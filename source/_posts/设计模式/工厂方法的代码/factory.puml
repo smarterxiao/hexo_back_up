@@ -1,0 +1,35 @@
+@startuml
+
+class NvWa
+interface Human
+interface EightTrigramsFurnace
+class HumanFactory
+class BlackHuman
+class YellowHuman
+class WhiteHuman
+
+
+NvWa o-- Human
+
+NvWa o-- EightTrigramsFurnace
+
+Human <|.. BlackHuman
+Human <|.. YellowHuman
+Human <|.. WhiteHuman
+EightTrigramsFurnace <|.. HumanFactory
+EightTrigramsFurnace o-- Human
+
+interface Human{
++ void getColor()
++ void talk()
+}
+
+interface EightTrigramsFurnace{
++ Human createHuman(Class c)
+}
+
+note bottom of EightTrigramsFurnace:这个是抽象的八卦炉
+note bottom of BlackHuman:这个是黑种人
+note bottom of YellowHuman:这个是黄种人
+note bottom of WhiteHuman:这个白种人
+@enduml

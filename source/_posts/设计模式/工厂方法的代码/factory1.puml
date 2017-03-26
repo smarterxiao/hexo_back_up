@@ -1,0 +1,22 @@
+@startuml
+
+class client
+interface AbstractProduct
+interface AbstractFactory
+class ConcreteFactory
+class ConcreteProduct
+
+
+
+client o--  AbstractProduct
+
+client o--  AbstractFactory
+
+AbstractProduct <|-- ConcreteProduct
+
+AbstractFactory <|-- ConcreteFactory
+
+AbstractFactory ..> AbstractProduct
+
+
+@enduml
