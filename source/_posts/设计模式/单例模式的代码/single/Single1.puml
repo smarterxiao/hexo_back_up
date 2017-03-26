@@ -1,0 +1,16 @@
+@startuml
+
+class Client
+class Singleton
+
+Client  o-- Singleton
+
+
+note bottom of Client :通过 Singleton.getSIngleton()方式访问
+
+class Singleton{
++ static final Singleton singleton=new Singleton()
+- Singleton()
++ static Singleton getSingleton()
+}
+@enduml

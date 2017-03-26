@@ -1,0 +1,20 @@
+@startuml
+
+class Minster
+class Emperor
+
+note bottom of Minster: 苦逼的臣子类
+note bottom of Emperor:增加了皇帝的最大数量
+
+Minster o--Emperor
+
+
+class Emperor{
++ static int maxNumOfEmperor=2
+- Emperor()
+- Emperor(String name)
++ static Emperor getInstance()
++ static void say()
+}
+
+@enduml
