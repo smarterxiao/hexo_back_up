@@ -100,5 +100,36 @@ tags:
     ```
 4. adb 命令的来源,android很多操作都可以通过adb来执行
 
-  看http://androidxref.com/  \system\core\toolbox    frameworks\base\cmds
+  看http://androidxref.com/ `\system\core\toolbox `  和 `frameworks\base\cmds`
 5. 模拟器现在可以用网易木木或者系统的，建议使用真机调试
+
+# 第三章 Android 控件架构与自定义控件详解
+
+## 1. Android 控件架构
+   抛开平常偷懒使用的butterknife。平常使用最多的的就是`setContentView` 然后`findViewById`。里面具体发生了那些事情，在这里做一个简单的介绍。
+
+ ![Alt text](图像1509633530.png "AndroidUI架构")
+
+ ![Alt text](图像1509634201.png "简陋的视图树")
+
+ ** findViewById是深度遍历的** 在`setContentView`之后 ActivityManagerService 会回调OnResume()方法 这个时候系统才会将DecorView添加到PhoneWindow中让他显示出来，完成界面的绘制
+
+## 2. View的测量和绘制
+
+#### 2.1 View的测量
+测量主要在`onMeasure`方法中进行，主要是有一个类来测量：MeasureSpec,这是一个32位的int值，高2位是测量模式，低30位用来测量大小，内部使用的都是位运算，提高效率，但是我从来没有过位运算。
+* 测量模式
+  * EXACTLY
+    这个是精确值模式，当我们将控件设置为`layout_width`或者`layout_height`属性指定为具体数值的时候使用。e：`android：layout_width=100dp` 这个时候系统使用的就是EXACTLY模式
+  * AT_MOST
+    即最大值模式，当控件的属性`layout_width`为`wrap_content`的时候就是使用这种模式，要求控件的大小不超过父控件大小就可以
+  * UNSPEXIFIED
+    这个是不测量模式，用于自定义控件
+* 使用
+  * 一
+    ```
+    int specMode=MeasureSpec.getMode(measureSpec)
+    int specSize=MeasureSpec.getSize(measureSpec)
+    
+    ```
+  * 二
