@@ -10,15 +10,15 @@ tags:
 # 第一章 Android 体系与系统架构
 
 ## 小结
-1. 一个网站：http://androidxref.com/  这个是一个Android的源码查看网站
+一个网站：http://androidxref.com/  这个是一个Android的源码查看网站
 
 # 第二章 Android 开发工具新接触
 
-## 1. 环境配置
+##  环境配置
 
-1. 一个常用的Android镜像网站 http://www.androiddevtools.cn/
+一个常用的Android镜像网站 http://www.androiddevtools.cn/
 
-## 2. ADB 的使用
+##  ADB 的使用
 1. 将ADB加入环境变量方便使用
     如果加入成功，那么运行`adb version`可以得到下面的结果
 
@@ -105,7 +105,8 @@ tags:
 
 # 第三章 Android 控件架构与自定义控件详解
 
-## 1. Android 控件架构
+##  Android 控件架构
+
    抛开平常偷懒使用的butterknife。平常使用最多的的就是`setContentView` 然后`findViewById`。里面具体发生了那些事情，在这里做一个简单的介绍。
 
  ![Alt text](图像1509633530.png "AndroidUI架构")
@@ -114,9 +115,9 @@ tags:
 
  ** findViewById是深度遍历的** 在`setContentView`之后 ActivityManagerService 会回调OnResume()方法 这个时候系统才会将DecorView添加到PhoneWindow中让他显示出来，完成界面的绘制
 
-## 2. View的测量和绘制
+##  View的测量和绘制
 
-#### 2.1 View的测量
+### View的测量
 测量主要在`onMeasure`方法中进行，主要是有一个类来测量：MeasureSpec,这是一个32位的int值，高2位是测量模式，低30位用来测量大小，内部使用的都是位运算，提高效率，但是我从来没有过位运算。
 * 测量模式
   * EXACTLY
@@ -130,6 +131,195 @@ tags:
     ```
     int specMode=MeasureSpec.getMode(measureSpec)
     int specSize=MeasureSpec.getSize(measureSpec)
-    
+
     ```
   * 二
+
+    ```
+      //  如果不知道控件的大小，可以使用这个方法就可以知道控件的大小了
+      int w = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+      int h = View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED);
+      view.measure(w, h);
+      view.layout();
+      addView(view);  //就可以将控件添加到副布局中了
+    ```
+
+### View布局
+
+就是`onLayout()`的过程
+
+###  View绘制
+
+ 绘制主要需要在`onDraw()`方法中进行，有一个画布，所有的绘制操作都和画布有关，后面会详细解释的，最好理解一下ps的图层，图像是一层一层叠加起来的
+
+![Alt text](tuceng.jpg "图层的理解")
+###  ViewGroup的测量
+
+> ViewGroup在测量的时候回遍历所有子View的measure方法，然后会调用layout方法进行布局，最后在绘制
+
+###  红包布局实战
+
+> 最近抢红包这个东西比较火，就用它来实现一次简单的ViewGroup实战
+
+![Alt text](图像1509980950.png "自定义ViewGroup效果图")
+
+  * MainActivity
+
+```
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+    }
+}
+
+```
+
+   RedPacketLayout
+
+```
+public class RedPacketLayout extends ViewGroup {
+    public RedPacketLayout(Context context) {
+        super(context);
+    }
+
+    public RedPacketLayout(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public RedPacketLayout(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+
+    RedPacketView big=new BigRedPacketView(getContext());
+    RedPacketView small=new SmallRedPacketView(getContext());
+
+    //ViewGroup要重写的方法 这个是一个抽象方法
+    @Override
+    protected void onLayout(boolean b, int i, int i1, int i2, int i3) {
+        //测量模式
+        int w = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int h = View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED);
+        //测量
+        big.measure(w, h);
+        small.measure(w, h);
+         //layout 布局 位置先写死
+        big.layout(100,100,100+big.getMeasuredWidth(),big.getMeasuredHeight()+100);
+        small.layout(200,200,200+small.getMeasuredWidth(),small.getMeasuredHeight()+200);
+        addView(big);
+        addView(small);
+    }
+}
+
+
+```
+
+   RedPacketView
+
+```
+public abstract class RedPacketView extends android.support.v7.widget.AppCompatTextView {
+    public RedPacketView(Context context) {
+        super(context);
+        init();
+    }
+
+    public RedPacketView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public RedPacketView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+   public abstract void init();
+}
+
+```
+
+   BigRedPacketView
+
+```
+
+public class BigRedPacketView extends RedPacketView {
+    public BigRedPacketView(Context context) {
+        super(context);
+    }
+
+    public BigRedPacketView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public BigRedPacketView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+    @Override
+    public void init() {
+        setText("大红包");
+        setTextColor(Color.GREEN);
+    }
+}
+
+```
+
+  SmallRedPacketView
+
+```
+
+public class SmallRedPacketView extends RedPacketView {
+    public SmallRedPacketView(Context context) {
+        super(context);
+    }
+
+    public SmallRedPacketView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public SmallRedPacketView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+    @Override
+    public void init() {
+        setText("小红包");
+        setTextColor(Color.RED);
+    }
+}
+
+```
+
+  activity_main
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.smart.qun.MainActivity">
+
+  <com.smart.qun.RedPacketLayout
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"></com.smart.qun.RedPacketLayout>
+
+</android.support.constraint.ConstraintLayout>
+```
+## 自定义View
+
+###  一些重要的回调方法
+
+  * `onFinishInfalte` 从XML加载完组件回调
+  * `onSizeChanged` 组件大小改变时回调
+  * `onMeasure` 回调该方法来进行测量
+  * `onLayout` 回掉该方法确定显示位置
+  * `onTouchEvent` 监听到触摸事件是回调
+
+##  自定义ViewGroup
+
+# 第四章
