@@ -320,6 +320,97 @@ public class SmallRedPacketView extends RedPacketView {
   * `onLayout` 回掉该方法确定显示位置
   * `onTouchEvent` 监听到触摸事件是回调
 
+### 对textView的自定义
+
+#### 有边框的TextView
+```
+· @Override
+    protected void onDraw(Canvas canvas) {
+
+        //在回调父类方法前，实现自己的逻辑，放在textView文字下方
+        //三明治上层的面包
+
+
+        Paint mPaint = new Paint();
+        mPaint.setColor(getResources().getColor(android.R.color.holo_blue_bright));
+        mPaint.setStyle(Paint.Style.FILL);
+
+        Paint mPaint2 = new Paint();
+        mPaint2.setColor((Color.YELLOW));
+        mPaint2.setStyle(Paint.Style.FILL);
+
+
+        canvas.drawRect(0,0,getMeasuredWidth(),getMeasuredHeight(),mPaint);
+        canvas.drawRect(10,10,getMeasuredWidth()+10,getMeasuredHeight()+10,mPaint2);
+        canvas.save();
+        canvas.translate(10,0);
+        //中间的肉
+        super.onDraw(canvas);
+
+        canvas.restore();
+        //下层的面包
+        //在回调父类方法后，实现自己的逻辑，放在textView文字上方
+    }
+```
+
+![Alt text](图像1510154184.png "自定义TextView效果图,有一个边框")
+
+#### 心得
+之前看第一遍的时候对`canvas.save()`和`canvas.restore()`这两个方法有一点不理解，第二遍的时候明白了很多，给大家演示一下就明白了。
+
+先来两张图
+
+    ![Alt text](test1.jpg "头像小王 300*300")
+    ![Alt text](test2.jpg "头像小李 300*300")
+
+  ```
+  @Override
+  protected void onDraw(Canvas canvas) {
+
+      mPaint = new Paint();
+      bitmap1 = BitmapFactory.decodeResource(getResources(), R.mipmap.test1);
+      bitmap2 = BitmapFactory.decodeResource(getResources(), R.mipmap.test2);
+
+      canvas.drawBitmap(bitmap1, 0, 0, mPaint);
+      canvas.scale(5f, 5f);//对画布进行放大
+      canvas.drawBitmap(bitmap2, 30, 30, mPaint);
+      super.onDraw(canvas);
+
+  }
+  ```
+
+![Alt text](图像1510154576.png "先放大 300*300")
+
+
+  ```
+  @Override
+  protected void onDraw(Canvas canvas) {
+
+
+      mPaint = new Paint();
+      bitmap1 = BitmapFactory.decodeResource(getResources(), R.mipmap.test1);
+      bitmap2 = BitmapFactory.decodeResource(getResources(), R.mipmap.test2);
+      canvas.drawBitmap(bitmap1, 0, 0, mPaint);
+      canvas.save();//保存
+      canvas.scale(5f, 5f);//对画布进行放大
+      canvas.restore();//恢复
+      canvas.drawBitmap(bitmap2, 30, 30, mPaint);
+      super.onDraw(canvas);
+    }
+    ```
+
+  ![Alt text](图像1510154812.png "执行save和restore")
+
+`canvas.save()`和`canvas.restore()`的意义是在某一个时间节点保存当前画布的状态，在对画布进行操作之后还原画布的状态
+
+
+#### 亮闪闪的TextView
+> 主要使用Shade来渲染
+
+
+
+
+
 ##  自定义ViewGroup
 
 # 第四章
