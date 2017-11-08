@@ -360,8 +360,9 @@ public class SmallRedPacketView extends RedPacketView {
 
 先来两张图
 
-    ![Alt text](test1.jpg "头像小王 300*300")
-    ![Alt text](test2.jpg "头像小李 300*300")
+![Alt text](1510156396552.png "头像小王300*300")
+
+![Alt text](1510156433278.png "头像小李300*300")
 
   ```
   @Override
@@ -379,7 +380,7 @@ public class SmallRedPacketView extends RedPacketView {
   }
   ```
 
-![Alt text](图像1510154576.png "先放大 300*300")
+![Alt text](图像1510154576.png "先放大300*300")
 
 
   ```
@@ -404,13 +405,53 @@ public class SmallRedPacketView extends RedPacketView {
 `canvas.save()`和`canvas.restore()`的意义是在某一个时间节点保存当前画布的状态，在对画布进行操作之后还原画布的状态
 
 
-#### 亮闪闪的TextView
+#### 闪动的TextView
 > 主要使用Shade来渲染
+
+```
+Paint paint;
+  int mViewWidth = 0;
+  private LinearGradient lin;
+  int mTranslate = 0;
+  private Matrix matrix;
+  @Override
+  protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+      super.onSizeChanged(w, h, oldw, oldh);
+      Log.i("test","onSizeChanged");
+      if (mViewWidth == 0) {
+          mViewWidth = getMeasuredWidth();
+          if (mViewWidth > 0) {
+              paint = getPaint();
+              lin = new LinearGradient(0, 0, mViewWidth, 0, new int[]{Color.BLUE, 0xffffffff, Color.BLUE}, null, Shader.TileMode.CLAMP);
+              paint.setShader(lin);
+              matrix = new Matrix();
+          }
+      }
+  }
+  @Override
+  protected void onDraw(Canvas canvas) {
+      super.onDraw(canvas);
+      Log.i("test","onDraw");
+      if (matrix != null) {
+
+          mTranslate += mViewWidth / 5;
+          if (mTranslate > 2 * mViewWidth) {
+              mTranslate = -mViewWidth;
+          }
+          matrix.setTranslate(mTranslate, 0);
+          lin.setLocalMatrix(matrix);
+          postInvalidate();
+      }
+
+
+  }
+```
 
 
 
 
 
 ##  自定义ViewGroup
+
 
 # 第四章
