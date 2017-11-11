@@ -405,7 +405,7 @@ public class SmallRedPacketView extends RedPacketView {
 `canvas.save()`和`canvas.restore()`的意义是在某一个时间节点保存当前画布的状态，在对画布进行操作之后还原画布的状态
 
 
-#### 闪动的TextView
+### 闪动的TextView
 > 主要使用Shade来渲染
 
 ```
@@ -447,11 +447,249 @@ Paint paint;
   }
 ```
 
+###复合控件
+这个是通过自定义属性来自定义控件：比如`android:layout_height="match_parent"` 这个是Android系统给我们提供的属性，我们可以自己定义这种属性。
+1. 自定义属性资源
+在`res/value`目录创建`attrs.xml`
+```
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <declare-styleable name="test">
+        <attr name="title" format="string" />
+        <attr name="titleTextSize" format="dimension" />
+        <attr name="titleTextColor" format="color" />
+        <attr name="leftTextColor" format="color" />
+        //不同的属性使用|隔开
+        <attr name="leftBackGround" format="reference|color" />
+        <attr name="leftText" format="string" />
+        <attr name="rightTextColor" format="color" />
+        <attr name="rightBackGround" format="reference|color" />
+        <attr name="rightText" format="string" />
+    </declare-styleable>
+
+</resources>
 
 
+```
 
+
+```
+public class SmarterLin extends LinearLayout {
+    private String string;
+    public SmarterLin(Context context) {
+        this(context,null);
+        init();
+    }
+    //第二种构造方法的作用就是用于自定义属性
+    public SmarterLin(Context context, @Nullable AttributeSet attrs) {
+        this(context, attrs,0);
+        init();
+    }
+    public SmarterLin(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        if(attrs!=null){
+            TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.test);
+            typedArray.getColor(R.styleable.test_leftTextColor,0);
+            typedArray.getDrawable(R.styleable.test_leftBackGround);
+            string = typedArray.getString(R.styleable.test_leftText);
+            typedArray.getDimension(R.styleable.test_titleTextSize,0);
+            //避免再次创建错误
+            typedArray.recycle();
+        }
+    }
+    private void init() {
+      //在这里设置自定属性，并添加控件
+        Button bt=new Button(getContext());
+        bt.setText(string);
+    }
+}
+
+```
+
+```
+<com.smart.myapplication.SmarterLin
+      android:text="Hello World!"
+      xmlns:custom="http://schemas.android.com/apk/res-auto"   //定义自己的命名空间  xmlns:custom="http://schemas.android.com/apk/res-auto"   custom是自定义空间的名字
+      custom:rightText="test"  //使用自定义空间
+      android:layout_width="match_parent"
+      android:layout_height="match_parent" />
+```
+###重写View来实现全新的自定义控件
+就是上面闪动的textview
 
 ##  自定义ViewGroup
+### 一个弹性scrollView
+不是那么流畅，只是大概理解他的原理
+```
+<com.smart.myapplication.SpringScrollLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="com.smart.myapplication.MainActivity">
+
+        <TextView
+            android:background="#00ffff"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:background="#00ff00"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+        <TextView
+            android:background="#ff0000"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+</com.smart.myapplication.SpringScrollLayout>
+```
+
+```
+
+public class SpringScrollLayout extends ViewGroup {
+
+    private float mLasty;
+    private int mStart;
+    private DisplayMetrics dm;
+    private float mEnd;
+
+    public SpringScrollLayout(Context context) {
+        super(context);
+    }
+
+    public SpringScrollLayout(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public SpringScrollLayout(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+    @Override
+    protected void onLayout(boolean change, int l, int t, int r, int b) {
+        WindowManager wm = (WindowManager) getContext()
+                .getSystemService(Context.WINDOW_SERVICE);
+        dm = new DisplayMetrics();
+        wm.getDefaultDisplay().getMetrics(dm);
+        LayoutParams mlp = getLayoutParams();
+        mlp.height = dm.heightPixels * getChildCount();
+        setLayoutParams(mlp);
+        for (int i4 = 0; i4 < getChildCount(); i4++) {
+            View child = getChildAt(i4);
+            child.layout(l, i4 * dm.heightPixels, r, (i4 + 1) * dm.heightPixels);
+        }
+    }
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        int count = getChildCount();
+        for (int i = 0; i < count; ++i) {
+            View child = getChildAt(i);
+            measureChild(child, widthMeasureSpec, heightMeasureSpec);
+        }
+    }
+    Scroller scroller = new Scroller(getContext());
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        float y = event.getY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                mLasty = y;
+                mStart = getScrollY();
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (!scroller.isFinished()) {
+                    scroller.abortAnimation();
+                }
+                float dy = mLasty - y;
+                if (getScaleY() < 0) {
+                    dy = 0;
+                }
+                if (getScaleY() > getHeight() - dm.heightPixels) {
+
+                    dy = 0;
+                }
+                scrollBy(0, (int) dy);
+                break;
+
+            case MotionEvent.ACTION_UP:
+
+                mEnd = getScaleY();
 
 
-# 第四章
+                float dScrollY = mEnd - mStart;
+
+                if (dScrollY > 0) {
+
+                    if (dScrollY < dm.heightPixels / 3) {
+                        scroller.startScroll(0, getScrollY(), 0, (int)- dScrollY);
+                    } else {
+                        scroller.startScroll(0, getScrollY(), 0, (int) (dm.heightPixels - dScrollY));
+                    }
+                } else {
+
+                    if (-dScrollY < dm.heightPixels / 3) {
+                        scroller.startScroll(0, getScrollY(), 0, (int) -dScrollY);
+                    } else {
+                        scroller.startScroll(0, getScrollY(), 0, (int) (-dm.heightPixels - dScrollY));
+                    }
+                }
+                break;
+        }
+        postInvalidate();
+        return true;
+    }
+    @Override
+    public void computeScroll() {
+        super.computeScroll();
+
+
+        if (scroller.computeScrollOffset()) {
+            scrollTo(0, scroller.getCurrY());
+            postInvalidate();
+        }
+    }
+}
+
+```
+
+## Android 事件拦截机制分析
+
+ViewGroup主要是这三个方法
+```
+@Override
+ public boolean dispatchTouchEvent(MotionEvent ev) {
+     return super.dispatchTouchEvent(ev);
+ }
+
+ @Override
+   public boolean onInterceptTouchEvent(MotionEvent ev) {
+       return super.onInterceptTouchEvent(ev);
+   }
+ @Override
+ public boolean onTouchEvent(MotionEvent event) {
+     return super.onTouchEvent(event);
+ }
+
+```
+View主要是这个方法
+
+```
+@Override
+public boolean onTouchEvent(MotionEvent event) {
+    return super.onTouchEvent(event);
+}
+```
+
+  ![Alt text](图像1510416628.png "触摸事件完整流程")
+
+一般不会操作`dispatchTouchEvent`这个方法，所以这里就不讨论这个方法 ，如果在ViewGroup中截断事件`onInterceptTouchEvent` 那么View是收不到事件的，如果在子View中处理了事件`onTouchEvent`，就是`onTouchEvent`返回值是`true`,ViewGroup是收不到事件的
+  ![Alt text](图像1510417038.png "触摸事件完整流程2")
+
+
+# 第四章 List使用
+现在这个很少用了，就不讲了，后面会有RecyclerView和ListView的源码分析
+
+# 第五章 Android  Scroll分析
