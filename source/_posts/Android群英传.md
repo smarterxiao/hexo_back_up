@@ -693,3 +693,23 @@ public boolean onTouchEvent(MotionEvent event) {
 现在这个很少用了，就不讲了，后面会有RecyclerView和ListView的源码分析
 
 # 第五章 Android  Scroll分析
+## 坐标系
+这个是滚动的基础，所有的移动都是在这个坐标系内进行滚动
+有两种坐标系，一个是以屏幕左上角位原点，一个是以父控件左上角为原点,获取的(X，Y)的值是不一向的
+![Alt text](图像1510671624.png   "Android坐标系")
+
+MotionEvent
+* getX()
+* getY()
+* getRawX()
+* getRawY()
+
+View
+* getLeft()
+* getRight()
+* getBottom()
+* getTop()
+
+## 滑动的七种方法
+
+### Layout方法
