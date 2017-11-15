@@ -712,4 +712,436 @@ View
 
 ## 滑动的七种方法
 
-### Layout方法
+```
+xml:
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="com.smart.myapplication.MainActivity">
+
+    <com.smart.myapplication.TestView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="50dp"
+        android:text="dddd" />
+
+</LinearLayout>
+
+TestView: 重写onTouchEvent
+@Override
+public boolean onTouchEvent(MotionEvent event) {
+   switch (event.getAction()) {
+      case MotionEvent.ACTION_DOWN:
+            Log.i("event x: ",event.getX()+"");
+            Log.i("event y: ",event.getY()+"");
+            Log.i("view x: ",event.getRawX()+"");
+            Log.i("view y: ",event.getRawY()+"");
+            Log.i("event getRawX: ", getX()+"");
+            Log.i("event getRawY: ", getY()+"");
+            Log.i("left: ",getLeft()+"");
+            Log.i("right: ",getRight()+"");
+            Log.i("bottom: ",getBottom()+"");
+            Log.i("top: ",getTop()+"");
+            break;
+      case MotionEvent.ACTION_UP:
+          break;
+      case MotionEvent.ACTION_CANCEL:
+          break;
+      case MotionEvent.ACTION_HOVER_MOVE:
+          break;
+          }
+        return true;
+    }
+点击结果:
+        I/event x:: 54.0
+        I/event y:: 23.0
+        I/view x:: 175.0
+        I/view y:: 175.0
+        I/event getRawX:: 229.0
+        I/event getRawY:: 478.0
+        I/left:: 175
+        I/right:: 287
+        I/bottom:: 241
+        I/top:: 175
+```
+### 第一种写法： Layout方法
+
+* 第一种写法
+
+```
+public class TestView extends android.support.v7.widget.AppCompatTextView {
+    private float x;
+    private float y;
+    private float lastX;
+    private float lastY;
+    public TestView(Context context) {
+        super(context);
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        x = event.getX();
+        y = event.getY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                lastX = x;
+                Log.i("test","test");
+                lastY = y;
+                break;
+            case MotionEvent.ACTION_UP:
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                break;
+            case MotionEvent.ACTION_MOVE:
+                int dx = (int) (x - lastX);
+                int dy = (int) (y - lastY);
+                layout(getLeft() + dx, getTop() + dy, getRight() + dx, getBottom() + dy);
+                break;
+        }
+
+
+        return true;
+    }
+}
+
+```
+* 第二种写法
+```
+public class TestView extends android.support.v7.widget.AppCompatTextView {
+    private float x;
+    private float y;
+    private float lastX;
+    private float lastY;
+    public TestView(Context context) {
+        super(context);
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        x = event.getRawX();
+        y = event.getRawY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                lastX = x;
+                Log.i("test","test");
+                lastY = y;
+                break;
+            case MotionEvent.ACTION_UP:
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                break;
+            case MotionEvent.ACTION_MOVE:
+                int dx = (int) (x - lastX);
+                int dy = (int) (y - lastY);
+                layout(getLeft() + dx, getTop() + dy, getRight() + dx, getBottom() + dy);
+                lastX=x;//加这个东西，不然会越跑越快
+                lastY=y;
+                break;
+        }
+        return true;
+    }
+}
+
+```
+
+### 第二种写法： offsetLeftAndRight()与offsetTopAndBottom()
+
+
+* 第一种写法
+
+```
+public class TestView extends android.support.v7.widget.AppCompatTextView {
+    private float x;
+    private float y;
+    private float lastX;
+    private float lastY;
+    public TestView(Context context) {
+        super(context);
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        x = event.getX();
+        y = event.getY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                lastX = x;
+                Log.i("test","test");
+                lastY = y;
+                break;
+            case MotionEvent.ACTION_UP:
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                break;
+            case MotionEvent.ACTION_MOVE:
+                int dx = (int) (x - lastX);
+                int dy = (int) (y - lastY);
+                offsetLeftAndRight(dx);
+                offsetTopAndBottom(dy); //  这两个方法和这个是一个意思    layout(getLeft() + dx, getTop() + dy, getRight() + dx, getBottom() + dy);
+                break;
+        }
+
+
+        return true;
+    }
+}
+
+```
+* 第二种写法
+```
+
+public class TestView extends android.support.v7.widget.AppCompatTextView {
+
+    private float x;
+    private float y;
+    private float lastX;
+    private float lastY;
+
+    public TestView(Context context) {
+        super(context);
+    }
+
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        x = event.getRawX();
+        y = event.getRawY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                lastX = x;
+                Log.i("test","test");
+                lastY = y;
+                break;
+            case MotionEvent.ACTION_UP:
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                break;
+            case MotionEvent.ACTION_MOVE:
+                int dx = (int) (x - lastX);
+                int dy = (int) (y - lastY);
+
+             offsetLeftAndRight(dx);
+             offsetTopAndBottom(dy); //  这两个方法和这个是一个意思    layout(getLeft() + dx, getTop() + dy, getRight() + dx, getBottom() + dy);
+                lastX=x;//加这个东西，不然会越跑越快
+                lastY=y;
+                break;
+        }
+
+        return true;
+    }
+}
+
+```
+
+### 第三种写法 LayoutParams
+`LayoutParams`保存了View的布局参数,所以可以获取`LayoutParams`之后改变布局参数来改变View的位置。获取`dx`和`dy`两种方式下面就写一种
+使用这种方式要注意父布局
+```
+public class TestView extends android.support.v7.widget.AppCompatTextView {
+    private float x;
+    private float y;
+    private float lastX;
+    private float lastY;
+    public TestView(Context context) {
+        super(context);
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        x = event.getRawX();
+        y = event.getRawY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                lastX = x;
+                Log.i("test","test");
+                lastY = y;
+                break;
+            case MotionEvent.ACTION_UP:
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                break;
+            case MotionEvent.ACTION_MOVE:
+                int dx = (int) (x - lastX);
+                int dy = (int) (y - lastY);
+                LinearLayout.LayoutParams layoutParams= (LinearLayout.LayoutParams) getLayoutParams(); //父布局是LinearLayout
+                layoutParams.leftMargin=getLeft()+dx;
+                layoutParams.topMargin=getTop()+dy;
+                setLayoutParams(layoutParams);
+                lastX=x;//加这个东西，不然会越跑越快
+                lastY=y;
+                break;
+        }
+        return true;
+    }
+}
+```
+也可以使用`ViewGroup.MarginLayoutParams layoutParams`，这样就不用区分父布局的类型，`ViewGroup`是所有包含控件的基类，一般改变位置是改变这个控件的`Margin`属性
+```
+public class TestView extends android.support.v7.widget.AppCompatTextView {
+    private float x;
+    private float y;
+    private float lastX;
+    private float lastY;
+    public TestView(Context context) {
+        super(context);
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        x = event.getRawX();
+        y = event.getRawY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                lastX = x;
+                Log.i("test","test");
+                lastY = y;
+                break;
+            case MotionEvent.ACTION_UP:
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                break;
+            case MotionEvent.ACTION_MOVE:
+                int dx = (int) (x - lastX);
+                int dy = (int) (y - lastY);
+                ViewGroup.MarginLayoutParams layoutParams= (ViewGroup.MarginLayoutParams) getLayoutParams();
+                layoutParams.leftMargin=getLeft()+dx;
+                layoutParams.topMargin=getTop()+dy;
+                setLayoutParams(layoutParams);
+                lastX=x;//加这个东西，不然会越跑越快
+                lastY=y;
+                break;
+        }
+        return true;
+    }
+}
+```
+
+### 第四种写法 scrollTo和scrollBy
+使用`scrollBy(dx, dy)`替换移动布局的操作，发现有问题，是布局的内容移动，就是如果是`TextView`,那么移动的是`TextView`的文字，不是`TextView`,而且<font color=RED>内容的移动方向是和手移动的方向相反</font>
+```
+public class TestView extends android.support.v7.widget.AppCompatTextView {
+
+    private float x;
+    private float y;
+    private float lastX;
+    private float lastY;
+    public TestView(Context context) {
+        super(context);
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        x = event.getRawX();
+        y = event.getRawY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                lastX = x;
+                Log.i("test", "test");
+                lastY = y;
+                break;
+            case MotionEvent.ACTION_UP:
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                break;
+            case MotionEvent.ACTION_MOVE:
+                int dx = (int) (x - lastX);
+                int dy = (int) (y - lastY);
+                scrollBy(dx, dy);  //就是这个东西，移动的是内容
+                lastX = x;//加这个东西，不然会越跑越快
+                lastY = y;
+                break;
+        }
+        return true;
+    }
+}
+```
+
+这里要补充一下视图移动的知识，使用`scrollTo`和`scrollBy`的时候移动的是盖板。从一个小孔看外面的世界，你把孔向左移动，但是孔里面的画面相对孔是向左移动。
+![Alt text](图像1510759310.png  "图解")
+最上面的是原始状态，屏幕和圆圈的关系，当使用`scrollTo`和`scrollBy`移动的时候，手指向右移动，这个时候移动的屏幕，导致图二的显示，但是实际上屏幕是不会移动的，所以就可以理解为图三的效果，内容向左移动了，所以`scrollTo`和`scrollBy`使用`dx`和`dy`的时候要取反，这个时候手指移动的方向就是内容移动的方向，然后屏幕是不动的 ，就是`textView`是不动的，动的是内容,就是`textView`是不动的，动的是内容，就是`textView`是不动的，动的是内容 。重要的话说三遍
+
+```
+public class TestView extends android.support.v7.widget.AppCompatTextView {
+
+    private float x;
+    private float y;
+    private float lastX;
+    private float lastY;
+    public TestView(Context context) {
+        super(context);
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        x = event.getRawX();
+        y = event.getRawY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                lastX = x;
+                Log.i("test", "test");
+                lastY = y;
+                break;
+            case MotionEvent.ACTION_UP:
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                break;
+            case MotionEvent.ACTION_MOVE:
+                int dx = (int) (x - lastX);
+                int dy = (int) (y - lastY);
+                scrollBy(-dx, -dy);  //取反
+                lastX = x;//加这个东西，不然会越跑越快
+                lastY = y;
+                break;
+        }
+        return true;
+    }
+}
+```
+
+### 第五种写法 Scroller
