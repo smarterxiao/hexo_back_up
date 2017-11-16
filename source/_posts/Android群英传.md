@@ -768,7 +768,7 @@ public boolean onTouchEvent(MotionEvent event) {
         I/bottom:: 241
         I/top:: 175
 ```
-### 第一种写法： Layout方法
+###  Layout方法
 
 * 第一种写法
 
@@ -858,7 +858,7 @@ public class TestView extends android.support.v7.widget.AppCompatTextView {
 
 ```
 
-### 第二种写法： offsetLeftAndRight()与offsetTopAndBottom()
+###  offsetLeftAndRight()与offsetTopAndBottom()
 
 
 * 第一种写法
@@ -959,7 +959,7 @@ public class TestView extends android.support.v7.widget.AppCompatTextView {
 
 ```
 
-### 第三种写法 LayoutParams
+###  LayoutParams
 `LayoutParams`保存了View的布局参数,所以可以获取`LayoutParams`之后改变布局参数来改变View的位置。获取`dx`和`dy`两种方式下面就写一种
 使用这种方式要注意父布局
 ```
@@ -1052,7 +1052,7 @@ public class TestView extends android.support.v7.widget.AppCompatTextView {
 }
 ```
 
-### 第四种写法 scrollTo和scrollBy
+###  scrollTo和scrollBy
 使用`scrollBy(dx, dy)`替换移动布局的操作，发现有问题，是布局的内容移动，就是如果是`TextView`,那么移动的是`TextView`的文字，不是`TextView`,而且<font color=RED>内容的移动方向是和手移动的方向相反</font>
 ```
 public class TestView extends android.support.v7.widget.AppCompatTextView {
@@ -1144,4 +1144,87 @@ public class TestView extends android.support.v7.widget.AppCompatTextView {
 }
 ```
 
-### 第五种写法 Scroller
+###  Scroller
+> 感觉群英传对这一部分讲的不太清楚，就自己写一下自己的理解，先上代码。实现一个功能，不管怎么拖动中间的控件，就是那个大王叫我来巡山的TextView，最后在当前位置在滚动到(100,100)的距离
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="com.smart.myapplication.MainActivity">
+    <com.smart.myapplication.TestView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+         >
+        <TextView
+            android:background="#ff0000"
+            android:text="大王叫我来巡山"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </com.smart.myapplication.TestView>
+
+</LinearLayout>
+
+```
+
+```
+
+public class TestView extends LinearLayout {
+    private float x;
+    private float y;
+    private float lastX;
+    private float lastY;
+    public TestView(Context context) {
+        super(context);
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    Scroller scroller=new Scroller(getContext());
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        x = event.getRawX();
+        y = event.getRawY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                break;
+            case MotionEvent.ACTION_UP:
+                scroller.startScroll((int)- event.getX(), (int) -event.getY(),-100,-100,10000);
+                invalidate();
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                break;
+            case MotionEvent.ACTION_MOVE:
+                int dx = (int) (x - lastX);
+                int dy = (int) (y - lastY);
+                scrollBy(-dx, -dy);  //取反
+                lastX = x;//加这个东西，不然会越跑越快
+                lastY = y;
+                break;
+        }
+        return true;
+    }
+    @Override
+    public void computeScroll() {
+        super.computeScroll();
+        if(scroller.computeScrollOffset()){//判断是否执行完毕
+            scrollTo(scroller.getCurrX(),scroller.getCurrY());
+            invalidate();
+        }
+    }
+}
+
+```
+
+`scroller.startScroll((int)- event.getX(), (int) -event.getY(),-100,-100,10000);` 第一个参数是开始的x、第二个是开始的y、第三个参数是移动的变化量dx、第四个是移动的变化量dy，第五个是时间可以弄长一点
+记住这个坐标和我们的坐标系是相反的，因为scroller底层使用的是scrollTo，移动的是里面的内容，所以从屏幕的方向看过去是相反的。`startScroll`开始之后会调用`computeScroll()`。如果想要移动到指定的位置，dx和dy这个要用当前位置和指定位置的差值
+
+
+### 属性动画 这个后面讲
+### ViewDragHelper
