@@ -1228,3 +1228,654 @@ public class TestView extends LinearLayout {
 
 ### 属性动画 这个后面讲
 ### ViewDragHelper
+> drawerLayout和SlidingPaneLayout背后的男人
+drawerLayout:侧边栏拖出
+SlidingPaneLayout：可以实现IOS侧滑关闭的功能
+
+* 最简单的版本，实现LinearLayout内部控件的移动
+
+```
+public class TestView extends LinearLayout {
+    private ViewDragHelper viewDragHelper;
+    public TestView(Context context) {
+        super(context);
+        init();
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+    private void init() {
+        viewDragHelper = ViewDragHelper.create(this, new ViewDragHelper.Callback() {
+            //判断View是不是你想要移动的 是就是true，不是就是false  
+            @Override
+            public boolean tryCaptureView(View child, int pointerId) {
+                return true;
+            }
+            @Override
+            public void onViewDragStateChanged(int state) {
+                super.onViewDragStateChanged(state);
+            }
+
+            //水平滑动
+            @Override
+            public int clampViewPositionHorizontal(View child, int left, int dx) {
+                return left;
+            }
+            //垂直滑动
+            @Override
+            public int clampViewPositionVertical(View child, int top, int dy) {
+                return top;
+            }
+        });
+    }
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        return viewDragHelper.shouldInterceptTouchEvent(ev);
+
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        viewDragHelper.processTouchEvent(event);
+        return true;
+    }
+    @Override
+    public void computeScroll() {
+        super.computeScroll();
+        if (viewDragHelper.continueSettling(true)) {//判断是否执行完毕
+            ViewCompat.postInvalidateOnAnimation(this);
+        }
+    }
+}
+
+```
+* 最简单版本的布局
+```
+<com.smart.myapplication.TestView
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="#ff0000"
+        android:text="dddd" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="#ffff00"
+        android:text="dddd" />
+</com.smart.myapplication.TestView>
+
+```
+
+* 第二个版本，可以回归原位
+```
+public class TestView extends LinearLayout {
+    private ViewDragHelper viewDragHelper;
+    public TestView(Context context) {
+        super(context);
+        init();
+    }
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+    private void init() {
+        viewDragHelper = ViewDragHelper.create(this, new ViewDragHelper.Callback() {
+            //判断View是不是你想要移动的 是就是true，不是就是false  
+            @Override
+            public boolean tryCaptureView(View child, int pointerId) {
+                return true;
+            }
+            @Override
+            public void onViewDragStateChanged(int state) {
+                super.onViewDragStateChanged(state);
+            }
+            //释放之后的回调，就是手指抬起的回调
+           @Override
+           public void onViewReleased(View releasedChild, float xvel, float yvel) {
+               //如果有第一个孩子，这里偷懒没做判断 如果移动超过500 就到300的位置，如果小于500 就回归原位
+               if (getChildAt(0).getLeft() < 500) {
+                   viewDragHelper.smoothSlideViewTo(getChildAt(0), 0, 0);
+                   ViewCompat.postInvalidateOnAnimation(TestView.this);
+               } else {
+                   viewDragHelper.smoothSlideViewTo(getChildAt(0), 300, 0);
+                   ViewCompat.postInvalidateOnAnimation(TestView.this);
+
+               }
+               super.onViewReleased(releasedChild, xvel, yvel);
+           }
+
+            //水平滑动
+            @Override
+            public int clampViewPositionHorizontal(View child, int left, int dx) {
+                return left;
+            }
+            //垂直滑动
+            @Override
+            public int clampViewPositionVertical(View child, int top, int dy) {
+                return top;
+            }
+        });
+    }
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        return viewDragHelper.shouldInterceptTouchEvent(ev);
+
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        viewDragHelper.processTouchEvent(event);
+        return true;
+    }
+    @Override
+    public void computeScroll() {
+        super.computeScroll();
+        if (viewDragHelper.continueSettling(true)) {//判断是否执行完毕
+            ViewCompat.postInvalidateOnAnimation(this);
+        }
+    }
+}
+```
+
+* 终极效果
+
+
+```
+
+public class TestView extends FrameLayout {
+
+    private ViewDragHelper viewDragHelper;
+    private View menu;
+    private View mainView;
+    private int measuredWidth;
+
+    public TestView(Context context) {
+        super(context);
+        init();
+    }
+
+    public TestView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public TestView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    private void init() {
+        viewDragHelper = ViewDragHelper.create(this, new ViewDragHelper.Callback() {
+            @Override
+            public boolean tryCaptureView(View child, int pointerId) {
+                return mainView==child;
+            }
+
+            @Override
+            public void onViewDragStateChanged(int state) {
+                super.onViewDragStateChanged(state);
+            }
+
+            //view位置改变调用
+            @Override
+            public void onViewPositionChanged(View changedView, int left, int top, int dx, int dy) {
+                super.onViewPositionChanged(changedView, left, top, dx, dy);
+            }
+
+            //view被用户触摸回调
+            @Override
+            public void onViewCaptured(View capturedChild, int activePointerId) {
+                super.onViewCaptured(capturedChild, activePointerId);
+            }
+
+
+
+            //view拖动状态改变回调
+            @Override
+            public void onEdgeDragStarted(int edgeFlags, int pointerId) {
+                super.onEdgeDragStarted(edgeFlags, pointerId);
+            }
+
+            //释放之后的回调，就是手指抬起的回调
+            @Override
+            public void onViewReleased(View releasedChild, float xvel, float yvel) {
+
+                //如果有第一个孩子，这里偷懒没做判断 如果移动超过500 就到300的位置，如果小于500 就回归原位
+                if (mainView.getLeft() < 500) {
+                    viewDragHelper.smoothSlideViewTo(mainView, 0, 0);
+                    ViewCompat.postInvalidateOnAnimation(TestView.this);
+                } else {
+                    viewDragHelper.smoothSlideViewTo(mainView, measuredWidth, 0);
+                    ViewCompat.postInvalidateOnAnimation(TestView.this);
+
+                }
+
+
+                super.onViewReleased(releasedChild, xvel, yvel);
+            }
+
+            //水平滑动
+            @Override
+            public int clampViewPositionHorizontal(View child, int left, int dx) {
+                return left;
+            }
+
+            //垂直滑动的变化量
+            @Override
+            public int clampViewPositionVertical(View child, int top, int dy) {
+                return 0;
+            }
+        });
+    }
+
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        return viewDragHelper.shouldInterceptTouchEvent(ev);
+
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        viewDragHelper.processTouchEvent(event);
+        return true;
+    }
+
+
+    @Override
+    public void computeScroll() {
+        super.computeScroll();
+        if (viewDragHelper.continueSettling(true)) {//判断是否执行完毕
+            ViewCompat.postInvalidateOnAnimation(this);
+        }
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        measuredWidth = menu.getMeasuredWidth();
+
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        super.onLayout(changed, l, t, r, b);
+    }
+
+    @Override
+    protected void onFinishInflate() {
+        super.onFinishInflate();
+        menu = getChildAt(0);
+        mainView = getChildAt(1);
+    }
+}
+
+```
+
+![Alt text](qq.gif  "模拟qq的侧滑效果")
+
+# 第六章 Android图形机制与处理技
+## 屏幕的信息
+###  屏幕大小
+单位是英寸，是手机对角线的长度。我们说的苹果是4.5英寸的屏幕是指的是对角线长度
+### 分辨率
+是手机像素的个数，eg：720*1280 这个说明宽有720个像素，高有1280个像素
+### PPI
+屏幕对角线的密度，屏幕对角线像素个数/对角线长度
+计算方法
+  w：屏幕宽分辨率  h：屏幕高分辨率  s：屏幕对角线长度(单位是英寸)  
+
+![Alt text](图像1511094759.png  "结果就是ppi")
+
+### 系统屏幕密度
+
+| 密度       | ldpi      |         mdpi |hdpi|xdpi|xxhdpi|
+| ------------- |:-------------:| -----:|-----:|-----:|-----:|
+| 密度值     |        120 | 160 |240|320|480|
+| 分辨率     | 240*320     |   320*160|480*800|720*1280|1080*1920|
+
+现在开发如果要求不高一般使用xdpi的就可以了，其他的可以放下
+
+### 单位转换
+
+sp和dp的区别是sp是针对字体的，会随着系统字体的调整而变化，dp是不会的
+```
+public class DisplayUtils {
+
+
+    /**
+     * 将px值转换为dpi或者dp
+     *
+     * @param context 建议Application
+     * @param pxValue px值
+     * @return 结果  px---->dp
+     */
+    public static int px2dpi(@NonNull Context context, float pxValue) {
+
+        final float scale = context.getResources().getDisplayMetrics().density;
+
+        return (int) (pxValue / scale + 0.5);
+
+    }
+
+
+    /**
+     * 将dp值转换为px
+     *
+     * @param context  建议Application
+     * @param dipValue dp值
+     * @return 结果 dp---->px
+     */
+    public static int dpi2px(@NonNull Context context, float dipValue) {
+        final float scale = context.getResources().getDisplayMetrics().density;
+        return (int) (dipValue * scale + 0.5f);
+
+    }
+
+
+    /**
+     * 将px值转换为sp
+     *
+     * @param context 建议Application
+     * @param pxValue px值
+     * @return 结果  px---->sp
+     */
+    public static int px2sp(@NonNull Context context, float pxValue) {
+
+        final float scale = context.getResources().getDisplayMetrics().scaledDensity;
+
+        return (int) (pxValue / scale + 0.5);
+
+    }
+
+    /**
+     * 将sp值转换为px
+     *
+     * @param context 建议Application
+     * @param spValue sp值
+     * @return 结果  sp---->px
+     */
+    public static int sp2px(@NonNull Context context, float spValue) {
+        final float scale = context.getResources().getDisplayMetrics().scaledDensity;
+        return (int) (spValue * scale + 0.5f);
+
+    }
+
+    /**
+     *  使用系统api将dp转换为px
+     * @param context  建议Application
+     * @param dp  dp值
+     * @return  dp---->px
+     */
+    public static int  dp2px(@NonNull Context context ,int dp){
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,dp,context.getResources().getDisplayMetrics());
+    }
+
+    /**
+     * 使用系统api将sp转换为px
+     * @param context  建议Application
+     * @param sp  dp值
+     * @return  sp---->px
+     */
+    public static int  sp2px(@NonNull Context context ,int sp){
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP,sp,context.getResources().getDisplayMetrics());
+    }
+
+}
+
+```
+
+
+## 2D绘图的基础
+ 画笔和画布的一些用法，还有很多这里就不列举了，可以查看api
+```
+public class TesView extends android.support.v7.widget.AppCompatTextView {
+    public TesView(Context context) {
+        super(context);
+    }
+    public TesView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TesView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    Paint mPaint=new Paint();
+
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        mPaint.setAntiAlias(true);//设置时候抗锯齿
+        mPaint.setColor(456);//设置颜色
+        mPaint.setARGB(1,1,1,1);//设置argb颜色
+        mPaint.setAlpha(456);//设置透明度
+        mPaint.setTextSize(456);//设置字体大小
+        mPaint.setStyle(Paint.Style.STROKE);//设置是空心还是实心
+        mPaint.setStrokeWidth(456);//设置空心边框的长度
+
+        //画点
+        canvas.drawPoint(1,1,mPaint);
+        //画线
+        canvas.drawLine(1,1,40,40,mPaint);
+        float[] pts={1,1,2,2,56,67,77,909};
+        canvas.drawLines(pts,mPaint);
+        //画矩形
+        canvas.drawRect(0,0,1,1,mPaint);
+        //画圆角矩形
+        canvas.drawRoundRect(1,1,1,1,,1,1,mPaint);
+        //画圆
+        canvas.drawCircle(1,1,10,mPaint);
+
+        //画圆弧： Paint.Style.STROKE+userCenter（true） 空心扇形   Paint.Style.STROKE+userCenter（false） 空心弧形
+        // Paint.Style.FILL+userCenter（true） 实心扇形   Paint.Style.FILL+userCenter（false） 实心弧形
+        canvas.drawArc(1,1,1,1,1,1,true,mPaint);
+        //画椭圆
+        canvas.drawOval(1,1,1,1,mPaint);
+
+        //画文字
+        canvas.drawText("王八坨子",1,1,mPaint);
+
+        float[] ptss={1,1,2,2,56,67,77,909};
+        //在指定位置画文字  已经过时
+        canvas.drawPosText("王八坨子",ptss,mPaint);
+
+
+        //画路径
+        Path path=new Path();
+        path.moveTo(200,200);//将起点移动到200,200
+        path.lineTo(500,500);//连接500,500
+        path.lineTo(777,500);//连接777,500
+        canvas.drawPath(path,mPaint);
+    }
+}
+
+```
+
+##XML绘图
+
+### bitmap
+可以将图片转换为bitmap
+```
+<?xml version="1.0" encoding="utf-8"?>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android" android:src="@drawable/ic_launcher_background">
+</bitmap>
+```
+### shape
+这个比较简单，这个可以使用渐变，如果有渐变一般是美工给一张图片解决... 一般实现不了UI的效果   
+### layer
+多个shape的集合 类似图层叠加效果
+### selector
+多个shape的集合，可以实现不同状态的效果显示
+
+### Android 绘图技巧
+
+```
+    canvas.save();  保存画布当前状态
+     canvas.restore();还原之前保存的画布状态，比如sava之后调用translate，之后还原到之前的位置
+     canvas.translate(100,100);
+     canvas.rotate(100);
+```
+
+#### 画一个时钟
+
+![Alt text](图像1511103351.png "效果图")
+
+```
+public class TesView extends android.support.v7.widget.AppCompatTextView {
+    public TesView(Context context) {
+        super(context);
+    }
+
+    public TesView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public TesView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    private void init() {
+
+        Paint mPaint=new Paint();
+
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setAntiAlias(true);
+        mPaint.setStrokeWidth(5);
+
+    }
+
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        Paint mPaint=new Paint();
+
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setAntiAlias(true);
+        mPaint.setStrokeWidth(5);
+        canvas.drawCircle(getWidth()/2,getHeight()/2,getWidth()/2,mPaint);
+
+        Paint painDegree=new Paint();
+
+        painDegree.setStrokeWidth(3);
+        for (int i = 0; i < 24; i++) {
+            if(i==0||i==6||i==12||i==18){
+                painDegree.setStrokeWidth(6);
+                painDegree.setTextSize(30);
+                这个是画的  |  这种线 就是第一个画的是12点的位置，旋转之后再画12点的位置
+                canvas.drawLine(getWidth()/2,getHeight()/2-getWidth()/2,getWidth()/2,getHeight()/2-getWidth()/2+60,painDegree);
+                String degree=String.valueOf(i);
+                canvas.drawText(degree,getWidth()/2-painDegree.measureText(degree)/2,getHeight()/2-getWidth()/2+90,painDegree);
+            }else{
+                painDegree.setStrokeWidth(3);
+                painDegree.setTextSize(15);
+                canvas.drawLine(getWidth()/2,getHeight()/2-getWidth()/2,getWidth()/2,getHeight()/2-getWidth()/2+30,painDegree);
+                String degree=String.valueOf(i);
+                canvas.drawText(degree,getWidth()/2-painDegree.measureText(degree)/2,getHeight()/2-getWidth()/2+60,painDegree);
+            }
+            //画完一笔旋转，刚好旋转360度不用保存
+            canvas.rotate(15,getWidth()/2,getHeight()/2);
+        }
+
+
+        Paint paintHour=new Paint();
+        paintHour.setStrokeWidth(20);
+        Paint paintMinute=new Paint();
+        paintMinute.setStrokeWidth(10);
+
+        canvas.save();
+        canvas.translate(getWidth()/2,getHeight()/2);
+        canvas.drawLine(0,0,100,100,paintHour);
+        canvas.drawLine(0,0,200,200,paintMinute);
+
+        canvas.restore();
+
+
+    }
+}
+```
+
+#### Layer图层
+
+
+![Alt text](图像1511104169.png "关闭图层的效果")
+
+```
+public class TesView extends android.support.v7.widget.AppCompatTextView {
+    public TesView(Context context) {
+        super(context);
+    }
+    public TesView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TesView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        Paint mPaint=new Paint();
+        canvas.drawColor(Color.WHITE);
+        mPaint.setColor(Color.BLUE);
+        canvas.drawCircle(150,150,100,mPaint);
+//        canvas.saveLayerAlpha(0,0,400,400,127);
+        mPaint.setColor(Color.RED);
+        canvas.drawCircle(200,200,100,mPaint);
+//        canvas.restore();
+    }
+}
+
+```
+
+![Alt text](图像1511104031.png "开启图层效果")
+
+```
+public class TesView extends android.support.v7.widget.AppCompatTextView {
+    public TesView(Context context) {
+        super(context);
+    }
+    public TesView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TesView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        Paint mPaint=new Paint();
+        canvas.drawColor(Color.WHITE);
+        mPaint.setColor(Color.BLUE);
+        canvas.drawCircle(150,150,100,mPaint);
+        //将下一个图层的透明度变化为127 就是50%
+        canvas.saveLayerAlpha(0,0,400,400,127);
+        mPaint.setColor(Color.RED);
+        canvas.drawCircle(200,200,100,mPaint);
+        canvas.restore();//这个是还原save的操作
+    }
+}
+
+```
+
+
+### Android图像处理值色彩特效处理
+
+看这个之前先来看一下矩阵，第一个矩阵第一行*第二个矩阵第一列 就是结果的第一个元素
+
+![Alt text](bg2015090102.png "矩阵乘法")
+
+（2,1）* (1,1) =3  
+
+想看的可以看一下这个视频
+http://open.163.com/special/opencourse/daishu.html
