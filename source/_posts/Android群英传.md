@@ -1870,12 +1870,48 @@ public class TesView extends android.support.v7.widget.AppCompatTextView {
 
 
 ### Android图像处理值色彩特效处理
-
+#### 矩阵
 看这个之前先来看一下矩阵，第一个矩阵第一行*第二个矩阵第一列 就是结果的第一个元素
 
-![Alt text](bg2015090102.png "矩阵乘法")
+![Alt text](bg2015090104.png "矩阵乘法")
 
 （2,1）* (1,1) =3  
 
+![Alt text](bg2015090105.png "矩阵乘法")
+
+![Alt text](图像1511276003.png.png "矩阵乘法")
+如果想要变红色  一般会修改a1或者e1的值  b1,c1,d1 就为0  修改a1就是给原来色值乘上a1，修改e1就是给原来色值加上一个偏移
+
 想看的可以看一下这个视频
 http://open.163.com/special/opencourse/daishu.html
+或者不想看可以看一下这个阮一峰的博客
+http://www.ruanyifeng.com/blog/2015/09/matrix-multiplication.html
+
+#### 概述
+图像从三个维度来描述
+* 色调
+* 饱和度
+* 亮度
+Android使用`ColorMatrix`帮助我们封装了矩阵，来实现对矩阵的操作
+```
+
+    //设置色调
+    ColorMatrix colorMatrix=new ColorMatrix();
+    colorMatrix.setRotate(0,1);
+    colorMatrix.setRotate(1,1);
+    colorMatrix.setRotate(2,1);
+
+    //设置饱和度 如果值为0  就是灰色的图像，老照片的效果
+    ColorMatrix colorMatrix1=new ColorMatrix();
+    colorMatrix1.setSaturation(0);
+
+    //设置亮度 如果都是0 就变成黑色了
+    ColorMatrix colorMatrix2=new ColorMatrix();
+    colorMatrix2.setScale(0,0,0,0);
+    //混合上面三种矩阵
+    ColorMatrix colorMatrix3=new ColorMatrix();
+    colorMatrix.postConcat(colorMatrix);
+    colorMatrix.postConcat(colorMatrix1);
+    colorMatrix.postConcat(colorMatrix2);
+```
+#### 一个例子
