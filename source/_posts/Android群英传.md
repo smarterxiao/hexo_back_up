@@ -1915,3 +1915,403 @@ Android使用`ColorMatrix`帮助我们封装了矩阵，来实现对矩阵的操
     colorMatrix.postConcat(colorMatrix2);
 ```
 #### 一个例子
+这个是原图
+![Alt text](pg_11111111111.jpg "两个美女")
+看一下效果
+
+改变`ColorMatrix`的`setRotate`，从-1到1
+
+![Alt text](gif_0.gif "改变0")
+
+![Alt text](gif_1.gif "改变1")
+
+![Alt text](gif_2.gif "改变2")
+
+![Alt text](gif_3.gif "3个都改变")
+
+`setSaturation`  范围 0-2
+![Alt text](djfkdskfl2.gif "改变饱和度")
+`setScale`   范围 0-2
+![Alt text](sldkfldkajflks.gif "改变亮度")
+
+代码
+
+进度条
+```
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout xmlns:tools="http://schemas.android.com/tools"
+
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        tools:context="com.smart.myapplication.MainActivity">
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="106dp">
+        <ImageView
+            android:id="@+id/iv_test"
+            android:layout_width="160dp"
+            android:layout_height="106dp"
+            android:src="@mipmap/pg_11111111111" />
+            <ImageView
+                android:id="@+id/iv_test1"
+                android:layout_width="160dp"
+                android:layout_height="106dp"
+                 />
+        </LinearLayout>
+        <SeekBar
+            android:id="@+id/bar_red"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="0" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="色调" />
+
+        <SeekBar
+            android:id="@+id/bar_green"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="50" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="饱和度" />
+
+        <SeekBar
+            android:id="@+id/bar_blue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="0" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="TextView"
+            tools:text="亮度" />
+
+    </LinearLayout>
+</ScrollView>
+```
+
+```
+
+
+public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBarChangeListener {
+
+    private ImageView iv_test;
+    private SeekBar bar_red;
+    private SeekBar bar_green;
+    private SeekBar bar_blue;
+
+    int MID_VALUE = 50;
+    private float mHue;
+    private float mStauration;
+    private float mLum;
+    private ImageView iv_test1;
+    private Bitmap bitmap;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        iv_test = findViewById(R.id.iv_test);
+        iv_test1 = findViewById(R.id.iv_test1);
+        bar_red = findViewById(R.id.bar_red);
+        bar_green = findViewById(R.id.bar_green);
+        bar_blue = findViewById(R.id.bar_blue);
+        bar_red.setOnSeekBarChangeListener(this);
+        bar_green.setOnSeekBarChangeListener(this);
+        bar_blue.setOnSeekBarChangeListener(this);
+        bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+
+    }
+    @Override
+    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+        switch (seekBar.getId()) {
+            case R.id.bar_red:
+                mHue = (progress-MID_VALUE*1.0f)/MID_VALUE*180;
+                break;
+            case R.id.bar_green:
+                mStauration = progress * 1.0f / MID_VALUE;
+                break;
+            case R.id.bar_blue:
+                mLum = progress * 1.0f / MID_VALUE;
+                break;
+        }
+        iv_test1.setImageBitmap(handleImageEffect(bitmap,mHue,mStauration,mLum));
+    }
+
+    @Override
+    public void onStartTrackingTouch(SeekBar seekBar) {
+        switch (seekBar.getId()) {
+        }
+    }
+
+    @Override
+    public void onStopTrackingTouch(SeekBar seekBar) {
+        switch (seekBar.getId()) {
+        }
+    }
+    public  static Bitmap handleImageEffect(Bitmap bm,float hue,float saturation,float lum){
+        Bitmap bmp=Bitmap.createBitmap(bm.getWidth(),bm.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas=new Canvas(bmp);
+        Paint paint=new Paint();
+        //色调
+        ColorMatrix hueMarix=new ColorMatrix();
+        hueMarix.setRotate(0,  hue);
+        hueMarix.setRotate(1,  hue);
+        hueMarix.setRotate(2,hue);
+        //饱和度
+        ColorMatrix saturationMarix=new ColorMatrix();
+        saturationMarix.setSaturation(saturation);
+        //亮度
+        ColorMatrix lumMarix=new ColorMatrix();
+        lumMarix.setScale(lum,lum,lum,1);
+
+        ColorMatrix imageMatrix=new ColorMatrix();
+//下面这三个要分开调用 每次解开一个 这个是书里面的一个坑 不然会一直显示黑色的
+//        imageMatrix.postConcat(hueMarix);
+//        imageMatrix.postConcat(saturationMarix);
+//        imageMatrix.postConcat(lumMarix);
+
+        //设置画笔颜色过滤器
+        paint.setColorFilter(new ColorMatrixColorFilter(imageMatrix));
+        canvas.drawBitmap(bm,0,0,paint);
+        return bmp;
+    }
+}
+
+```
+下面来看一下`ColorMatrix` 这个东西到底是什么，点击进入源码 `ctrl+b`，这里就分析一下比较正要的代码
+
+```
+ColorMatrix {
+ private final float[] mArray = new float[20];//这是一个四行五列的矩阵，在这里面没有矩阵这种数据结构，用数组替代
+ public void setRotate(int axis, float degrees) {
+     reset();
+     double radians = degrees * Math.PI / 180d;
+     float cosine = (float) Math.cos(radians);
+     float sine = (float) Math.sin(radians);
+     switch (axis) {
+     // Rotation around the red color
+     case 0:
+        //
+        //   double radians = degrees * Math.PI / 180d;
+        //   float cosine = (float) Math.cos(radians);
+        //  float sine = (float) Math.sin(radians);
+        //x 代表原来的值，然后改变色调就是改变红绿蓝的比例，可以看一下上面的矩阵的乘法
+        //     x      x        x     x    x
+        //     x      cosine  sine   x    x
+        //     x    -sine   cosine   x    x
+        //     x      x        x     x    x
+        //
+         mArray[6] = mArray[12] = cosine;
+         mArray[7] = sine;
+         mArray[11] = -sine;
+         break;
+     // Rotation around the green color
+     case 1:
+         mArray[0] = mArray[12] = cosine;
+         mArray[2] = -sine;
+         mArray[10] = sine;
+         break;
+     // Rotation around the blue color
+     case 2:
+         mArray[0] = mArray[6] = cosine;
+         mArray[1] = sine;
+         mArray[5] = -sine;
+         break;
+     default:
+         throw new RuntimeException();
+     }
+ }
+//改变饱和度也是改变这个色彩矩阵
+ public void setSaturation(float sat) {
+    reset();
+    float[] m = mArray;//矩阵
+
+    final float invSat = 1 - sat;
+    final float R = 0.213f * invSat;
+    final float G = 0.715f * invSat;
+    final float B = 0.072f * invSat;
+
+    m[0] = R + sat; m[1] = G;       m[2] = B;
+    m[5] = R;       m[6] = G + sat; m[7] = B;
+    m[10] = R;      m[11] = G;      m[12] = B + sat;
+}
+//改变亮度也是改变这个色彩矩阵
+public void setScale(float rScale, float gScale, float bScale,
+                       float aScale) {
+      final float[] a = mArray;//矩阵
+
+      for (int i = 19; i > 0; --i) {
+          a[i] = 0;
+      }
+      a[0] = rScale;
+      a[6] = gScale;
+      a[12] = bScale;
+      a[18] = aScale;
+  }
+}
+```
+
+> 可以发现改变饱和度，色调，亮度就是改变红绿蓝的数值
+
+#### 一个更加明显的例子
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="com.smart.myapplication.MainActivity">
+    <ImageView
+        android:id="@+id/iv_test"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@mipmap/pg_11111111111" />
+    <GridLayout
+        android:id="@+id/gl"
+        android:columnCount="5"
+        android:rowCount="4"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <Button
+            android:id="@+id/bt1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="改变" />
+        <Button
+            android:id="@+id/bt2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="重置" />
+    </LinearLayout>
+</LinearLayout>
+
+```
+
+
+```
+public class MainActivity extends AppCompatActivity {
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private int mHeight;
+    private int mWidth;
+    private GridLayout gridLayout;
+    float[] mColorMatrix = new float[20];
+    private Button bt1;
+    private Button bt2;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        iv_test = findViewById(R.id.iv_test);
+        bt1 = findViewById(R.id.bt1);
+        bt2 = findViewById(R.id.bt2);
+        iv_test = findViewById(R.id.iv_test);
+        bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+        gridLayout = findViewById(R.id.gl);
+        gridLayout.post(new Runnable() {
+            @Override
+            public void run() {
+                mWidth = gridLayout.getWidth() / 5;
+                mHeight = gridLayout.getHeight() / 4;
+                addEts();
+                initMatrix();
+
+            }
+        });
+        bt1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                btnChange(v);
+            }
+        });
+        bt2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                btnReset(v);
+            }
+        });
+    }
+    private void initMatrix() {
+        for (int i = 0; i < 20; i++) {
+            if (i % 6 == 0) {
+                ets[i].setText(String.valueOf(1));
+            } else {
+                ets[i].setText(String.valueOf(0));
+            }
+        }
+    }
+    EditText[] ets = new EditText[20];
+    private void addEts() {
+        for (int i = 0; i < 20; i++) {
+            EditText et = new EditText(MainActivity.this);
+            ets[i] = et;
+            gridLayout.addView(et, mWidth, mHeight);
+        }
+    }
+    private void getMatrix() {
+        for (int i = 0; i < 20; i++) {
+            mColorMatrix[i] = Float.valueOf(ets[i].getText().toString());
+        }
+    }
+    private void setBitmapMatrix() {
+        Bitmap bmp = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        ColorMatrix colorMatrix = new ColorMatrix();
+
+        colorMatrix.set(mColorMatrix);
+        Canvas canvas = new Canvas(bmp);
+        Paint paint = new Paint();
+        paint.setColorFilter(new ColorMatrixColorFilter(mColorMatrix));
+        canvas.drawBitmap(bitmap, 0, 0, paint);
+        iv_test.setImageBitmap(bmp);
+    }
+    public void btnChange(View view) {
+        getMatrix();
+        setBitmapMatrix();
+    }
+    public void btnReset(View view) {
+        initMatrix();
+        getMatrix();
+        setBitmapMatrix();
+    }
+}
+
+```
+
+这个是原图
+![Alt text](pg_11111111111.jpg "两个美女")
+
+* 灰度效果
+
+|      ----   |      ----        |   ----  | ---- | ---- |
+| ------------- |:-------------:| -----:|-----:|-----:|
+| 0.33f    | 0.59f | 0.11f |0|0|
+| 0.33f     | 0.59f      |  0.11f |0|0|
+| 0.33f | 0.59f   | 0.11f|0|0|
+| 0 |0 | 0|1|0|
+
+![Alt text](huiduxiaoguo.png "灰度效果")
