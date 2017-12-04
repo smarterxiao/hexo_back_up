@@ -2171,7 +2171,7 @@ public void setScale(float rScale, float gScale, float bScale,
 
 > 可以发现改变饱和度，色调，亮度就是改变红绿蓝的数值
 
-#### 一个更加明显的例子
+#### 一个更加明显的例子，之前书上是黑白的，不是很明显
 
 ```
 <?xml version="1.0" encoding="utf-8"?>
@@ -2285,7 +2285,9 @@ public class MainActivity extends AppCompatActivity {
         colorMatrix.set(mColorMatrix);
         Canvas canvas = new Canvas(bmp);
         Paint paint = new Paint();
+        //将变换的效果设置到画笔
         paint.setColorFilter(new ColorMatrixColorFilter(mColorMatrix));
+        //画一个bitMap
         canvas.drawBitmap(bitmap, 0, 0, paint);
         iv_test.setImageBitmap(bmp);
     }
@@ -2315,3 +2317,104 @@ public class MainActivity extends AppCompatActivity {
 | 0 |0 | 0|1|0|
 
 ![Alt text](huiduxiaoguo.png "灰度效果")
+
+* 反转效果
+
+|----| ----        |   ----  | ---- | ---- |
+| ------------- |:-------------:| -----:|-----:|-----:|
+| -1   | 0 | 0 |1|1|
+| 0    | -1     |  0 |1|1|
+|0 | 0  | -1|1|1|
+| 0 |0 | 0|1|0|
+
+![Alt text](device-2017-12-04-231328.png "反转效果")
+
+
+* 怀旧效果
+
+|----| ----        |   ----  | ---- | ---- |
+| ------------- |:-------------:| -----:|-----:|-----:|
+| 0.393f   | 0.769f | 0.189f |0|0|
+| 0.349f    | 0.686f     |  0.168f |0|0|
+|0.272f| 0.534f | 0.131f|0|0|
+| 0 |0 | 0|1|0|
+
+![Alt text](device-2017-12-04-231739.png "怀旧效果")
+
+
+
+* 去色效果
+
+|----| ----        |   ----  | ---- | ---- |
+| ------------- |:-------------:| -----:|-----:|-----:|
+| 1.5f   | 1.5f |1.5f |0|-1|
+| 1.5f    | 1.5f     | 1.5f |0|-1|
+|1.5f| 1.5f |1.5f|0|-1|
+| 0 |0 | 0|1|0|
+
+![Alt text](device-2017-12-04-232141.png "去色效果")
+
+
+
+* 高饱和度
+
+|----| ----        |   ----  | ---- | ---- |
+| ------------- |:-------------:| -----:|-----:|-----:|
+| 1.438f   | -0.122f |-0.016f |0|0.03f|
+| -0.062f    | 1.378f     | -0.016ff |0|0.05f|
+|-0.062f|  -0.122f  |1.438f  |1|0|
+| 0 |0 | 0|1|0|
+
+![Alt text](device-2017-12-04-232508.png "高饱和度")
+
+#### 像素点分析
+我们可以更加详细的处理每一个像素点，通过API`BitMap.getPiexs`获取每一个像素点，之后通过计算每一个颜色值，来达到我们想要的效果。
+
+一个简单的流程，不能直接修改原来图片的`Piexs` 只能复制出来创建一个新的图片
+```
+private ImageView iv_test;
+private Bitmap bitmap;
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_main);
+
+    iv_test = findViewById(R.id.iv_test);
+
+    bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+    int width = bitmap.getWidth();
+    int height = bitmap.getHeight();
+    Bitmap bit = Bitmap.createBitmap(width,height, Bitmap.Config.ARGB_8888);
+    int[] old = new int[width * height];//旧的颜色集合
+    int[] newColors = new int[width * height];//旧的新的集合
+    /**
+     * @param pixels   获取的矩阵
+     * @param offset   偏移
+     * @param stride.  宽度，就是每一行有多少个像素
+     * @param x        起始位置
+     * @param y        结束位置
+     * @param width    宽度
+     * @param height   高度
+     */
+    bitmap.getPixels(old, 0, width, 0, 0, width, height);
+    int color = old[10]; //获取第十一个像素点的颜色  一个具体的像素点
+    //解析这个颜色值，分离出 ARGB
+    int red = Color.red(color);
+    int green = Color.green(color);
+    int blue = Color.blue(color);
+    int alpha = Color.alpha(color);
+
+    //对颜色值进行处理
+    red=2*red;
+    green=2*green;
+    blue=2*blue;
+    alpha=2*alpha;
+    //制作颜色
+    newColors[10]=Color.argb(alpha,red,green,blue);
+    //设置颜色矩阵
+    bit.setPixels(newColors, 0, width, 0, 0, width, height);
+}
+
+```
+
+#### 处理像素点的例子
