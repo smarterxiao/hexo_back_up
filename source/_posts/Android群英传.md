@@ -2418,3 +2418,341 @@ protected void onCreate(Bundle savedInstanceState) {
 ```
 
 #### 处理像素点的例子
+代码大部分都是相同的，可以重点关注一下`对颜色值进行处理,这里就是ov大厂处理图片的地方`注释之间的代码
+
+* 反色效果
+```
+
+public class MainActivity extends AppCompatActivity {
+
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private ImageView iv_test1;
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        //两个imageview
+        iv_test = findViewById(R.id.iv_test);
+        iv_test1 = findViewById(R.id.iv_test1);
+
+        bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        Bitmap bit = Bitmap.createBitmap(width,height, Bitmap.Config.ARGB_8888);
+        int[] old = new int[width * height];//旧的颜色集合
+        int[] newColors = new int[width * height];//旧的新的集合
+        /**
+         * @param pixels   获取的矩阵
+         * @param offset   偏移
+         * @param stride.  宽度，就是每一行有多少个像素
+         * @param x        起始位置
+         * @param y        结束位置
+         * @param width    宽度
+         * @param height   高度
+         */
+        bitmap.getPixels(old, 0, width, 0, 0, width, height);
+
+
+
+        for (int i = 0; i < width * height; i++) {
+            int color = old[i]; //获取第i个像素点的颜色
+            //解析这个颜色值，分离出 ARGB
+            int red = Color.red(color);
+            int green = Color.green(color);
+            int blue = Color.blue(color);
+            int alpha = Color.alpha(color);
+
+            int red1;
+            int green1;
+            int blue1;
+            int alpha1;
+
+            //对颜色值进行处理,这里就是ov大厂处理图片的地方
+            red1=255-red;//处理红色
+            green1=255-green;//处理绿色
+            blue1=255-blue;//处理蓝色
+            alpha1=alpha;//处理透明度
+
+
+            //边界判断
+            if(red1>255){
+                red1=255;
+            }else if(red1<0){
+                red1=0;
+            }
+
+            if(green1>255){
+                green1=255;
+            }else if(green1<0){
+                green1=0;
+            }
+
+
+            if(blue1>255){
+                blue1=255;
+            }else if(blue1<0){
+                blue1=0;
+            }
+            if(alpha1>255){
+                alpha1=255;
+            }else if(alpha1<0){
+                alpha1=0;
+            }
+
+            //制作颜色
+            newColors[i]=Color.argb(alpha1,red1,green1,blue1);
+        }
+        //设置颜色矩阵
+        bit.setPixels(newColors, 0, width, 0, 0, width, height);
+        iv_test1.setImageBitmap(bit);
+    }
+}
+
+```
+![Alt text](device-2017-12-05-232020.png "反色效果")
+
+* 老照片
+
+```
+
+
+public class MainActivity extends AppCompatActivity {
+
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private ImageView iv_test1;
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        //两个imageview
+        iv_test = findViewById(R.id.iv_test);
+        iv_test1 = findViewById(R.id.iv_test1);
+
+        bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        Bitmap bit = Bitmap.createBitmap(width,height, Bitmap.Config.ARGB_8888);
+        int[] old = new int[width * height];//旧的颜色集合
+        int[] newColors = new int[width * height];//旧的新的集合
+        /**
+         * @param pixels   获取的矩阵
+         * @param offset   偏移
+         * @param stride.  宽度，就是每一行有多少个像素
+         * @param x        起始位置
+         * @param y        结束位置
+         * @param width    宽度
+         * @param height   高度
+         */
+        bitmap.getPixels(old, 0, width, 0, 0, width, height);
+
+
+
+        for (int i = 0; i < width * height; i++) {
+            int color = old[i]; //获取第i个像素点的颜色
+            //解析这个颜色值，分离出 ARGB
+            int red = Color.red(color);
+            int green = Color.green(color);
+            int blue = Color.blue(color);
+            int alpha = Color.alpha(color);
+
+            int red1;
+            int green1;
+            int blue1;
+            int alpha1;
+
+            //对颜色值进行处理,这里就是ov大厂处理图片的地方
+            red1= (int) (0.393*red+0.769*green+0.189*blue);//处理红色
+            green1=(int) (0.349*red+0.686*green+0.186*blue);//处理绿色
+            blue1=(int) (0.272*red+0.534*green+0.131*blue);//处理蓝色
+            alpha1=alpha;//处理透明度
+
+            //边界判断
+            if(red1>255){
+                red1=255;
+            }else if(red1<0){
+                red1=0;
+            }
+
+            if(green1>255){
+                green1=255;
+            }else if(green1<0){
+                green1=0;
+            }
+
+
+            if(blue1>255){
+                blue1=255;
+            }else if(blue1<0){
+                blue1=0;
+            }
+            if(alpha1>255){
+                alpha1=255;
+            }else if(alpha1<0){
+                alpha1=0;
+            }
+
+            //制作颜色
+            newColors[i]=Color.argb(alpha1,red1,green1,blue1);
+        }
+        //设置颜色矩阵
+        bit.setPixels(newColors, 0, width, 0, 0, width, height);
+        iv_test1.setImageBitmap(bit);
+    }
+}
+
+```
+
+![Alt text](device-2017-12-05-232351.png "老照片")
+
+* 浮雕效果：这个感觉有点不对
+> 算法 有ABC三个点，对B进行浮雕算法
+B.red=C.red-B.red+127;
+B.green=C.green-B.green+127;
+B.blue=C.blue-B.blue+127;
+
+```
+
+
+public class MainActivity extends AppCompatActivity {
+
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private ImageView iv_test1;
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+//两个imageview
+        iv_test = findViewById(R.id.iv_test);
+        iv_test1 = findViewById(R.id.iv_test1);
+
+        bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        Bitmap bit = Bitmap.createBitmap(width,height, Bitmap.Config.ARGB_8888);
+        int[] old = new int[width * height];//旧的颜色集合
+        int[] newColors = new int[width * height];//旧的新的集合
+        /**
+         * @param pixels   获取的矩阵
+         * @param offset   偏移
+         * @param stride.  宽度，就是每一行有多少个像素
+         * @param x        起始位置
+         * @param y        结束位置
+         * @param width    宽度
+         * @param height   高度
+         */
+        bitmap.getPixels(old, 0, width, 0, 0, width, height);
+
+
+
+        for (int i = 0; i < width * height; i++) {
+            int color = old[i]; //获取第i个像素点的颜色
+
+            int color2 = old[i+1>255?255:i+1];
+            //解析这个颜色值，分离出 ARGB
+            int red = Color.red(color);
+            int green = Color.green(color);
+            int blue = Color.blue(color);
+            int alpha = Color.alpha(color);
+
+
+            int red2 = Color.red(color2);
+            int green2 = Color.green(color2);
+            int blue2 = Color.blue(color2);
+            int alpha2 = Color.alpha(color2);
+
+            int red1;
+            int green1;
+            int blue1;
+            int alpha1;
+
+            //对颜色值进行处理,这里就是ov大厂处理图片的地方
+            red1= red2-red+127;//处理红色
+            green1= green2-green+127;//处理绿色
+            blue1= blue2-blue+127;//处理蓝色
+            alpha1=alpha;//处理透明度
+
+            //边界判断
+            if(red1>255){
+                red1=255;
+            }else if(red1<0){
+                red1=0;
+            }
+
+            if(green1>255){
+                green1=255;
+            }else if(green1<0){
+                green1=0;
+            }
+
+
+            if(blue1>255){
+                blue1=255;
+            }else if(blue1<0){
+                blue1=0;
+            }
+            if(alpha1>255){
+                alpha1=255;
+            }else if(alpha1<0){
+                alpha1=0;
+            }
+
+            //制作颜色
+            newColors[i]=Color.argb(alpha1,red1,green1,blue1);
+        }
+        //设置颜色矩阵
+        bit.setPixels(newColors, 0, width, 0, 0, width, height);
+        iv_test1.setImageBitmap(bit);
+    }
+}
+```
+
+![Alt text](device-2017-12-05-233233.png "浮雕效果")
+
+### Android图像处理之图形特效处理
+> 上面看完了`ColorMatrix`对颜色的处理，现在看一下`Matrix`对图形变换的处理，本质是一致的，都是通过矩阵计算
+只不过从`argb`变成了`xy`
+
+![Alt text](图像1512488459.png "简单的一个矩阵算法")
+
+正常情况会让 g=h=0 i=1 这样1=g*X+h*Y+i 始终成立
+
+#### 原始变换矩阵
+
+|----| ----        |   ----  |
+| ------------- |:-------------:| -----:|
+| 1   | 0 |0 |
+| 0  |1| 0 |
+|0|  0 |1  |
+
+
+####平移变换
+
+|----| ----        |   ----  |
+| ------------- |:-------------:| -----:|
+| 1   | 0 |dx |
+| 0  |1| dy|
+|0|  0 |1  |
+
+
+
+
+#### 旋转变换
+
+a 顺时针旋转的角度
+|----| ----        |   ----  |
+| ------------- |:-------------:| -----:|
+| cos(a)   |  -sin(a)  |0 |
+|  sin(a)   | cos(a) | 0|
+|0|  0 |1  |
