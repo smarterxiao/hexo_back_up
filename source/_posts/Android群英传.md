@@ -2745,14 +2745,206 @@ public class MainActivity extends AppCompatActivity {
 | 0  |1| dy|
 |0|  0 |1  |
 
+![Alt text](图像1515509868.png "平移")
 
-
+![Alt text](图像1515510116.png "平移 ")
 
 #### 旋转变换
 
 a 顺时针旋转的角度
+
 |----| ----        |   ----  |
 | ------------- |:-------------:| -----:|
 | cos(a)   |  -sin(a)  |0 |
 |  sin(a)   | cos(a) | 0|
 |0|  0 |1  |
+![Alt text](图像1515510352.png "旋转 ")
+
+#### 缩放
+|----| ----        |   ----  |
+| ------------- |:-------------:| -----:|
+| k1 | 0  |0 |
+| 0  | k2| 0|
+|0|  0 |1  |
+就是乘以不同的系数
+
+#### 错切变换
+
+|----| ----        |   ----  |
+| ------------- |:-------------:| -----:|
+| 1 | k1  |0 |
+| k2  | 1| 0|
+|0|  0 |1  |
+![Alt text](错切.png "旋转 ")
+
+
+#### 小结
+把前面4种变化
+|----| ----        |   ----  |
+| ------------- |:-------------:| -----:|
+| A| B  |C |
+| D  | E| F|
+|0|  0 |1  |
+
+* A和E控制：缩放变换
+* B和D控制：错切变换
+* C和F控制：平移变换
+* A、B、D、E控制：旋转变换
+
+#### 效果展示和代码
+
+##### 平移变换
+效果
+![Alt text](device-2018-01-11-215812.png "平移，看下面那张图片")
+
+![Alt text](device-2018-01-11-220301.png "缩放，看下面那张图片")
+
+![Alt text](device-2018-01-11-220845.png "旋转45，看下面那张图片")
+
+![Alt text](device-2018-01-11-221212.png "错切x，看下面那张图片")
+
+![Alt text](device-2018-01-11-221335.png "错切y，看下面那张图片")
+
+布局  
+```
+<com.smart.myapplication.TesView
+android:layout_width="1000dp"
+android:layout_height="1000dp"
+/>
+```
+代码
+
+```
+public class TesView extends android.support.v7.widget.AppCompatTextView {
+    public TesView(Context context) {
+        super(context);
+    }
+    public TesView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TesView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+    Bitmap bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+        canvas.drawBitmap(bitmap,0,0,new Paint());
+        //绘制的时候进行平移100像素
+        float[] mImageMatrix=new float[]{1,0,100,0,1,100,0,0,1};
+        //绘制的时候进行放大1.2倍
+        float[] mImageMatrix=new float[]{1.2f,0,0,0,1.2f,0,0,0,1};
+        //绘制的时候进行旋转45度
+        float[] mImageMatrix=new float[]{0.5f,-0.5f,0,0.5f,0.5f,0,0,0,1};
+        //绘制的时候进行x轴错切
+        float[] mImageMatrix=new float[]{1,0.5f,0,0,1,0,0,0,1};
+        //绘制的时候进行y轴错切
+        float[] mImageMatrix=new float[]{1,0,0,0.5f,1,0,0,0,1};
+        Matrix matrix=new Matrix();
+        matrix.setValues(mImageMatrix);
+        canvas.drawBitmap(bitmap,matrix,null);
+    }
+}
+
+```
+
+#### api提供的方法一样可以
+```
+@Override
+protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        Bitmap bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+        canvas.drawBitmap(bitmap,0,0,new Paint());
+        Matrix matrix=new Matrix();
+        matrix.setRotate();//旋转
+        matrix.setTranslate();//平移
+        matrix.setScale();//缩放
+        matrix.setSkew();//错切
+        matrix.postxxx();//后乘运算
+        matrix.prexxx();//前乘运算
+        matrix.setValues(mImageMatrix);
+        canvas.drawBitmap(bitmap,matrix,null);
+```
+
+
+#### 像素块分析
+就是把一个图片分为一个一个不同的像素组，对这个像素组进行计算,类似一个拼图，把一张图片给拆开，不过没有凹凸
+
+
+```
+public class TesView extends android.support.v7.widget.AppCompatTextView {
+
+    private Bitmap bitmap;
+    private int height;
+    private int width;
+    private int HEIGHT;
+    private int WIDTH;
+    private float[] orig;
+    private float[] verts;
+
+    public TesView(Context context) {
+        super(context);
+        init();
+    }
+
+    private void init() {
+
+
+        bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+        width = bitmap.getWidth();
+        height = bitmap.getHeight();
+        orig = new float[width*height/2];
+        verts = new float[width*height/2];
+        int index = 0;
+        HEIGHT = 100;
+        WIDTH = 100;
+        for (int y = 0; y <= HEIGHT; y++) {
+            float fy = height * y / HEIGHT;
+            for (int i = 0; i <= WIDTH; i++) {
+                float fx = width * i / WIDTH;
+                orig[index * 2 ] = verts[index * 2] = fx;
+                orig[index * 2 + 1] = verts[index * 2 + 1] = fy ;
+                index++;
+            }
+        }
+    }
+
+    public TesView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public TesView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+
+    private void flagWave() {
+        for (int j = 0; j <= HEIGHT; j++) {
+            for (int i1 = 0; i1 <= WIDTH; i1++) {
+                verts[(j * (WIDTH + 1) + i1) * 2 + 0] += 0;
+                float offsetY = (float) Math.sin((float) i1 / WIDTH * 2 * Math.PI + Math.PI * k);
+                //这个5是系数 ，就是滚动的距离
+                verts[(j * (WIDTH + 1) + i1) * 2 + 1] = orig[(j * WIDTH + i1) * 2 + 1] + offsetY*5 ;
+            }
+        }
+
+    }
+
+    float k = 0f;
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        flagWave();
+        k += 0.1;// 这样可以扭动起来
+        canvas.drawBitmapMesh(bitmap, WIDTH, HEIGHT, verts, 0, null, 0, null);
+        invalidate();
+    }
+}
+
+```
+
+![Alt text](dongdong.gif "效果")
