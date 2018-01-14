@@ -2951,4 +2951,362 @@ public class TesView extends android.support.v7.widget.AppCompatTextView {
 
 #### Android 图像处理值画笔
 
+##### 圆角图片
+
 ![Alt text](2041548-d964105abf4be5d9.jpg "Google的官方图片")
+
+```
+public class guaguakaView extends android.support.v7.widget.AppCompatTextView {
+    public guaguakaView(@NonNull Context context) {
+        super(context);
+    }
+    public guaguakaView(@NonNull Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public guaguakaView(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+    Bitmap bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+
+        Bitmap mOut=Bitmap.createBitmap(bitmap.getWidth(),bitmap.getHeight(),Bitmap.Config.ARGB_8888);
+        Canvas mCanvas=new Canvas(mOut);
+        Paint paint=new Paint();
+        paint.setAntiAlias(true);
+        mCanvas.drawRoundRect(0,0,bitmap.getWidth(),bitmap.getHeight(),80,80,paint);
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        mCanvas.drawBitmap(bitmap,0,0,paint);
+        canvas.drawBitmap(mOut,0,0,new Paint());
+    }
+}
+
+```
+
+![Alt text](device-2018-01-14-212001.png "圆角图片")
+
+
+##### 刮刮卡
+
+![Alt text](guaguaka.png "刮刮卡效果图")
+
+```
+public class TesView extends android.support.v7.widget.AppCompatTextView {
+
+    private Bitmap bitmap;
+    private int height;
+    private int width;
+    private int HEIGHT;
+    private int WIDTH;
+    private float[] orig;
+    private float[] verts;
+
+    public TesView(Context context) {
+        super(context);
+        init();
+    }
+    private void init() {
+        bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+        width = bitmap.getWidth();
+        height = bitmap.getHeight();
+        orig = new float[width*height/2];
+        verts = new float[width*height/2];
+        int index = 0;
+        HEIGHT = 100;
+        WIDTH = 100;
+        for (int y = 0; y <= HEIGHT; y++) {
+            float fy = height * y / HEIGHT;
+            for (int i = 0; i <= WIDTH; i++) {
+                float fx = width * i / WIDTH;
+                orig[index * 2 ] = verts[index * 2] = fx;
+                orig[index * 2 + 1] = verts[index * 2 + 1] = fy ;
+                index++;
+            }
+        }
+    }
+    public TesView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+    public TesView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+    private void flagWave() {
+        for (int j = 0; j <= HEIGHT; j++) {
+            for (int i1 = 0; i1 <= WIDTH; i1++) {
+                verts[(j * (WIDTH + 1) + i1) * 2 + 0] += 0;
+                float offsetY = (float) Math.sin((float) i1 / WIDTH * 2 * Math.PI + Math.PI * k);
+                verts[(j * (WIDTH + 1) + i1) * 2 + 1] = orig[(j * WIDTH + i1) * 2 + 1] + offsetY*5 ;
+            }
+        }
+    }
+    float k = 0f;
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        flagWave();
+        k += 0.1;
+        canvas.drawBitmapMesh(bitmap, WIDTH, HEIGHT, verts, 0, null, 0, null);
+        invalidate();
+    }
+}
+
+```
+
+#### Shader  着色器
+
+分类
+* BitmapShader  //图片Shader
+* LinearGradient  //线性Shader
+* RadialGradient    //光束SHader
+* SweepGradient     //梯度  Shader
+* ComposeShader    //混合  Shader
+
+模式
+
+* CLAMP  拉伸，最后那个像素不断重复
+* REPEAT 重复
+* MIRROR 镜像
+
+
+![Alt text](device-2018-01-14-220130.png "圆形头像效果图")
+
+```
+public class RoundView extends View {
+    public RoundView(Context context) {
+        super(context);
+    }
+    public RoundView(Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public RoundView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+      //头像要比较大 不然显示有问题，这个是一个demo，下面会有原因
+        Bitmap mBitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+        BitmapShader bitmapShader = new BitmapShader(mBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+        Paint mPaint = new Paint();
+        mPaint.setShader(bitmapShader);
+        canvas.drawCircle(500, 250, 200, mPaint);
+    }
+}
+
+```
+
+
+不同的显示模式的效果
+
+![Alt text](1510156433278.png "原图")
+```
+@Override
+ protected void onDraw(Canvas canvas) {
+     super.onDraw(canvas);
+
+
+     Bitmap mBitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.test1);
+
+     BitmapShader bitmapShader = new BitmapShader(mBitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+     Paint mPaint = new Paint();
+     mPaint.setShader(bitmapShader);
+     canvas.drawCircle(500, 500, 500, mPaint);
+ }
+```
+
+![Alt text](device-2018-01-14-220943.png "效果图")
+
+```
+      Bitmap mBitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.test1);
+      LinearGradient bitmapShader = new LinearGradient(0, 0, 400,400, Color.BLUE,Color.YELLOW,Shader.TileMode.REPEAT);
+      Paint mPaint = new Paint();mPaint.setShader(bitmapShader);
+      canvas.drawCircle(500, 500, 500, mPaint);
+```
+
+![Alt text](device-2018-01-14-222421.png "效果图")
+
+
+
+
+```
+      Bitmap mBitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.test1);
+      RadialGradient radialGradient=new RadialGradient(10,10,100,Color.BLUE,Color.BLACK,Shader.TileMode.REPEAT);
+      Paint mPaint = new Paint();
+      mPaint.setShader(radialGradient);
+      canvas.drawCircle(500, 500, 500, mPaint);
+```
+
+![Alt text](device-2018-01-14-223034.png "效果图")
+
+```
+        Bitmap mBitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.test1);
+        SweepGradient radialGradient=new SweepGradient(100,100,Color.BLUE,Color.BLACK);
+        Paint mPaint = new Paint();
+        mPaint.setShader(radialGradient);
+        canvas.drawCircle(500, 500, 500, mPaint);
+```
+
+![Alt text](device-2018-01-14-223502.png "效果图")
+
+
+
+
+```
+public class ReflectView extends View {
+
+    private Paint mPaint;
+    private PorterDuffXfermode mCfermode;
+    private PorterDuffXfermode porterDuffXfermode;
+    private Bitmap bitmap;
+    private Bitmap otherBitmap;
+    private Paint paint;
+
+    public ReflectView(Context context) {
+        super(context);
+        initRes(context);
+    }
+
+    public ReflectView(Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+        initRes(context);
+    }
+
+
+    public ReflectView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        initRes(context);
+    }
+
+    private void initRes(Context context) {
+        bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.pg_11111111111);
+        Matrix matrix=new Matrix();
+        //缩放 如果是负值，就会倒立
+        matrix.setScale(1f,-1f);
+        otherBitmap = bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+        paint = new Paint();
+        paint.setShader(new LinearGradient(0, bitmap.getHeight(),0, bitmap.getWidth()+ bitmap.getHeight()/4,0xDD000000,0x10000000, Shader.TileMode.CLAMP));
+        porterDuffXfermode = new PorterDuffXfermode(PorterDuff.Mode.DST_IN);
+
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        canvas.drawColor(Color.BLACK);
+        canvas.drawBitmap(bitmap,0,0,null);
+        canvas.drawBitmap(otherBitmap,0,bitmap.getHeight(),null);
+        paint.setXfermode(porterDuffXfermode);
+        //设置渐变
+        canvas.drawRect(0,bitmap.getHeight(),bitmap.getWidth(),bitmap.getHeight()*2,paint);
+        paint.setXfermode(null);
+
+    }
+}
+
+```
+
+![Alt text](device-2018-01-14-231137.png "效果图")
+
+##### PathEffect 不同的笔绘制的特效
+
+
+```
+public class EffectView extends View {
+
+    public EffectView(Context context) {
+        super(context);
+    }
+    public EffectView(Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public EffectView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        Path path=new Path();
+        path.moveTo(0,0);
+        for (int i = 0; i < 30; i++) {
+            path.lineTo(i*35,(float)(Math.random()*100));
+        }
+        canvas.drawPath(path,new Paint());
+    }
+}
+
+```
+
+![Alt text](device-2018-01-14-232423.png "效果图")
+
+##### PathEffect 不同的笔绘制的特效 系统api
+
+* CornerPathEffect 拐角处变得圆滑
+* DiscretePathEffect 线段上面产生咋点
+* DashPathEffect 绘制虚线
+* PathDashPathEffect 画方形或者圆形的虚线
+* ComposePathEffect 组合效果
+
+```
+public class EffectView extends View {
+
+    public EffectView(Context context) {
+        super(context);
+    }
+
+
+    public EffectView(Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public EffectView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+
+
+//        Path path=new Path();
+
+//        canvas.drawPath(path,new Paint());
+
+
+        PathEffect[] pathEffects=new PathEffect[6];
+        pathEffects[0]=null;
+        pathEffects[1]=new CornerPathEffect(30);
+        pathEffects[2]=new DiscretePathEffect(3.0f,3.0f);
+        pathEffects[3]=new DashPathEffect(new float[]{20,10,5,10},0);
+        Path path=new Path();
+        path.moveTo(0,0);
+        for (int i = 0; i < 30; i++) {
+            path.lineTo(i*35,(float)(Math.random()*100));
+        }
+        path.addRect(0,0,8,8,Path.Direction.CCW);
+        pathEffects[4]=new PathDashPathEffect(path,12,0,PathDashPathEffect.Style.ROTATE);
+        pathEffects[5]=new ComposePathEffect(pathEffects[3],pathEffects[1]);
+        Paint paint=new Paint();
+        for (PathEffect pathEffect : pathEffects) {
+            paint.setPathEffect(pathEffect);
+            canvas.drawPath(path,paint);
+            canvas.translate(0,200);
+        }
+
+    }
+}
+
+```
+
+![Alt text](device-2018-01-14-233455.png "效果图")
+
+
+#### View的兄弟 SurfaceView
+Android是可以在子线程更新UI的，SurfaceView就是要在子线程更新UI。他有双缓冲机制，这个后面讲，用的很少
+
+# 第七章 Android 动画机制与使用技巧
