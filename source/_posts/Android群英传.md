@@ -2948,3 +2948,7 @@ public class TesView extends android.support.v7.widget.AppCompatTextView {
 ```
 
 ![Alt text](dongdong.gif "效果")
+
+#### Android 图像处理值画笔
+
+![Alt text](2041548-d964105abf4be5d9.jpg "Google的官方图片")
