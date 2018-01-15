@@ -1701,7 +1701,7 @@ public class TesView extends android.support.v7.widget.AppCompatTextView {
 
 ```
 
-##XML绘图
+## XML绘图
 
 ### bitmap
 可以将图片转换为bitmap
@@ -1717,7 +1717,7 @@ public class TesView extends android.support.v7.widget.AppCompatTextView {
 ### selector
 多个shape的集合，可以实现不同状态的效果显示
 
-### Android 绘图技巧
+## Android 绘图技巧
 
 ```
     canvas.save();  保存画布当前状态
@@ -1869,7 +1869,7 @@ public class TesView extends android.support.v7.widget.AppCompatTextView {
 ```
 
 
-### Android图像处理值色彩特效处理
+## Android图像处理值色彩特效处理
 #### 矩阵
 看这个之前先来看一下矩阵，第一个矩阵第一行*第二个矩阵第一列 就是结果的第一个元素
 
@@ -2720,7 +2720,7 @@ public class MainActivity extends AppCompatActivity {
 
 ![Alt text](device-2017-12-05-233233.png "浮雕效果")
 
-### Android图像处理之图形特效处理
+## Android图像处理之图形特效处理
 > 上面看完了`ColorMatrix`对颜色的处理，现在看一下`Matrix`对图形变换的处理，本质是一致的，都是通过矩阵计算
 只不过从`argb`变成了`xy`
 
@@ -2951,7 +2951,7 @@ public class TesView extends android.support.v7.widget.AppCompatTextView {
 
 ![Alt text](dongdong.gif "效果")
 
-#### Android 图像处理值画笔
+## Android 图像处理之画笔特效处理
 
 ##### 圆角图片
 
@@ -3273,13 +3273,8 @@ public class EffectView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-
-
 //        Path path=new Path();
-
 //        canvas.drawPath(path,new Paint());
-
-
         PathEffect[] pathEffects=new PathEffect[6];
         pathEffects[0]=null;
         pathEffects[1]=new CornerPathEffect(30);
@@ -3308,7 +3303,89 @@ public class EffectView extends View {
 ![Alt text](device-2018-01-14-233455.png "效果图")
 
 
-#### View的兄弟 SurfaceView
+## View的兄弟 SurfaceView
 Android是可以在子线程更新UI的，SurfaceView就是要在子线程更新UI。他有双缓冲机制，这个后面讲，用的很少
 
 # 第七章 Android 动画机制与使用技巧
+
+## Android View 动画框架
+> Android框架定义了透明度，旋转，缩放，位移等常见的几种动画，原理是每次绘制视图的时候哦获取View所在的ViewGroup中的drawChild函数，获取该View的Animation的Transformation值，然后调用canvas。concat（transformToApply。getMatrix()）,通过矩阵完成动画帧。如果动画没有完成，就调用invalidate（），直到完成绘制。
+* 属性动画
+* 视图动画
+
+## 视图动画
+
+### 透明度动画
+
+```
+        View view = findViewById(R.id.view);
+        AlphaAnimation aa=new AlphaAnimation(0,1);
+        aa.setDuration(1000);
+        view.startAnimation(aa);
+
+```
+
+### 旋转动画
+
+```
+      View view = findViewById(R.id.view);
+      RotateAnimation aa=new RotateAnimation(0,1);
+      aa.setDuration(1000);
+      view.startAnimation(aa);
+```
+
+### 位移动画
+
+```
+     View view = findViewById(R.id.view);
+     TranslateAnimation aa=new TranslateAnimation(0,200,0,300);
+     aa.setDuration(1000);
+     view.startAnimation(aa);
+```
+
+### 缩放动画
+
+```
+       View view = findViewById(R.id.view);
+       ScaleAnimation aa=new ScaleAnimation(0,2,0,2);
+       aa.setDuration(1000);
+       view.startAnimation(aa);
+
+```
+
+### 动画集合
+
+```
+    View view = findViewById(R.id.view);
+    ScaleAnimation aa = new ScaleAnimation(0, 2, 0, 2);
+    aa.setDuration(1000);
+    TranslateAnimation ab = new TranslateAnimation(0, 2, 0, 2);
+    ab.setDuration(1000);
+    AnimationSet as = new AnimationSet(true);
+    as.setDuration(1000);
+    as.addAnimation(aa);
+    as.addAnimation(ab);
+    //回调
+    as.setAnimationListener(new Animation.AnimationListener() {
+         @Override
+         public void onAnimationStart(Animation animation) {
+
+         }
+
+         @Override
+         public void onAnimationEnd(Animation animation) {
+
+         }
+
+         @Override
+         public void onAnimationRepeat(Animation animation) {
+
+         }
+     });
+    view.startAnimation(as);
+
+```
+
+
+## 属性动画的分析
+### ObjecAnimator  这个是属性动画的基础
