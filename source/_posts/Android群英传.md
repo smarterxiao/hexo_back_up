@@ -3389,3 +3389,68 @@ Android是可以在子线程更新UI的，SurfaceView就是要在子线程更新
 
 ## 属性动画的分析
 ### ObjecAnimator  这个是属性动画的基础
+本质是通过反射获取属性
+```
+       View view = findViewById(R.id.view);
+       ObjectAnimator animator=ObjectAnimator.ofFloat(view,"translationX",300);
+       animator.setDuration(1300);
+       animator.start();
+ ```
+![Alt text](shuxing.gif "效果图")
+
+属性动画常用的属性
+
+* translationX和translationY   控制View对象和他容器左上角的距离
+* scaleX和scaleY  围绕他的支点进行缩放，缩放的倍数
+* pivotX和pivotY 这两个属性控制着View对象的支点位置，围绕这个支点进行旋转和缩放变换处理，默认情况是这个对象的中心点   
+* x和y 这两个对象是描述了VIew对象在他容器的最终位置，是translationX和translationY的对象中点
+* alpha 表示透明度，默认值是1 不透明 0 完全透明
+
+如果一个属性没有get和set方法，那可以自己添加一个get和set方法来实现自定义的属性效果
+
+
+```
+
+public class TeView {
+
+    private View mTarget;
+    public View getmTarget() {
+        return mTarget;
+    }
+    public int getWidth() {
+        return mTarget.getLayoutParams().width;
+    }
+
+    public void setWidth(int width) {
+        mTarget.getLayoutParams().width = width;
+        mTarget.requestLayout();
+    }
+
+
+    public TeView(View mTarget) {
+        this.mTarget = mTarget;
+    }
+
+    public void setmTarget(View mTarget) {
+        this.mTarget = mTarget;
+    }
+}
+
+
+
+
+
+```
+
+使用
+```
+
+View view = findViewById(R.id.view);
+TeView teView=new TeView(view);
+ObjectAnimator animator=ObjectAnimator.ofInt(teView,"width",500);
+animator.setDuration(6300);
+animator.start();
+
+```
+
+![Alt text](dongdonghua.gif "效果图")
