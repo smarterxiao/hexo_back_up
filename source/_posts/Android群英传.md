@@ -3454,3 +3454,324 @@ animator.start();
 ```
 
 ![Alt text](dongdonghua.gif "效果图")
+
+### PropertyValuesHolder :属性动画集合
+
+属性动画集合的使用,类似视图动画的AnimationSet
+
+```
+      PropertyValuesHolder pvh1 = PropertyValuesHolder.ofFloat("translationX", 300f);
+      PropertyValuesHolder pvh2 = PropertyValuesHolder.ofFloat("scaleX", 1f, 0, 1f);
+      PropertyValuesHolder pvh3 = PropertyValuesHolder.ofFloat("scaleY", 3000);
+      ObjectAnimator.ofPropertyValuesHolder(view, pvh1, pvh2, pvh3).setDuration(3000).start();
+
+```
+
+### ValueAnimator
+ValueAnimator是继承自ObjectAnimator，ValueAnimator本身不提供动画效果，他更像是一个数值发生器，我们定义一个区间，然后通过回调我们自己处理，知道区间行走完毕
+
+```
+
+    ValueAnimator animator = ValueAnimator.ofFloat(0, 100);
+     animator.setTarget(view);
+     animator.setDuration(1000).start();
+     animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+         @Override
+         public void onAnimationUpdate(ValueAnimator animation) {
+             float animatedValue = (float) animation.getAnimatedValue();
+             Log.i("区间进度：", animatedValue + "");
+         }
+     });
+
+
+部分结果：
+12-06 10:02:29.438 19945-19945/? I/区间进度：: 11.175674
+12-06 10:02:29.454 19945-19945/? I/区间进度：: 12.912909
+12-06 10:02:29.471 19945-19945/? I/区间进度：: 14.644662
+12-06 10:02:29.487 19945-19945/? I/区间进度：: 16.582394
+12-06 10:02:29.504 19945-19945/? I/区间进度：: 18.615437
+12-06 10:02:29.521 19945-19945/? I/区间进度：: 20.610731
+12-06 10:02:29.538 19945-19945/? I/区间进度：: 22.81198
+12-06 10:02:29.555 19945-19945/? I/区间进度：: 25.090742
+
+```
+
+### 动画事件的监听
+
+```
+animator.addListener(new Animator.AnimatorListener() {
+       @Override
+       public void onAnimationStart(Animator animation) {
+
+       }
+
+       @Override
+       public void onAnimationEnd(Animator animation) {
+
+       }
+
+       @Override
+       public void onAnimationCancel(Animator animation) {
+
+       }
+
+       @Override
+       public void onAnimationRepeat(Animator animation) {
+
+       }
+   });
+```
+
+或者 :只是监听部分事件
+
+
+```
+        animator.addListener(new AnimatorListenerAdapter() {
+           /**
+            * {@inheritDoc}
+            *
+            * @param animation
+            */
+           @Override
+           public void onAnimationEnd(Animator animation) {
+               super.onAnimationEnd(animation);
+           }
+       });
+
+```
+
+### AnimatorSet
+可以实现和PropertyValuesHolder 类似的效果，并且能控制顺序
+
+```
+  ObjectAnimator animator1 = ObjectAnimator.ofFloat(view, "translationX", 300);
+   ObjectAnimator animator2 = ObjectAnimator.ofFloat(view, "scaleX", 1f, 0f, 1f);
+   ObjectAnimator animator3 = ObjectAnimator.ofFloat(view, "scaleY", 1f, 0f, 1f);
+
+   AnimatorSet set = new AnimatorSet();
+   set.setDuration(1000);
+   set.playSequentially();//循环播放
+   set.play().with().before().after()//播放顺序
+   set.playTogether(animator1, animator2, animator3);
+   set.start();
+
+```
+### 在XML中使用属性动画
+在res文件夹创建文件夹res/animator   然后将属性动画的xml文件放在这个文件夹里面
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<objectAnimator
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="1000"
+    android:propertyName="scaleX"
+    android:valueTo="1.0"
+    android:valueFrom="2.0"
+    android:valueType="floatType">
+</objectAnimator>
+
+```
+使用
+```
+      Animator anim = AnimatorInflater.loadAnimator(this, R.animator.xxxx);
+      anim.setTarget(view);
+      anim.start();
+```
+
+
+### 属性动画的简写
+
+```
+
+        view.animate().alpha(0).y(300).setDuration(300).withStartAction(new Runnable() {
+            @Override
+            public void run() {
+
+            }
+        }).withEndAction(new Runnable() {
+            @Override
+            public void run() {
+
+            }
+        }).start();
+```
+## Android 布局动画
+就是在指定的ViewGroup上给ViewGroup增加View的时候添加一个过渡的动画效果，最简单的是在ViewGroup的XML中，是增加的时候
+
+
+```
+
+        final TextView textView = new TextView(this);
+
+        final ViewGroup test = findViewById(R.id.test);
+
+        View view = findViewById(R.id.view);
+        view.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                test.addView(textView);
+                textView.setText("dfjkdssjfdksdsj");
+            }
+        });
+
+```
+
+![Alt text](dongxiao.gif "效果图")
+
+可以通过LayoutAnimationController来自定义一个View的过渡效果
+```
+public class MainActivity extends AppCompatActivity {
+
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private ImageView iv_test1;
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+//两个imageview
+//        iv_test = findViewById(R.id.iv_test);
+//        iv_test1 = findViewById(R.id.iv_test1);
+         LinearLayout test = findViewById(R.id.test);
+        ScaleAnimation sa=new ScaleAnimation(0,1,0,1);
+        sa.setDuration(2000);
+        LayoutAnimationController lac=new LayoutAnimationController(sa,0.5f);
+        lac.setOrder(LayoutAnimationController.ORDER_NORMAL);//顺序
+        test.setLayoutAnimation(lac);
+    }
+}
+
+```
+
+## 插值器
+
+就是动画进行的速率，例如先快后慢，加速运动，匀减速，...
+```
+
+public class MainActivity extends AppCompatActivity {
+
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private ImageView iv_test1;
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+//两个imageview
+//        iv_test = findViewById(R.id.iv_test);
+//        iv_test1 = findViewById(R.id.iv_test1);
+
+
+
+         LinearLayout test = findViewById(R.id.test);
+
+        ScaleAnimation sa=new ScaleAnimation(0,1,0,1);
+        sa.setDuration(2000);
+        sa.setInterpolator();// 设置差值器
+        LayoutAnimationController lac=new LayoutAnimationController(sa,0.5f);
+        lac.setOrder(LayoutAnimationController.ORDER_NORMAL);
+        test.setLayoutAnimation(lac);
+    }
+
+
+}
+
+```
+
+## 自定义动画
+原理：集成不同的动画比如：ScaleAnimation 然后重写applyTransformation的方法
+ScaleAnimation的具体实现
+```
+    @Override
+    protected void applyTransformation(float interpolatedTime, Transformation t) {
+      float sx = 1.0f;
+     float sy = 1.0f;
+     float scale = getScaleFactor();
+
+     if (mFromX != 1.0f || mToX != 1.0f) {
+         sx = mFromX + ((mToX - mFromX) * interpolatedTime);
+     }
+     if (mFromY != 1.0f || mToY != 1.0f) {
+         sy = mFromY + ((mToY - mFromY) * interpolatedTime);
+     }
+
+     if (mPivotX == 0 && mPivotY == 0) {
+         t.getMatrix().setScale(sx, sy);//获取矩阵，对矩阵处理 这个是处理缩放矩阵，所以是一个缩放动画
+     } else {
+         t.getMatrix().setScale(sx, sy, scale * mPivotX, scale * mPivotY);
+     }
+    }
+
+```
+
+
+例子
+可以通过Camera来处理矩阵，这个是Android封装的一些信息
+
+```
+//自定义动画
+public class XAnimation extends Animation {
+  //使用Camera处理矩阵
+    private Camera mCamera;
+    @Override
+    protected void applyTransformation(float interpolatedTime, Transformation t) {
+//        super.applyTransformation(interpolatedTime, t);
+        final Matrix matrix = t.getMatrix();
+        mCamera.save();
+        mCamera.rotateY(10 * interpolatedTime);
+        mCamera.getMatrix(matrix);
+        mCamera.restore();
+        matrix.preTranslate(x1, y1);
+        matrix.postTranslate(-x1, -y1);
+    }
+
+
+    int x1;
+    int y1;
+
+    @Override
+    public void initialize(int width, int height, int parentWidth, int parentHeight) {
+        super.initialize(width, height, parentWidth, parentHeight);
+        mCamera = new Camera();
+        setDuration(2000);
+        setFillAfter(true);
+        setInterpolator(new BounceInterpolator());
+        x1 = width / 2;
+        y1 = height / 2;
+    }
+}
+
+
+
+
+```
+调用
+```
+
+public class MainActivity extends AppCompatActivity {
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private ImageView iv_test1;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+//两个imageview
+//        iv_test = findViewById(R.id.iv_test);
+//        iv_test1 = findViewById(R.id.iv_test1);
+         LinearLayout test = findViewById(R.id.test);
+        XAnimation sa=new XAnimation();
+        sa.setDuration(2000);
+        LayoutAnimationController lac=new LayoutAnimationController(sa,0.5f);
+        lac.setOrder(LayoutAnimationController.ORDER_NORMAL);
+        test.setLayoutAnimation(lac);
+    }
+}
+```
+
+![Alt text](device-2018-01-20-235707.png "效果图")
