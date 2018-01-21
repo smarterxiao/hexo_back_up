@@ -3775,3 +3775,562 @@ public class MainActivity extends AppCompatActivity {
 ```
 
 ![Alt text](device-2018-01-20-235707.png "效果图")
+
+
+## Android 5.x SVG矢量动画
+
+通过xml绘制动画
+
+### 标签
+
+* M =moveto(M X,Y) ：将画笔移动到指定的坐标位置，但未发生绘制
+* L=lineto(L X,Y)  ：将直线移动到指定的位置
+* H=horizontal lineto(H X): 画水平线到x坐标的位置
+* V=vertical lineto(V,Y):画垂直线到指定Y坐标位置
+* C=curveto(C X1,Y1,X2,Y2,ENDX,ENDY):三次贝塞尔曲线
+* S=smooth curveto(S X2,Y2,ENDX,ENDY):三次贝塞尔曲线
+* Q=quadratic Belzier curve(Q X,Y,ENDX,ENDY):二次贝塞尔曲线
+* T=smooth quadratic Belzier curve(T ENDX,ENDY)：映射前面路径后的终点
+* A=elliptical Arc(A RX,RY,XROTATION,FALG1,FALG2,X,Y): 弧线
+* Z=closePath():关闭路径
+
+> 注意点
+* 坐标轴以(0,0)位中心，x向下，y像右
+* 所有指令大小写均可，大写是绝对定位，相对全局坐标系，小写是相对定位，参照父布局坐标系
+* 指令和数据间的空格可以省略
+* 同一个指令出现多次可以只用一个
+
+### 常用指令
+* L：L 200 400 从(0,0)到(200,400)的直线
+* M：移动坐标点
+* A：弧线 RX，RY是椭圆半轴的大小；XROTATION是椭圆的X轴与水平方向顺时针方向的夹角；FLAG1只有两个值 0表示小角弧线，1表示大角弧线；FLAF2只有两个值，确定起点和终点的方向，1为顺时针 2为逆时针；X，Y是终点坐标
+
+### 一个SVG编辑器
+
+http://editor.method.ac/
+
+Inkscape
+
+### Android使用SVG
+Google 在Android 5.x中提供了下面两个新的API来支持SVG
+* VectorDrawable
+* AnimatedVectorDrawable
+
+#### VectorDrawable
+```
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:height="200dp"
+    android:width="200dp"
+    android:viewportHeight="100"   //将200dp分为100份
+    android:viewportWidth="100">
+</vector>
+```
+
+```
+
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportHeight="100"
+    android:viewportWidth="100">
+    <group
+        android:name="test"
+        android:rotation="0">
+        <path
+            android:fillColor="#ff0000"
+            android:pathData="M 25 50 a 25,25 ,0 1,0 ,50,0"></path>  //这个path就是SVG的路径
+    </group>
+</vector>
+```
+
+![Alt text](图像1516505303.png "效果图")
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportHeight="100"
+    android:viewportWidth="100">
+    <group
+        android:name="test"
+        android:rotation="0">
+        <path
+            android:strokeColor="#ff0000"
+            android:strokeWidth="2"   //非填充
+            android:pathData="M 25 50 a 25,25 ,0 1,0 ,50,0"></path>
+    </group>
+</vector>
+```
+
+![Alt text](图像1516505521.png "效果图")
+
+#### AnimatedVectorDrawable ：这个是有动画的SVG
+使用
+```
+public class MainActivity extends AppCompatActivity {
+
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private ImageView iv_test1;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        LinearLayout test = findViewById(R.id.test);
+        ImageView view = findViewById(R.id.view);
+        ((Animatable) view.getDrawable()).start();
+    }
+}
+```
+布局
+```
+<?xml version="1.0" encoding="utf-8"?>
+
+
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:id="@+id/test"
+    android:animateLayoutChanges="true"
+    tools:context="com.smart.myapplication.MainActivity">
+
+
+    <ImageView
+        android:id="@+id/view"
+        android:src="@drawable/hahaha"
+        android:layout_width="100dp"
+        android:layout_height="100dp" />
+
+</LinearLayout>
+
+```
+
+动画:在res/animator文件夹下没有新建 xxxx.xml
+```
+
+<?xml version="1.0" encoding="utf-8"?>
+<objectAnimator
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="1000"
+    android:propertyName="scaleX"
+    android:valueTo="1.0"
+    android:valueFrom="2.0"
+    android:valueType="floatType">
+</objectAnimator>
+```
+hahaha.xml  关联SVG和动画
+```
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/wahaha">
+<target
+    android:animation="@animator/xxxx"
+    android:name="test">
+
+</target>
+</animated-vector>
+```
+背景
+```
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportHeight="100"
+    android:viewportWidth="100">
+    <group
+        android:name="test"
+        android:rotation="0">
+        <path
+            android:strokeColor="#ff0000"
+            android:strokeWidth="2"
+            android:pathData="M 25 50 a 25,25 ,0 1,0 ,50,0"></path>
+    </group>
+</vector>
+```
+
+SVG动画实例
+
+java代码
+```
+public class MainActivity extends AppCompatActivity {
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private ImageView iv_test1;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        LinearLayout test = findViewById(R.id.test);
+        final ImageView view = findViewById(R.id.view);
+        view.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                ((Animatable) view.getDrawable()).start();
+            }
+        });
+
+    }
+}
+
+```
+布局
+```
+<?xml version="1.0" encoding="utf-8"?>
+
+
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:id="@+id/test"
+    android:animateLayoutChanges="true"
+    tools:context="com.smart.myapplication.MainActivity">
+
+
+    <ImageView
+        android:id="@+id/view"
+        android:src="@drawable/hahaha"
+        android:layout_width="100dp"
+        android:layout_height="100dp" />
+
+</LinearLayout>
+
+```
+
+xxxx.xml 定义属性动画
+```
+
+<?xml version="1.0" encoding="utf-8"?>
+<objectAnimator
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="1000"
+    android:propertyName="pathData"
+    android:valueTo="M 20,80 L 50,50,80,80"
+    android:valueFrom="M 20,80 L 50,80,80,80"   //属性动画
+    android:interpolator="@android:anim/bounce_interpolator"
+    android:valueType="pathType">
+</objectAnimator>
+```
+hahaha.xml :定义动画
+```
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/wahaha">
+    <target
+        android:name="path1"
+        android:animation="@animator/xxxx" />
+    <target
+        android:name="path2"
+        android:animation="@animator/xxxx">
+
+    </target>
+</animated-vector>
+
+```
+
+定义路径
+```
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportHeight="100"
+    android:viewportWidth="100">
+    <group
+       >
+        <path
+            android:name="path1"
+            android:strokeColor="#ff0000"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:pathData="M 20 80 L 50,80,80,20"></path>
+
+        <path
+            android:name="path2"
+            android:strokeColor="#ffff00"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:pathData="M 20 20 L 50,20,80,20"></path>
+    </group>
+</vector>
+```
+
+![Alt text](enenen.gif "效果图")
+
+#### 例子
+
+这个一般是UI给的图，所以就不做非常详细的介绍了
+
+## Android 动画特效
+
+### 展开动画
+```
+
+public class MainActivity extends AppCompatActivity {
+    private ImageView iv_test;
+    private Bitmap bitmap;
+    private ImageView iv_test1;
+    private View view;
+    private View view1;
+    private View view3;
+    private View view2;
+    private View view4;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        view = findViewById(R.id.view);
+        view1 = findViewById(R.id.view1);
+        view2 = findViewById(R.id.view2);
+        view3 = findViewById(R.id.view3);
+        view4 = findViewById(R.id.view4);
+        view.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startAnim();
+            }
+        });
+    }
+    boolean mFlag = false;
+    private void startAnim() {
+        ObjectAnimator animator0 = ObjectAnimator.ofFloat(view, "alpha", 1f, 0.5f);
+        ObjectAnimator animator1 = ObjectAnimator.ofFloat(view1, "translationY", 200f);
+        ObjectAnimator animator2 = ObjectAnimator.ofFloat(view2, "translationX", 200f);
+        ObjectAnimator animator3 = ObjectAnimator.ofFloat(view3, "translationY", -200);
+        ObjectAnimator animator4 = ObjectAnimator.ofFloat(view4, "translationX", -200);
+        AnimatorSet set = new AnimatorSet();
+        set.setDuration(500);
+        set.setInterpolator(new BounceInterpolator());
+        set.playTogether(animator0, animator1, animator2, animator3, animator4);
+        set.start();
+        mFlag = false;
+    }
+}
+
+```
+布局
+```
+
+<?xml version="1.0" encoding="utf-8"?>
+
+
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:id="@+id/test"
+    android:gravity="center"
+    android:layout_gravity="center"
+    android:animateLayoutChanges="true"
+    tools:context="com.smart.myapplication.MainActivity">
+    <ImageView
+        android:id="@+id/view1"
+        android:background="#0000ff"
+        android:layout_width="50dp"
+        android:layout_height="50dp" />
+    <ImageView
+        android:id="@+id/view2"
+        android:background="#ffff00"
+        android:layout_width="50dp"
+        android:layout_height="50dp" />
+    <ImageView
+        android:id="@+id/view3"
+        android:background="#00ffff"
+        android:layout_width="50dp"
+        android:layout_height="50dp" />
+    <ImageView
+        android:id="@+id/view4"
+        android:background="#00ff00"
+        android:layout_width="50dp"
+        android:layout_height="50dp" />
+    <ImageView
+        android:id="@+id/view"
+        android:background="#ff0000"
+        android:layout_width="50dp"
+        android:layout_height="50dp" />
+</RelativeLayout>
+
+```
+
+
+![Alt text](shuxingdonghua.gif "效果图")
+
+
+### 计时器动画
+
+```
+public class MainActivity extends AppCompatActivity {
+
+    private TextView view;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        view = findViewById(R.id.view);
+        ValueAnimator valueAnimator = ValueAnimator.ofInt(1, 100);
+        valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                view.setText("$" + (Integer) animation.getAnimatedValue());
+            }
+        });
+        valueAnimator.setDuration(3000);
+        valueAnimator.start();
+    }
+
+}
+```
+
+![Alt text](jishi.gif "效果图")
+
+### 下拉展开动画
+```
+public class MainActivity extends AppCompatActivity {
+    private View hide;
+    private float density;
+    private float mHidden;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        hide = findViewById(R.id.hide);
+        density = getResources().getDisplayMetrics().density;
+        mHidden = (float) (density*40+0.5);
+    }
+    public void llClick(View view) {
+        animateOpen(hide);
+    }
+    private void animateOpen(View hide) {
+        hide.setVisibility(View.VISIBLE);
+        ValueAnimator animator=CreateDropAnimator(hide,0, (int) mHidden);
+        animator.start();
+    }
+    private ValueAnimator CreateDropAnimator(final View hide, int start, int end) {
+        ValueAnimator animator=ValueAnimator.ofInt(start,end);
+        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                Integer animatedValue = (Integer) animation.getAnimatedValue();
+                ViewGroup.LayoutParams layoutParams=hide.getLayoutParams();
+                layoutParams.height=animatedValue;
+                hide.setLayoutParams(layoutParams);
+            }
+        });
+        return animator;
+    }
+}
+```
+布局
+```
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    tools:context="com.smart.myapplication.MainActivity">
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#ff0000"
+        android:gravity="center_vertical"
+        android:onClick="llClick"
+        android:orientation="horizontal">
+
+
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@mipmap/ic_launcher" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@mipmap/ic_launcher"
+            android:text="ClickMe"
+            android:textSize="30dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="400dp"
+        android:gravity="center_vertical"
+        android:id="@+id/hide"
+        android:visibility="gone">
+
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="I am hidden"
+            android:textSize="20dp" />
+
+    </LinearLayout>
+</LinearLayout>
+
+```
+
+![Alt text](clickshow.gif "效果图")
+
+# 第八章Activity与Activity调用展分析
+## Activity
+
+![Alt text](060009291302389.png "生命周期图")
+
+*  create :创建UI
+*  resume ：初始化Pause中释放的资源
+*  pause  ： 释放资源，比如camera，sensor，receivers
+
+## Activity任务栈
+可以通过AndroidMainfest文件alunchMode来设置也可以通过Intent的flag来设置
+* standard： 启动的Activity都在一个任务栈中，先进先出，创建就放入任务栈
+* singleTop : 启动的Activity都在一个任务栈中，判断启动的Activity是不是在最上面，如果在栈顶，就不创建，不在栈顶就创建
+* singleTask：和singleTop类似，检查整个Activity栈是否存在需要启动的Activity，如果存在，就把他上面的全部销毁，不存在就创建。如果在其他程序中通过SingleTask启动这个Activity，就会创建一个新的任务栈，不是放在启动的任务栈，如果这个Activity已经在任务栈中存在，就不会创建任务栈，而是把它放到前台，放到栈顶   
+* singleInstance：和浏览器工作的内容有点相似，如果多个程序启动，如果当前没有在浏览器中打开，就会打开浏览器，否则就会在当前打开的浏览器中访问，并且这个会在singleInstance的Activity会出现在一个新的任务栈中，这个任务栈只存在一个Activity
+
+## Intent FLAG 启动模式
+
+* onInterceptTouchEvent.FLAG_ACTIVITY_NEW_TSK ：这个启动的会放在一个新的task中
+* onInterceptTouchEvent.FLAG_ACTIVITY_SINGLE_TOP ：singleTop
+* onInterceptTouchEvent.SINGLE_ACTIVITY_CLERA_TOP ：singleTask
+* onInterceptTouchEvent.FLAG_ACTIVITY_NO_HISTORY  :A启动B ，B用这个模式启动C 那么任务栈中就会剩下 AC B会关闭
+
+## 清空任务栈
+
+* clearTaskOnLaunch 启动的时候回将他上方所有的Activity清楚
+* finishOnTaskLaunch：离开这个activity任务栈的时候吧自己关闭
+* alwaysRetainTaskState： 这个任务栈不接受任何清理命令，一直存在
+
+# 第九章 Android 系统信息与安全机制简介
+## Android系统信息获取
+可以通过android.os.BUILD和SystemProPerty来获取，参数太多了没救不列出来了
+## AndroidApk应用信息获取之PacketManager
+获取包的信息，
+## AndroidApk应用信息获取之ActivityManager
+获取应用运行时的信息
+## 解析Packets.xml获取系统信息
+在/data/system/packets.xml
+## ANdroid安全机制
+### 混淆代码
+### 权限机制
+### 数字证书
+### linux内核层安钻机制--UID和王文权限控制
+### Android虚拟机沙箱机制--沙箱隔离
+## APK反编译简介
+* apktool
+* dex2jar，jd-gui
+
+# 第10章 Android 性能优化
