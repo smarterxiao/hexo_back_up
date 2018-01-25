@@ -4420,5 +4420,69 @@ adb shell dumpsys procstats
 
 | 英文       | 中文和含义    |    
 | ------------- |:-------------:|
-|Incl CPU Time    |        某个方法真正执行的时间 | 
-| 分辨率     | 240*320     |  
+|Incl CPU Time    |   某个方法占用CPU的时间      |
+| Excl CPU Time  |   某个方法本身（不包括字方法）占用CPU的时间  |  
+| Incl  Time  |  某个方法真正执行的时间   |  
+| Excl Real Time  |  某个方法本身（不包括字方法）真正执行的时间  |  
+|Calls +resurCalls| 调用次数+递归回调的次数|
+
+每个时间都包含两列。一个是实际时间，一个是百分比，分析的时候通常从Incl CPU Time 和Calls +resurCalls开始分析，对占用时间长的进行重点分析，如果占用时间长并且Calls +resurCalls少，就可以列为重点怀疑对象了
+
+## 使用Mat工具进行分析
+打开 Android Device Monitor工具 如图
+
+![Alt text](图像1516802863.png "操作")
+
+
+![Alt text](图像1516802989.png "操作")
+
+
+这里有一个小技巧，就是不停的点击Cause Gc按钮 如果data Object一栏中的Total Size 有明显变化，就代表有可能存在内存泄漏
+
+![Alt text](图像1516803153.png "操作")
+
+在这里到处一个.hprof文件。这个就是我们要分析的文件，不过这个不能直接使用mat打开，要使用命令行转换
+
+
+```
+
+D:\sdk\platform-tools\hprof-conv input.hprof out.hprof
+
+```
+
+将转换后的文件使用mat打开。打开mat工具，选择open a heap dump 选项
+![Alt text](图像1516803752.png "操作")
+
+
+* Histogram 直方图 用于显示内存中每一个对象的数量，大小和名称。可以在最上面一样过滤关键字，在选择的对象上右击，选择List objects-with incoming references可以查看具体的对象
+
+![Alt text](图像1516804054.png "操作")
+
+* Dominator Tree 会对内存中的对象按照大小进行排序，并显示对象之间的引用结构，通过分析大对象找到内存消耗的原因
+
+![Alt text](图像1516804298.png "操作")
+
+## Dumpsys 命令分析系统状态
+在使用Dumpsys时，可以通过输入`adb shell dumpsys+` 获取提示
+
+
+| 参数       | 中文和含义    |    
+| ------------- |:-------------:|
+|activity   |   显示所有activity栈的信息      |
+|meminfo |   内存信息  |  
+|battery|  电池信息   |  
+| package  |  包信息 |  
+|wifi| 显示WIFI信息|
+|alarm| 显示alarm信息|
+|procstats|显示内存状态|
+
+性能优化这个是一个具有挑战的工作，这些只是入门的方式
+
+# 第十一章 搭建云端服务器
+## 几个备胎，需要的时候可以查看官方文档
+* 原子云
+* avos cloud
+* powerApp
+
+# 第十二章 Android 5.x新特性
+##
