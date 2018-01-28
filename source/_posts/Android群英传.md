@@ -4463,7 +4463,7 @@ D:\sdk\platform-tools\hprof-conv input.hprof out.hprof
 ![Alt text](图像1516804298.png "操作")
 
 ## Dumpsys 命令分析系统状态
-在使用Dumpsys时，可以通过输入`adb shell dumpsys+` 获取提示
+在使用Dumpsys时，可以通过输入`adb shell dumpsys` 获取提示
 
 
 | 参数       | 中文和含义    |    
