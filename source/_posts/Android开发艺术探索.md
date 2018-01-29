@@ -533,9 +533,119 @@ http://www.baidu.com:80/search/info
 | Host       | URI的主机名，比如www.baidu.com,如果host未指定,那么整个URI中的其他参数无效，这也意味着URI是无效的   |
 | Port    |URI的端口号，比如80，仅当URI中指定了scheme和host参数的时候，post参数才是有意义的   |
 | path    |是描述路径信息的。表示完整路径信息  |
-| pathPrefix    | 表示完整路径信息，但是他里面可以包含通配符* ，*表示0个或者多个任意字符，需要注意的是，由于正则表达式的规范，如果想表示真是的字符串  |
-| pathPattern    | |
+| pathPrefix    | 表示完整路径信息，但是他里面可以包含通配符* ，*表示0个或者多个任意字符，需要注意的是，由于正则表达式的规范，如果想表示真是的字符串，要写成\\*  |
+| pathPattern    |表示路径的前缀信息 |
 
+介绍完之后就介绍data的匹配规则了，data匹配规则和action类似，它也要求必须含有data数据，并且data数据能够完全匹配过滤规则中的某一个data，这这里的完全匹配指的是过滤规则中出现的data部分也出现了Intent中的Data中
+
+```
+
+<activity
+    android:name=".SecondActivity"
+    android:label="@string/title_activity_second"
+    android:launchMode="singleTask"
+    android:taskAffinity="com.xiao.x"
+    android:theme="@style/AppTheme.NoActionBar">
+    <intent-filter>
+        <data
+            android:mimeType="text/*" />//
+    </intent-filter>
+
+</activity>
+```
+这种匹配规则制定了媒体类型为所有类型的文字，mimeType属性必须为"text/* "才能匹配，这种情况下虽然规律规则没有指定URI，但是却有默认值，URI的默认值为content和file。也就是说，虽然没有指定URI，但是Intent中URI部分的scheme必须为content或者file才能匹配，这点是需要尤其注意的。为了匹配这个规则，我们可以写出如下示例。
+
+```
+intent.setDataAndType（URI.parse("file://abc")，“text/xxx”）
+```
+
+如果要为Intent指定完整的data,必须要调用setDataAndType方法，不能先调用setData在调用setType,因为这两个方法彼此会清除对方的值，这个看源码就很容易理解了。
+
+```
+public Intent setData(URI data){
+  mData=data;
+  mType=null;
+  return this;
+}
+```
+
+设置过滤规则：
+
+```
+
+<activity
+    android:name=".SecondActivity"
+    android:label="@string/title_activity_second"
+    android:launchMode="singleTask"
+    android:taskAffinity="com.xiao.x"
+    android:theme="@style/AppTheme.NoActionBar">
+    <intent-filter>
+        <data
+          android:scheme="http" ...
+            android:mimeType="video/mpeg" />
+
+            <data
+              android:scheme="http" ...
+                android:mimeType="audio/mpeg" />
+    </intent-filter>
+
+</activity>
+```
+
+这种规则制定了两组data规则，切每个data都制定了完整的属性值，既有URI又有mimeType。为了匹配2中的规则，我们可以写出如下示例
+
+
+```
+intent.setDataAndType（URI.parse("file://abc")，“audio/mpeg”）
+```
+或者
+```
+intent.setDataAndType（URI.parse("file://abc")，“video/mpeg”）
+```
+ 通过上面的两个示例，读者应该已经明白了data的匹配规则，关于data还有一个特殊情况需要说明一下，这也是它和action不同的地方，如下两种特殊写法，它们的作用是一样的
+
+
+ ```
+             <data
+               android:scheme="file"
+                 android:host"www.baidu.com"/>
+ ```
+
+
+ ```
+             <data
+               android:scheme="file" />
+                   <data    android:host"www.baidu.com"/>
+ ```
+
+到这里我们已经把IntentFilter的过滤规则都讲解一遍，还记得本节前面给出的一个intent-filter的示例吗，现在我们给出完全匹配他的Intent
+
+```
+Intent intent=new Intent("com.xiao.x")
+intent.addCategory("com.xiao.x")
+intent.setDataAndType(URI.parse("file://abc"),"text/plain")
+startActivity(intent)
+```
+这个匹配规则对于Service和BroadcastReceiver是一样的
+但是对于Service 系统建议使用显示的方式来启动服务
+
+
+当我们使用隐式方式启动Activity的时候建议做一下判断，看能不能匹配我们的隐式Intent，如果没有就可能会报错 activity no found 。判断有两种方式，第一种是使用packetManager的resolveActivity方法或者Intent的resolveActivity方法，如果找不到Activity，就会返回null。packetManage还提供了另外一种方法，queryIntentActivities 方法，这个方法和resolveActivity不同，他返回所有匹配的activity，这个时候可以通过他过滤activity，然后直接实现应用内跳转。
+
+```
+public abstrace List<resolveInfo> queryIntentActivitys(Intent intent,int flags);
+public abstrace resolveInfo  resolveActivity(Intent intent,int flags);
+```
+
+第一个参数是intent，第二个参数要注意，我们要使用MATCH_DEFAULT_ONLY这个标记位，这个标记位的含义是紧紧匹配那些在intent-filter中申明的`<category android:name="android.intent.category.DEFAULT">` 这个category的activity。使用这个标记位的意义是如果两个方法返回值不为null，那么startactivity一定可以成功，如果不使用这个标记位，那么就可以吧intent-filter中category不含DEFAULT的那些匹配出来。从而导致匹配失败，那么category为DEFSULT的那些就无法匹配出来，导致启动失败。因为不还有DEFAULT的这个category的activity无法接受隐式的intent。在action和category中有一类action和category比较重要
+
+```
+<action android:name="android.intent.action.MAIN">
+<category android:name="android.intent.category.LAUNCHER">
+
+```
+
+这个标记了应用的一个入口，二缺一不可，不然无法启动。针对Service和BroadcastReceiver，PackageManager同样提供了类似的方法获取成功匹配的组件的信息
 
 
 # 第二章 IPC机制
