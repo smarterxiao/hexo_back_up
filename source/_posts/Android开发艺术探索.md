@@ -649,6 +649,192 @@ public abstrace resolveInfo  resolveActivity(Intent intent,int flags);
 
 
 # 第二章 IPC机制
+
+本章主要讲解Android中的IPC机制，首先介绍了Android中的多进程概念以及多进程开发模式中常见的注意事项，接着介绍Android中的许雷华机制和Binder。然后详细介绍进程间的通信方式。
+
+## Android IPC简介
+
+IPC是Inter-progress Communication的缩写，含义为进程间通信或者跨进程通信，是指两个进程之间进行数据交换的过程，说起进程间通信，我们首先要理解，进程通信是什么，什么是线程。线程和进程是截然不同的概念。按照操作系统中的描述，线程是CPU最小的调度单元，同时线程是一种有限的系统资源。二进程一般是一个执行单元，或者可以理解为一个程序或者一个应用。一个进程可以包含多个线程，一个进程可以只包含一个主线程。在Android里面主线程也叫UI线程，在UI线程里才能操作界面元素，很多时候，一个进程中需要执行大量耗时操作的情况下，会造成ANR，这个时候就需要在子线程里面执行耗时操作。
+
+IPC不是Android独有的，任何一个操作系统都需要有相应的IPC机制，Windows上面可以通过剪贴板，管道，邮槽等进行进程间通讯。Linux可以通过命名管道，共享内存，信号量来进行进程间通讯。对于Android来讲，他是基于Linux内核的移动操作系统，他的进程间通讯方式不是完全继承自Linux，而是有他自己的进程间通讯方式。在Android中有特色的进程通讯方式就是Binder，通过Binder可以轻松的实现进程间通讯。除了Binder，Android还支持Socket，通过Socket可以实现任意两个中断之间的通讯，当然同一个设备上的两个进程通过Socket通信自然也是可以的。
+
+说到IPC的使用场景就必须提到多进程，只有面对多进程的情况下才需要考虑进程间通讯。有两种情况：第一种是一个应用如果由于某些原因自身需要采用多进程模式来实现。第二种是和另外一个APP实现通讯，比如通过咸鱼吊起支付宝...
+
+## Android中的多进程模式
+
+### 开启多进程模式
+通过清单文件配置来开启
+
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.smart.kaifa">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".SecondActivity"
+            android:process=":remote"//多进程模式
+            android:label="@string/title_activity_second"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme.NoActionBar">
+
+        </activity>
+        >
+        <activity
+            android:process="xxx.xxx.xxx.remote"
+            android:name=".ThirdActivity"
+            android:label="@string/title_activity_third"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.xiao.x"//多进程模式
+            android:theme="@style/AppTheme.NoActionBar"></activity>
+    </application>
+
+</manifest>
+
+```
+
+
+SecondActivity和ThirdActivity指定了process属性，并且他们的属性值不同，这意味着当前引用有增加了两个新的进程。假设当前应用的包名为com.xiao 那么在启动SecondActivity的时候会有一个进程com.xiao:remote 这个进程 。当ThridActivity启动时，系统也会为他单独创建一个进程xxx.xxx.xxx.remote。同时入口的MainActivity由于没有指定precess属性，那么他运行在默认进程中，默认进程名是包名。 可以通过DDMS视图查看，或者通过adb命令查看 adb shell ps
+
+这里有一个注意点，SecondActivity和ThirdActivity的android：process属性分别为:remote和xxx.xxx.xxx.remote这两种方式有什么区别吗？其实有区别的，区别有两点，第一点是xxx.xxx.xxx.remote这种命名方式不会附加包名信息，但是:remote会附加包名信息。其次，以:开头的进程属于当前应用的私有进程，其他应用的组件不可以和他跑在同一个进程中，进程命不以:开头的进程属于全局进程，可以和其他应用通过共享ShareUID方式和他跑在同一个进程中。
+
+我们都知道Android系统回味每一应用分配位移的UID，只有UID相同的应用才能共享数据，这里要说明的是，两个应用可以通过ShareUID跑在同一个进程中是有要求的，需要两个应用的ShareUID相同别切具有相同的签名。这种情况下才能互相访问私有数据，比如data目录，组件信息等，可以把它理解为同一个应用的两个部分
+
+### 多进程模式的运行机制。
+可以这么说开启多进程模式之后，各种奇怪的现象都出现了，首先static 不能共用了，因为Android中，每一个应用跑在一个虚拟机中，这个时候static是相对当前虚拟机的，所以在一个进程中的static修改是无效的。
+举个栗子：
+```
+
+
+public class UserManager{
+
+    public static int sUerId=1;
+
+}
+```
+
+这个时候在MainActivity中设置这个值为2，在SecondActivity中获取，发现值还是1 。
+
+一般来讲，多进程会出现下面几个常见的问题
+ * 静态成员和单例模式完全失效
+ * 线程同步机制完全失效
+ * SharedPreferences的可靠性下降
+ * Application会多次创建
+
+ 关于第四个问题，这里说一下，每次启动一个进程，就相当于创建了一个App，所以会启动一次Application。可以试一下。
+ 多进程模式实惠拥有不同的虚拟机、Application、内存空间，这个会给开发带来许多困扰的。
+
+## IPC基础概念介绍
+
+### Serializable 接口
+这个是Java提供的，这个比较简单，实现这个接口，然后设置一个
+
+```
+public class HHH implements Serializable {
+
+    private static final long seriaVersionUID=12131232322332L;
+}
+
+```
+
+这个就可以了，seriaVersionUID一定要一样这样才能正确的反序列化。
+
+
+```
+序列化的过程是
+User user=new User();
+ObjectOutPutStream out=new ObjectOutPutStream(new FileOutputStream("xxx.xxx"));
+out.writeObject(user);
+out.close();
+
+
+反序列化的过程是
+User user=new User();
+ObjectInPutStream in=new ObjectInPutStream(new FileInputStream("xxx.xxx"));
+User user=(User)in.readObject(user);
+in.close();
+```
+这个值是完全一样的，但是不是一个对象，地址变了。
+seriaVersionUID的作用是为了防止版本便更导致的User结构变化导致的序列化失败，如果没有指定，两边结构不一样就会出现转换失败，如果指定了，就可以很大程度上避免序列化失败的过程，另外系统的序列化和反序列化也是可以改变的，但是不建议改变
+
+
+### Parcelable接口
+这个是Android提供的，相对于Serializable，内存占用更小一些
+
+```
+public class User implements Parcelable {
+    public int userId;
+    public String userName;
+    public boolean isMale;
+
+    //返回当前对象的内容描述，如果含有中文描述符，返回1，否则返回0，几乎所有情况都为0
+    @Override
+    public int describeContents() {
+        return 0;
+    }
+    // 将当前对象写入许雷华结构中，其中flag标识有两种值 0或者1，为1时标识当前对象需要最为返回值返回，不能立即释放资源，几乎所有情况都为0
+    @Override
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeInt(this.userId);
+        dest.writeString(this.userName);
+        dest.writeByte(this.isMale ? (byte) 1 : (byte) 0);
+    }
+
+    public User() {
+    }
+
+    //从与写话后的对象中创建原始对象
+    protected User(Parcel in) {
+        this.userId = in.readInt();
+        this.userName = in.readString();
+        this.isMale = in.readByte() != 0;
+    }
+
+    public static final Parcelable.Creator<User> CREATOR = new Parcelable.Creator<User>() {
+      //从序列化后的对象中创建原始对象
+        @Override
+        public User createFromParcel(Parcel source) {
+            return new User(source);
+        }
+        //创建指定长度的原始对象数组
+        @Override
+        public User[] newArray(int size) {
+            return new User[size];
+        }
+    };
+}
+
+
+```
+
+当然AndroidStudio有实现这个接口的插件：Parcelable code Generator
+
+如果是网络情况建议使用Serializable提高兼容性，app内部使用使用Parcelable 降低内存消耗
+
+### binder
+这个是一个很深入的话题，特别复杂，这里就介绍一下Binder的使用和上层原理。
+
+Binder是Android中的一个类，他实现了IBinder接口。从IPC角度来说，Binder是Android中的一种跨进程通讯方式，Binder还可以理解为一种虚拟的物理设备，他的设备驱动是/dev/binder。该通信方式是Linux中没有的。从Android FrameWord角度来讲，Binder是ServiceManager连接各种Manager（Activity Manager 、Window Manager 等等）和相对应的ManagerService的桥梁，从Android应用层来讲，Binder是客户端和服务端进行通信的媒介，当bindService的时候，服务端会返回UI个包含了服务端业务调用的Binder对象，通过这个Binder对象，客户端就可以获取服务器端提供的服务或者数据，这里的服务包括普通服务和基于AIDL的服务。
+
+Android开发中，Binder主要用在Service中，包括AIDL和Messenger，其中普通Service中的Binder不涉及进程间通信，所以较为简单，无法涉及Binder的核心。而Messenger的底层其实就是AIDL，所以这里选用AIDL来分析Binder的工作机制。为了分析AIDL机制，这里要创建一个AIDL实例
+
+
+
+
 # 第三章 View的事件体系
 # 第四章 View的工作原理
 # 第五章 理解RemoteViews
