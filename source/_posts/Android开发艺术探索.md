@@ -907,8 +907,11 @@ interface IBookManager {
 
 ```
 
-之后这个是生成的IBookManager.java 文件 可以双击shift 然后搜索
+之后系统为我们生成的IBookManager.java 文件 可以双击shift 然后搜索
 
+
+这里先介绍一下这个类：
+他继承IInterface接口，同时自己还是一个接口，首先声明了`getBookList`和`addBook`和`basicTypes`方法，同时声明了三个常量来标记这三个方法，方便在transact的时候确定客户端所请求的是那个方法，接着声明了一个Stub类，这是一个Binder类。当服务端和客户端属于同一个进程的时候，方法调用不会走跨进程的transact过程，而当两者位于不同的进程的时候，方法调用走transact过程，这个逻辑由Stub内部代理类Proxy来完成。
 ```
 /*
  * This file is auto-generated.  DO NOT MODIFY.
@@ -970,7 +973,9 @@ public interface IBookManager extends android.os.IInterface
                 return this;
             }
 
-          //这个方法运行在服务端中的Binder线程池中，当客户端发起跨进程请求的时候，远程请求会通过系统底层分装后交给此方法来处理，该方法的原型是  
+          //这个方法运行在服务端中的Binder线程池中，当客户端发起跨进程请求的时候，远程请求会通过系统底层分装后交给此方法来处理，该方法的原型是 public Boolean onTransact（int code, android.os.Parcel data, android.os.Parcel reply, int flags）  
+          //服务端通过code可以确定客户端所请求的目标方法是什么，接着从data中取出目标方法所需要的参数（如果目标方法有参数的话），然后执行目标方法，当目标方法执行完毕后，就像reply中写入返回值（如果目标方法有返回值的话）
+          //onTransacct方法执行的过程就是这样的，需要注意的是，如果此方法返回false。那么客户端的请求就会失败，因此我们可以利用这个特性来做权限验证，毕竟我们也不希望随便一个进程就可以远程调用我们的服务
           @Override
           public boolean onTransact(int code, android.os.Parcel data, android.os.Parcel reply, int flags) throws android.os.RemoteException{
               switch (code)  {
@@ -1023,20 +1028,20 @@ public interface IBookManager extends android.os.IInterface
               return super.onTransact(code, data, reply, flags);
           }
 
-
+          //这个是一个代理类mRemote这个其实是一个Stub对象，这个是Stub的一个内部代理类
           private static class Proxy implements com.smart.kaifa.IBookManager{
                 private android.os.IBinder mRemote;
                 Proxy(android.os.IBinder remote){
                   mRemote = remote;
                 }
-          @Override
-          public android.os.IBinder asBinder(){
-              return mRemote;
-            }
-          public java.lang.String getInterfaceDescriptor(){
-                return DESCRIPTOR;
-            }
-          /**
+              @Override
+              public android.os.IBinder asBinder(){
+                  return mRemote;
+                }
+              public java.lang.String getInterfaceDescriptor(){
+                    return DESCRIPTOR;
+                }
+              /**
                * Demonstrates some basic types that you can use as parameters
                * and return values in AIDL.
                */
@@ -1063,6 +1068,7 @@ public interface IBookManager extends android.os.IInterface
           }
 
           //这里是获取List集合的方法，实现IBookManager方法
+          //这个方法运行在客户端，当客户端远程调用此方法的时候，他的内部实现是这样子的：首先，创建该方法所需要输入型Parcel对象data，输出型对象parcel对象_reply和返回值对象 _result，然后把该方法的参数信息写入_data中（如果有参数的话），接着调用transact方法来发起RPC（远程过程调用）请求，同时当前线程挂起：然后服务端的onTransact方法会被调用，知道RPC过程返回后，当前线程继续执行，并从_reply中读取RPC过程返回的结果
           @Override
           public java.util.List<com.smart.kaifa.Book> getBookList() throws android.os.RemoteException{
               android.os.Parcel _data = android.os.Parcel.obtain();
@@ -1071,7 +1077,9 @@ public interface IBookManager extends android.os.IInterface
 
               try {
                 _data.writeInterfaceToken(DESCRIPTOR);
+                接着调用transact方法来发起RPC（远程过程调用）请求
                 mRemote.transact(Stub.TRANSACTION_getBookList, _data, _reply, 0);
+
                 _reply.readException();
                 _result = _reply.createTypedArrayList(com.smart.kaifa.Book.CREATOR);
               }finally {
@@ -1081,6 +1089,7 @@ public interface IBookManager extends android.os.IInterface
               return _result;
             }
           //这里是addBook方法，实现IBookManager方法
+          //这个方法需要在客户端运行，它的执行过程和getBookList一样，但是没有返回值，所以不需要从_reply中读取返回值
           @Override
           public void addBook(com.smart.kaifa.Book book) throws android.os.RemoteException{
                 android.os.Parcel _data = android.os.Parcel.obtain();
@@ -1110,7 +1119,9 @@ public interface IBookManager extends android.os.IInterface
 
 
 ```
-这个是系统生成的
+通过上面的分析，可以了解了Binder的工作机制，但是还有两点需要额外说明一下：首先，当客户端发起远程请求时，由于房钱线程会被挂起知道服务端进程返回数据，所以如果一个远程方法很耗时，这个时候就不能在UI线程中发起此远程请求；其次由于服务端Binder方法运行在Binder线程池中，所以Binder方法不管是否耗时都应该采取同步的方式实现，应为他已经运行在一个线程中了。为了更好的说明Binder下面给出一个Binder的工作机制图
+
+
 
 
 
