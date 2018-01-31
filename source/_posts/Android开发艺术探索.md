@@ -832,6 +832,285 @@ Binder是Android中的一个类，他实现了IBinder接口。从IPC角度来说
 
 Android开发中，Binder主要用在Service中，包括AIDL和Messenger，其中普通Service中的Binder不涉及进程间通信，所以较为简单，无法涉及Binder的核心。而Messenger的底层其实就是AIDL，所以这里选用AIDL来分析Binder的工作机制。为了分析AIDL机制，这里要创建一个AIDL实例
 
+Book.java
+
+```
+public class Book implements Parcelable {
+    public int bookId;
+    public String bookName;
+
+    @Override
+    public int describeContents() {
+        return 0;
+    }
+
+    @Override
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeInt(this.bookId);
+        dest.writeString(this.bookName);
+    }
+
+    public Book() {
+    }
+
+    protected Book(Parcel in) {
+        this.bookId = in.readInt();
+        this.bookName = in.readString();
+    }
+
+    public static final Parcelable.Creator<Book> CREATOR = new Parcelable.Creator<Book>() {
+        @Override
+        public Book createFromParcel(Parcel source) {
+            return new Book(source);
+        }
+
+        @Override
+        public Book[] newArray(int size) {
+            return new Book[size];
+        }
+    };
+}
+
+```
+
+
+Book.aidl
+
+```
+// Book.aidl
+package com.smart.kaifa;
+
+// Declare any non-default types here with import statements
+parcelable Book;
+
+```
+
+
+IBookManager.aidl
+```
+package com.smart.kaifa;
+
+// Declare any non-default types here with import statements
+import com.smart.kaifa.Book;
+interface IBookManager {
+    /**
+     * Demonstrates some basic types that you can use as parameters
+     * and return values in AIDL.
+     */
+    void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat,
+            double aDouble, String aString);
+
+
+            List<Book> getBookList();
+            void addBook(in Book book);
+}
+
+```
+
+之后这个是生成的IBookManager.java 文件 可以双击shift 然后搜索
+
+```
+/*
+ * This file is auto-generated.  DO NOT MODIFY.
+ * Original file: F:\\kaifa\\app\\src\\main\\aidl\\com\\smart\\kaifa\\IBookManager.aidl
+ */
+package com.smart.kaifa;
+//继承IInterface接口
+public interface IBookManager extends android.os.IInterface
+{
+
+
+  /*** Demonstrates some basic types that you can use as parameters
+       * and return values in AIDL.
+       */
+  //定义这三个待实现的方法
+  public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, java.lang.String aString) throws android.os.RemoteException;
+  public java.util.List<com.smart.kaifa.Book> getBookList() throws android.os.RemoteException;
+  public void addBook(com.smart.kaifa.Book book) throws android.os.RemoteException;
+
+  /** Local-side IPC implementation stub class. */
+  //这个是一个内部类Stub   继承Binder 接口并实现IBookManager这个接口，在内部类中实现
+  public static abstract class Stub extends android.os.Binder implements com.smart.kaifa.IBookManager
+    {   
+       //这个是Binder的唯一标识，一般用当前Binder的类名标识，比如本例中的 com.smart.kaifa.IBookManager
+        private static final java.lang.String DESCRIPTOR = "com.smart.kaifa.IBookManager";
+        //定义三个ID用于标记着三个方法
+        static final int TRANSACTION_basicTypes = (android.os.IBinder.FIRST_CALL_TRANSACTION + 0);
+        static final int TRANSACTION_getBookList = (android.os.IBinder.FIRST_CALL_TRANSACTION + 1);
+        static final int TRANSACTION_addBook = (android.os.IBinder.FIRST_CALL_TRANSACTION + 2);  
+
+          /** Construct the stub at attach it to the interface. */
+
+          //Stub的构造方法
+          public Stub(){
+              this.attachInterface(this, DESCRIPTOR);
+            }
+
+          /**
+           * Cast an IBinder object into an com.smart.kaifa.IBookManager interface,
+           * generating a proxy if needed.
+           */
+
+           //用于将服务端的Binder对象转换成客户端所需的AIDL，这种转换过程是区分进程的，如果客户端和服务端位于同一个进程，那么此方法返回的就是服务端的Stub对象本身，否则返回的是系统封装后的Stub.proxy
+          public static com.smart.kaifa.IBookManager asInterface(android.os.IBinder obj){
+              if ((obj==null)) {
+                  return null;
+                }
+            android.os.IInterface iin = obj.queryLocalInterface(DESCRIPTOR);
+
+            if (((iin!=null)&&(iin instanceof com.smart.kaifa.IBookManager))) {
+                return ((com.smart.kaifa.IBookManager)iin);
+              }
+              return new com.smart.kaifa.IBookManager.Stub.Proxy(obj);
+          }
+
+          //这个方法用户返回当前Binder对象  
+          @Override
+          public android.os.IBinder asBinder(){
+                return this;
+            }
+
+          //这个方法运行在服务端中的Binder线程池中，当客户端发起跨进程请求的时候，远程请求会通过系统底层分装后交给此方法来处理，该方法的原型是  
+          @Override
+          public boolean onTransact(int code, android.os.Parcel data, android.os.Parcel reply, int flags) throws android.os.RemoteException{
+              switch (code)  {
+                  case INTERFACE_TRANSACTION:
+                      {
+                          reply.writeString(DESCRIPTOR);
+                          return true;
+                      }         
+                  case TRANSACTION_basicTypes:
+                      {
+                          data.enforceInterface(DESCRIPTOR);
+                          int _arg0;
+                          _arg0 = data.readInt();
+                          long _arg1;
+                          _arg1 = data.readLong();
+                          boolean _arg2;
+                          _arg2 = (0!=data.readInt());
+                          float _arg3;
+                          _arg3 = data.readFloat();
+                          double _arg4;
+                          _arg4 = data.readDouble();
+                          java.lang.String _arg5;
+                          _arg5 = data.readString();
+                          this.basicTypes(_arg0, _arg1, _arg2, _arg3, _arg4, _arg5);
+                          reply.writeNoException();
+                          return true;
+                      }
+                 case TRANSACTION_getBookList:
+                      {
+                        data.enforceInterface(DESCRIPTOR);
+                        java.util.List<com.smart.kaifa.Book> _result = this.getBookList();
+                        reply.writeNoException();
+                        reply.writeTypedList(_result);
+                        return true;
+                      }
+                case TRANSACTION_addBook:
+                      {
+                      data.enforceInterface(DESCRIPTOR);
+                      com.smart.kaifa.Book _arg0;
+                            if ((0!=data.readInt())) {
+                                  _arg0 = com.smart.kaifa.Book.CREATOR.createFromParcel(data);
+                            }else {
+                                  _arg0 = null;
+                            }
+                      this.addBook(_arg0);
+                      reply.writeNoException();
+                      return true;
+                      }
+                  }
+              return super.onTransact(code, data, reply, flags);
+          }
+
+
+          private static class Proxy implements com.smart.kaifa.IBookManager{
+                private android.os.IBinder mRemote;
+                Proxy(android.os.IBinder remote){
+                  mRemote = remote;
+                }
+          @Override
+          public android.os.IBinder asBinder(){
+              return mRemote;
+            }
+          public java.lang.String getInterfaceDescriptor(){
+                return DESCRIPTOR;
+            }
+          /**
+               * Demonstrates some basic types that you can use as parameters
+               * and return values in AIDL.
+               */
+          //这个是创建的aidl的时候自带的一个方法 ，注意这个是用android studio创建的时候 可以忽略，实现IBookManager方法
+          @Override
+          public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, java.lang.String aString) throws android.os.RemoteException{
+              android.os.Parcel _data = android.os.Parcel.obtain();
+              android.os.Parcel _reply = android.os.Parcel.obtain();
+              try {
+                _data.writeInterfaceToken(DESCRIPTOR);
+                _data.writeInt(anInt);
+                _data.writeLong(aLong);
+                _data.writeInt(((aBoolean)?(1):(0)));
+                _data.writeFloat(aFloat);
+                _data.writeDouble(aDouble);
+                _data.writeString(aString);
+                mRemote.transact(Stub.TRANSACTION_basicTypes, _data, _reply, 0);
+                _reply.readException();
+              }
+              finally {
+                _reply.recycle();
+                _data.recycle();
+              }
+          }
+
+          //这里是获取List集合的方法，实现IBookManager方法
+          @Override
+          public java.util.List<com.smart.kaifa.Book> getBookList() throws android.os.RemoteException{
+              android.os.Parcel _data = android.os.Parcel.obtain();
+              android.os.Parcel _reply = android.os.Parcel.obtain();
+              java.util.List<com.smart.kaifa.Book> _result;
+
+              try {
+                _data.writeInterfaceToken(DESCRIPTOR);
+                mRemote.transact(Stub.TRANSACTION_getBookList, _data, _reply, 0);
+                _reply.readException();
+                _result = _reply.createTypedArrayList(com.smart.kaifa.Book.CREATOR);
+              }finally {
+                _reply.recycle();
+                _data.recycle();
+              }
+              return _result;
+            }
+          //这里是addBook方法，实现IBookManager方法
+          @Override
+          public void addBook(com.smart.kaifa.Book book) throws android.os.RemoteException{
+                android.os.Parcel _data = android.os.Parcel.obtain();
+                android.os.Parcel _reply = android.os.Parcel.obtain();
+
+                  try {
+                    _data.writeInterfaceToken(DESCRIPTOR);
+                        if ((book!=null)) {
+                        _data.writeInt(1);
+                        book.writeToParcel(_data, 0);
+                      }else {
+                        _data.writeInt(0);
+                      }
+                  mRemote.transact(Stub.TRANSACTION_addBook, _data, _reply, 0);
+                  _reply.readException();
+                  }finally {
+                  _reply.recycle();
+                  _data.recycle();
+                }
+            }
+
+        }
+
+    }
+
+}
+
+
+```
+这个是系统生成的
 
 
 
