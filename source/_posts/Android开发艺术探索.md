@@ -1123,6 +1123,288 @@ public interface IBookManager extends android.os.IInterface
 
 
 
+![Alt text](图像1517752561.png "Binder的工作机制")
+
+
+从上述分析过程来看，我们完全可以不提供AIDL文件即可实现Binder，之所以提供AIDL文件，是为了方便系统帮助我们生成代码，系统根据AIDL文件生成Java文件的格式是固定的，我们可以抛开AIDL文件直接写一个Binder出来。接下来就介绍如何写一个Binder出来,参考上面系统同生成的IBookManager.java这个类的代码。可以发现这个类是相当的有规律。我们可以根据这个规律实现，首先这个类分为两个部分，一个是这个类本身就继承自IInterface接口，其次它的内部由个Stub类，这个类就是个Binder，还记得我们怎么写一个Binder的服务端，
+
+
+```
+private final IBookManager.Stub mBinder=new IBookManager.Stub(){
+
+
+@override
+public List<Book> getBookList() throws RemoteException{
+  synchronized(mBookList){
+    return mBookList;
+  }
+}
+
+@override
+public void addBook(Book book) throws RemoteException{
+  synchronized(mBookList){
+    if(!mBookList.contains(book))
+    return mBookList.add(book);
+  }
+}
+
+
+}
+
+
+```
+
+首先我们会实现一个创建了一个Stub对象并在内部实现IBookManager的接口方法。然后在Service的onBind中返回这个Stub对象，因此，从这一点来看，我们完全可以把Stub可以吧Stub这个类提取出来直接作为一个独立的Binder类来实现，这样IBookManager中就只剩下接口本身了，通过这种分离的方式可以让他的结构变得清晰点。
+根据上面的思想 收订实现一个Binder可以通过如下步骤来完成
+
+ * 声明一个AIDL性质的接口，只需要继承IInterface接口即可，IInterface接口中只有一个asBinder方法。这个接口的实现如下：
+
+ ```
+public interface IBookManager extends IInterface{
+
+  //这个是Binder的唯一标识，一般用当前Binder的类名标识，比如本例中的 com.smart.kaifa.IBookManager
+   private static final java.lang.String DESCRIPTOR = "com.smart.kaifa.IBookManager";
+   //定义三个ID用于标记着三个方法
+   static final int TRANSACTION_basicTypes = (android.os.IBinder.FIRST_CALL_TRANSACTION + 0);
+   static final int TRANSACTION_getBookList = (android.os.IBinder.FIRST_CALL_TRANSACTION + 1);
+   static final int TRANSACTION_addBook = (android.os.IBinder.FIRST_CALL_TRANSACTION + 2);  
+   //定义三个抽象方法
+   public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, java.lang.String aString) throws android.os.RemoteException;
+   public java.util.List<com.smart.kaifa.Book> getBookList() throws android.os.RemoteException;
+   public void addBook(com.smart.kaifa.Book book) throws android.os.RemoteException;
+
+}
+
+
+ ```
+
+可以看到，在接口中声明了一个Binder描述符和另外三个id，这三个id分别表示的是basicTypes、getBookList、addBook方法，这段代码原本也是系统生成的，我们仿照系统生成的规则去手写这部分代码，如果有更多的方法怎么做呢？很显然，我们要在声明一个id，然后按照固定模式声明这个新方法即可，这个比较好理解，不在多说。
+
+* 实现Stub类和Stub类中的Proxy代理类，这段代码我们可以自己写，但是写出来发现和系统生成的代码是一样的，英雌这个Stub类我们只需要参考系统生成的代码即可，只是结构上需要做一下调整，调整后的代码如下所示。
+
+```
+public class BookMangerImpl extends Binder implements IBookManager{
+
+    public BookManagerImpl(){
+      this.attachInterface(this,DESCRIPTOR);
+    }
+
+    //用于将服务端的Binder对象转换成客户端所需的AIDL，这种转换过程是区分进程的，如果客户端和服务端位于同一个进程，那么此方法返回的就是服务端的Stub对象本身，否则返回的是系统封装后的Stub.proxy
+   public static com.smart.kaifa.IBookManager asInterface(android.os.IBinder obj){
+       if ((obj==null)) {
+           return null;
+         }
+     android.os.IInterface iin = obj.queryLocalInterface(DESCRIPTOR);
+
+     if (((iin!=null)&&(iin instanceof com.smart.kaifa.IBookManager))) {
+         return ((com.smart.kaifa.IBookManager)iin);
+       }
+       return new com.smart.kaifa.IBookManager.Stub.Proxy(obj);
+   }
+
+   //这个方法用户返回当前Binder对象  
+   @Override
+   public android.os.IBinder asBinder(){
+         return this;
+     }
+
+   //这个方法运行在服务端中的Binder线程池中，当客户端发起跨进程请求的时候，远程请求会通过系统底层分装后交给此方法来处理，该方法的原型是 public Boolean onTransact（int code, android.os.Parcel data, android.os.Parcel reply, int flags）  
+   //服务端通过code可以确定客户端所请求的目标方法是什么，接着从data中取出目标方法所需要的参数（如果目标方法有参数的话），然后执行目标方法，当目标方法执行完毕后，就像reply中写入返回值（如果目标方法有返回值的话）
+   //onTransacct方法执行的过程就是这样的，需要注意的是，如果此方法返回false。那么客户端的请求就会失败，因此我们可以利用这个特性来做权限验证，毕竟我们也不希望随便一个进程就可以远程调用我们的服务
+   @Override
+   public boolean onTransact(int code, android.os.Parcel data, android.os.Parcel reply, int flags) throws android.os.RemoteException{
+       switch (code)  {
+           case INTERFACE_TRANSACTION:
+               {
+                   reply.writeString(DESCRIPTOR);
+                   return true;
+               }         
+           case TRANSACTION_basicTypes:
+               {
+                   data.enforceInterface(DESCRIPTOR);
+                   int _arg0;
+                   _arg0 = data.readInt();
+                   long _arg1;
+                   _arg1 = data.readLong();
+                   boolean _arg2;
+                   _arg2 = (0!=data.readInt());
+                   float _arg3;
+                   _arg3 = data.readFloat();
+                   double _arg4;
+                   _arg4 = data.readDouble();
+                   java.lang.String _arg5;
+                   _arg5 = data.readString();
+                   this.basicTypes(_arg0, _arg1, _arg2, _arg3, _arg4, _arg5);
+                   reply.writeNoException();
+                   return true;
+               }
+          case TRANSACTION_getBookList:
+               {
+                 data.enforceInterface(DESCRIPTOR);
+                 java.util.List<com.smart.kaifa.Book> _result = this.getBookList();
+                 reply.writeNoException();
+                 reply.writeTypedList(_result);
+                 return true;
+               }
+         case TRANSACTION_addBook:
+               {
+               data.enforceInterface(DESCRIPTOR);
+               com.smart.kaifa.Book _arg0;
+                     if ((0!=data.readInt())) {
+                           _arg0 = com.smart.kaifa.Book.CREATOR.createFromParcel(data);
+                     }else {
+                           _arg0 = null;
+                     }
+               this.addBook(_arg0);
+               reply.writeNoException();
+               return true;
+               }
+           }
+       return super.onTransact(code, data, reply, flags);
+   }
+
+   //这个是一个代理类mRemote这个其实是一个Stub对象，这个是Stub的一个内部代理类
+   private static class Proxy implements com.smart.kaifa.IBookManager{
+         private android.os.IBinder mRemote;
+         Proxy(android.os.IBinder remote){
+           mRemote = remote;
+         }
+       @Override
+       public android.os.IBinder asBinder(){
+           return mRemote;
+         }
+       public java.lang.String getInterfaceDescriptor(){
+             return DESCRIPTOR;
+         }
+       /**
+        * Demonstrates some basic types that you can use as parameters
+        * and return values in AIDL.
+        */
+   //这个是创建的aidl的时候自带的一个方法 ，注意这个是用android studio创建的时候 可以忽略，实现IBookManager方法
+   @Override
+   public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, java.lang.String aString) throws android.os.RemoteException{
+       android.os.Parcel _data = android.os.Parcel.obtain();
+       android.os.Parcel _reply = android.os.Parcel.obtain();
+       try {
+         _data.writeInterfaceToken(DESCRIPTOR);
+         _data.writeInt(anInt);
+         _data.writeLong(aLong);
+         _data.writeInt(((aBoolean)?(1):(0)));
+         _data.writeFloat(aFloat);
+         _data.writeDouble(aDouble);
+         _data.writeString(aString);
+         mRemote.transact(Stub.TRANSACTION_basicTypes, _data, _reply, 0);
+         _reply.readException();
+       }
+       finally {
+         _reply.recycle();
+         _data.recycle();
+       }
+   }
+
+   //这里是获取List集合的方法，实现IBookManager方法
+   //这个方法运行在客户端，当客户端远程调用此方法的时候，他的内部实现是这样子的：首先，创建该方法所需要输入型Parcel对象data，输出型对象parcel对象_reply和返回值对象 _result，然后把该方法的参数信息写入_data中（如果有参数的话），接着调用transact方法来发起RPC（远程过程调用）请求，同时当前线程挂起：然后服务端的onTransact方法会被调用，知道RPC过程返回后，当前线程继续执行，并从_reply中读取RPC过程返回的结果
+   @Override
+   public java.util.List<com.smart.kaifa.Book> getBookList() throws android.os.RemoteException{
+       android.os.Parcel _data = android.os.Parcel.obtain();
+       android.os.Parcel _reply = android.os.Parcel.obtain();
+       java.util.List<com.smart.kaifa.Book> _result;
+
+       try {
+         _data.writeInterfaceToken(DESCRIPTOR);
+         接着调用transact方法来发起RPC（远程过程调用）请求
+         mRemote.transact(Stub.TRANSACTION_getBookList, _data, _reply, 0);
+
+         _reply.readException();
+         _result = _reply.createTypedArrayList(com.smart.kaifa.Book.CREATOR);
+       }finally {
+         _reply.recycle();
+         _data.recycle();
+       }
+       return _result;
+     }
+   //这里是addBook方法，实现IBookManager方法
+   //这个方法需要在客户端运行，它的执行过程和getBookList一样，但是没有返回值，所以不需要从_reply中读取返回值
+   @Override
+   public void addBook(com.smart.kaifa.Book book) throws android.os.RemoteException{
+         android.os.Parcel _data = android.os.Parcel.obtain();
+         android.os.Parcel _reply = android.os.Parcel.obtain();
+
+           try {
+             _data.writeInterfaceToken(DESCRIPTOR);
+                 if ((book!=null)) {
+                 _data.writeInt(1);
+                 book.writeToParcel(_data, 0);
+               }else {
+                 _data.writeInt(0);
+               }
+           mRemote.transact(Stub.TRANSACTION_addBook, _data, _reply, 0);
+           _reply.readException();
+           }finally {
+           _reply.recycle();
+           _data.recycle();
+         }
+     }
+
+ }
+
+}
+
+
+
+}
+
+
+```
+
+其实理解了Binder的工作流程之后，很容易写出这样的东西.
+现在来介绍Binder的两个非常重要的方法，linkToDeath和unlinkToDeath，我们知道，Binder运行在服务端进程，如果服务端进程由于某种原因异常终止了，这个时候客户端就会和服务端Binder连接断裂(称之为Binder死亡)，会导致我们的远程调用失败，更为关键的是，如果我们不知道Binder连接已经断裂，那么客户端的功能就会收到影响，所以Binder提供了两个方法配对，linkToDeath和unlinkToDeath，通过linkToDeath,我们可以给Binder设置一个死亡代理，当Binder死亡是，我们就会收到通知，这个时候我们就可以重新发起连接请求从而恢复连接，那么到底如何给Binder设置死亡代理呢？
+很简单，先声明一个DeathRecipient对象，DeathRecipient是一个接口,其内部只有一个抽象方法binderDied，我们需要实现这个方法，当Binder死亡的时候，系统就会回调binderDied方法,我们就可以移除之前绑定的binder代理并重新绑定远程服务。
+```
+private IBinder.DeathRecipient mDeathRecipient=new IBinder.DeathRecipient{
+@override
+public void binderDied(){
+  if(mBookManager==null){
+    return;
+  }
+  mBookManager.asBinder().unlinkToDeath(mDeathRecipient,0);
+  mBookManager=null;
+}
+
+
+}
+
+```
+
+其次，在客户端绑定远程服务成功后，给binder设置死亡代理
+```
+mService=OMessageBoxManager.Stub。asInterface（binder）;
+binder.linkToDeath(mDeathRecipient,0);
+```
+
+其中，linkToDeath的第二个阐述是标记位，我们直接设置为0就可以，经过上面两个步骤。就给我们的Bionder设置死亡代理，当Binder死亡的时候我们就可以收到通知了，另外通过Binder的方法IsBinderAlive也可以判断Binder是否死亡。
+到这里Ipc的基础知识就介绍完毕了，下面开始进入正题。
+
+## Android中的IPC方式
+在上面，我们介绍了IPC的几个基础知识，序列化和BInder，现在开始分析各种跨进程通信方式，具体方式有很多，比如可以通过在Intent中附加extras来传递信息，或者通过共享文件的方式共享上布局，还可以采用BInder方式来跨进程通信，ContentProvide天生就支持跨进程访问的，因此我们也可以才采用他来进行IPC通信，当然也可以通过SOcket进行
+### 使用Bundle
+我们知道，四大组件中的三大组件（Activity，Service，Receiver）都是支持在Intent中传递Bundle数据的，由于Bundle实现了Parcelable接口，所以他可以方便的在不同的进程间传输，基于这一点，当我们在一个进程中启动另一个进程的Activity、Service、Receiver 我们尽可以在Bundle中
+
+
+
+### 使用文件共享
+
+### 使用Messager
+### 使用AIDL
+
+### 使用ContentProvide
+
+### 使用Socket
+
+## Binder 连接池
+
+## 选用合适的IPC方式
+
 
 
 # 第三章 View的事件体系
