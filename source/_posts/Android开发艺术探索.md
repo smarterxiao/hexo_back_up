@@ -1392,12 +1392,398 @@ binder.linkToDeath(mDeathRecipient,0);
 出了直接传递数据这种典型的使用场景，还有一种特殊的使用场景，比如A进程正在进行一个计算，计算完成后他要启动B进程的一个组件并把计算结果传递给进程B，可是计算结果不支持放入Bundle中，因此无法通过Intent来传输，这个时候如果我们用其他IPC方式就会略显复杂，可以考虑如下方式，我们通过Intent启动进程B的一个service组件（比如IntentService），让Service在后台进行计算，然后计算完毕在启动B进程中真正需要启动的目标组件，由于Service也运行在B进程中，所以目标苏建就可以直接获取计算结果，这样一来就轻松解决了跨进程的问题，这种方式的和兴思想在于将原本需要在A进程的计算任务转移到B进程后台Service中去执行，这样就成功的避免了进程间通信的问题，而且只用了很小的代价
 
 
-
-
-
 ### 使用文件共享
 
+共享文件也是一种不错的进程间通信方式，两个进程通过读/写同一个文件来交换数据，比如A进程把文件写入文件，B进程通过读取这个文件来获取数据。我们知道，在windows上面，一个文件如果被加了排斥锁会导致其他线程无法对其进行访问，包括读/写，而Android是基于Linux的，是的其并发读写文件可以没有限制的进行，甚至两个线程可以同时对同一个文件进行对鞋操作都是允许的，尽管这个可能出问题，通过文件交换数据很好使用，处理可以交换一些文本信息外，我们还可以序列化一个对象到文件系统中同时从另一个进程中恢复这个对象，下面就是这种方法
+
+还是一开始的例子，在MainActivity的onresume中序列化一个User对象到SD卡上的一个文件里，然后在SecondActivity的onResume中反序列化，我们希望在SecondActivity中能够正确的恢复User对象的值，关键代码如下：
+先加一下权限，这里是测试的，所以就不加了
+
+MainActivity
+```
+
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        View viewById = findViewById(R.id.test);
+
+
+        viewById.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent();
+
+                intent.setClass(MainActivity.this, SecondActivity.class);
+                startActivity(intent);
+            }
+        });
+
+    }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        persistToFile();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        Log.i("哇哈哈", "营养快线");
+    }
+
+    private void persistToFile() {
+        Log.d("tag", "哇哈哈111");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                User user = new User(1, "Hello word", false);
+                File dir = new File(Environment.getExternalStorageDirectory(), "smart");
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
+                Log.d("tag", "哇哈哈222");
+                File file = new File(dir, "sss");
+
+                ObjectOutputStream objectOutputStream = null;
+                try {
+                    objectOutputStream = new ObjectOutputStream(new FileOutputStream(file));
+                    Log.d("tag", "哇哈哈333");
+                    objectOutputStream.writeObject(user);
+                    Log.d("tag", "哇哈哈444");
+                } catch (Exception e) {
+                    Log.d("tag", e.getMessage()+"||||||");
+                } finally {
+                    //记得关闭
+                    if (objectOutputStream != null) {
+                        try {
+                            objectOutputStream.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+        }).start();
+    }
+
+
+}
+
+```
+
+清单文件
+```
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.smart.kaifa">
+
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"></uses-permission>
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".SecondActivity"
+            android:label="@string/title_activity_second"
+            android:launchMode="singleTask"
+            android:process=":remote"
+            android:theme="@style/AppTheme.NoActionBar">
+        </activity>
+        >
+    </application>
+
+</manifest>
+```
+
+SecondActivity
+
+```
+public class SecondActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        View viewById = findViewById(R.id.test);
+        viewById.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent();
+                intent.setClass(SecondActivity.this, ThirdActivity.class);
+                startActivity(intent);
+            }
+        });
+
+
+    }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        recoverFromFile();
+    }
+
+
+    private void recoverFromFile() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                User user = null;
+                Log.d("tag", "=========");
+                File cache = new File(Environment.getExternalStorageDirectory(), "smart");
+                File file = new File(cache, "sss");
+                Log.d("tag", "=========");
+                if (file.exists()) {
+                    Log.d("tag", "=========");
+                    ObjectInputStream inputStream = null;
+                    try {
+                        Log.d("tag", "=========");
+                        inputStream = new ObjectInputStream(new FileInputStream(file));
+                        user = (User) inputStream.readObject();
+                        Log.d("tag", user.userName+"=========");
+                        final User finalUser = user;
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Log.d("tag", finalUser.userName+"=========");
+                                Toast.makeText(SecondActivity.this, finalUser.userName, Toast.LENGTH_LONG);
+                            }
+                        });
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Log.d("tag", e.getMessage()+"=========");
+                    } catch (ClassNotFoundException e) {
+                        e.printStackTrace();
+                        Log.d("tag", e.getMessage()+"=========");
+                    } finally {
+                        if (inputStream != null) {
+                            try {
+                                inputStream.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                }
+            }
+        }).start();
+    }
+}
+
+```
+
+要注意一点 SecondActivity是运行在另外的一个进程中的，看日志的时候要切换一下进程。
+
+可以看日志，在SecondActivity中成功的从文件恢复了之前存入对象的数据，这里只所以说内容，是因为反序列化得到对象只是在内容上和序列化之前的对象是一样的，但是他的本质是两个对象
+
+通过文件共享这种方式来共享数据对文件格式是没有具体要求的，比如可以是文本文件，也可以是XML文件，只要读写是双方约定的数据格式即可。通过文件共享的方式也是有局限性的，比如并发读写的问题，想上面的那些例子，如果并发读写，那么我们读出的内容就有可能不是最新的，如果是并发写的话就更加严重了，英雌我们要尽量避免并发写这种情况的操作或者使用线程同步来限制多个线程的写操作，通过上面的分析，我们可以知道，文件共享方式适合在对数据同步要求不高的进程之间进行通信，并用要妥善处理并发读写的问题。
+
+当然SharedPrefences是个特例，众所周知，SharedPrefences是Android中提供的轻量级存储方案，他通过键值对的方式来存储数据，在底层实现上他采用XML文件来存储价值对，每个应用的SharedPrefences文件都可以在当前包所在的data目录下查看到。一般来说，他的目录位于/data/data/package name/shared_prefs 目录下，其中package name 表示的是当前应用的包名，从本质上来说，SharedPrefences也属于文件的一种，但是由于系统对他的读写有一定的缓存策略，记在内从重会有一份SharedPrefences文件的缓存，英雌在多进程模式下，系统对他的读写就变得不可靠，当面对高并发的读写访问，sharedPrefences有很大几率会丢失数据，因此，不建议在进程通信中使用SharePrefences
+
 ### 使用Messager
+
+Messager可以翻译为心事，顾名思义，通过他可以在不同进程中传递Messager对象，在Message中放入我们需要传递的数据，就可以轻松的实现数据的进程间传递了。Messager是一种轻量级的IPC方法，他的底层实现是AIDL，为什么这么说呢，我们大致看一下Messager这个类的构造方法就明白了。
+下面Messager的两个构造方法，从构造方法的实现上我们可以明显看出AIDL的痕迹，不管是IMessager还是Stub.asInterface，这种是用方法都表明它的底层是AIDL。
+
+```
+public Messager(Handler target){
+  mTarget=target.getIMessager();
+}
+
+
+public Messager(IBinder target){
+  mTarget=IManager.Stub.asInterface(target);
+}
+```
+
+Messager的使用方法很简单，他对AIDL做了封装，是的我们可以更简单的进行进程间通讯，同时由于它的一次处理一个请求，因此在服务端我们不用考虑线程同步的问题，这是因为服务端中不存在并发执行的情景，他实现了一个Messager有如下几个步骤，分为客户端和服务端。
+
+1. 服务端进程
+首先，我们需要在服务端创建一个Service来处理客户端的连接请求，同时创建一个Handler并通过他来创建一个Messager对象，然后在Service的onBind中返回这个Messager对象底层的Binder即可。
+
+2. 客户端进程
+客户端进程中，首先要绑定服务端的Service，绑定成功后用服务端返回的IBinder对象创建一个Messager，通过这个Messager就可以像服务端发送消息了，发消息类型为Message对象。如果需要服务端能够回应客户端，就和服务端一样，我们还需要创建一个Handler并创建一个新的Messager并他这个Messager对象通过Message的replyTo参数传递给服务器，服务端通过这个replyTo参数就可以回应客户端，这听起来可能还是有点抽象，下面来看两个例子
+
+清单文件,注册
+```
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.smart.kaifa">
+
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"></uses-permission>
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".SecondActivity"
+            android:label="@string/title_activity_second"
+            android:launchMode="singleTask"
+            android:process=":remote"
+            android:theme="@style/AppTheme.NoActionBar">
+
+
+        </activity>
+
+        <activity android:name=".MessengerActivity"></activity>
+
+        <service
+            android:name=".MessagerService"
+            android:process=".remote"></service>
+        <activity
+            android:name=".ThirdActivity"
+            android:label="@string/title_activity_third"
+            android:launchMode="singleTask"
+            android:process="xxx.xxx.xxx.remote"
+            android:taskAffinity="com.xiao.x"
+            android:theme="@style/AppTheme.NoActionBar"></activity>
+    </application>
+
+</manifest>
+```
+
+远程服务，在其他进程中，然后在接收到消息之后打印消息
+```
+
+public class MessagerService extends Service {
+    private static final String TAG = "MessagerService";
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mMessenger.getBinder();
+    }
+    private final Messenger mMessenger = new Messenger(new MessagerHandler());
+    private static class MessagerHandler extends Handler {
+        @Override
+        public void handleMessage(Message msg) {
+
+            switch (msg.what) {
+                case 1:
+                    Bundle data = msg.getData();
+                    String key = data.getString("key");
+                    Log.i(TAG, "receive msg from Client:" + key);
+                    getString("msg");
+                    break;
+
+                default:
+                    super.handleMessage(msg);
+            }
+        }
+        private void getString(String msg) {
+        }
+    }
+
+}
+
+```
+
+启动服务的Activity，这个是客户端的处理，发送一个消息
+
+```
+public class MessengerActivity extends Activity {
+
+    private static final String TAG = "MessengerActivity";
+    private Messenger mService;
+    private ServiceConnection mConnection=new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            mService=new Messenger(service);
+            Message obtain = Message.obtain(null, 1);
+            Bundle bundle=new Bundle();
+            //设置key值
+            bundle.putString("key","ad钙奶");
+            obtain.setData(bundle);
+            try {
+                mService.send(obtain);
+            }catch (Exception e){
+
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+
+        }
+    };
+
+
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        setContentView(R.layout.activity_main);
+        TextView tv = findViewById(R.id.test);
+        tv.setText("点击启动服务");
+        tv.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MessengerActivity.this, MessagerService.class);
+
+                bindService(intent,mConnection, Context.BIND_AUTO_CREATE);
+            }
+        });
+
+
+    }
+
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        //销毁的时候记得解绑，节约资源
+        if(mConnection!=null){
+            unbindService(mConnection);
+        }
+
+    }
+}
+
+```
+
+打印结果
+
+```
+02-05 23:12:36.784 673-673/.remote I/MessagerService: receive msg from Client:ad钙奶
+```
+
+通过上面的例子可以看出，在Messenger中进行数据传递必须将数据放入Message中，二Messenger和Message都实现了Parcelable接口，因此，可以跨进程传输。简单来说，Message中所支持的数据类型就是Messenger所支持的传输类型，实际上通过Messenger来传递Message，Message中能够使用的载体之后what、arg1、arg2、bundle以及replyTo。Message中的另外一个字段objectt在同一个进程中很实用，但是进程间在通信的时候。在Message中的另一个字段object在同一个进程中很实用的，但是在进程间通信的时候，在Android2.2之前object字段不支持跨进程传输，及时在2.2以后，也仅仅是实现系统提供的Parcelable接口的的对象才能通过他来传输，这就意味着我们自定义的Parcelable对象是无法通过object字段来传输。当然可以使用Bundle
+
+
+现在在举一个例子，在收到消息之后会回复一条消息
+
+
+服务端的修改
+```
+
+```
+
 ### 使用AIDL
 
 ### 使用ContentProvide
