@@ -1781,10 +1781,154 @@ public class MessengerActivity extends Activity {
 
 服务端的修改
 ```
+public class MessagerService extends Service {
+
+
+    private static final String TAG = "MessagerService";
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mMessenger.getBinder();
+    }
+
+
+    private final Messenger mMessenger = new Messenger(new MessagerHandler());
+
+
+    private static class MessagerHandler extends Handler {
+
+
+        @Override
+        public void handleMessage(Message msg) {
+
+            switch (msg.what) {
+                case 1:
+                    Bundle data = msg.getData();
+                    String key = data.getString("key");
+                    Log.i(TAG, "receive msg from Client:" + key);
+                    getString("msg");
+                    Messenger replyTo = msg.replyTo;
+                    Message message = Message.obtain(null, 2);
+                    Bundle bundle=new Bundle();
+                    bundle.putString("reply","消息已经获取到了");
+                    message.setData(bundle);
+
+                    try {
+                      //通过Messenger发送值
+                        replyTo.send(message);
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+                    break;
+
+                default:
+
+                    super.handleMessage(msg);
+
+            }
+
+
+        }
+
+        private void getString(String msg) {
+        }
+    }
+
+}
+```
+
+客户端的修改
+
+```
+public class MessengerActivity extends Activity {
+
+    private static final String TAG = "MessengerActivity";
+    private Messenger mService;
+    private ServiceConnection mConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            mService = new Messenger(service);
+            Message obtain = Message.obtain(null, 1);
+            Bundle bundle = new Bundle();
+            bundle.putString("key", "ad钙奶");
+            obtain.setData(bundle);
+            //将客户端需要接受的东西放入,绑定handler
+            obtain.replyTo=mGetReplyMessenger;
+            try {
+
+                mService.send(obtain);
+            } catch (Exception e) {
+
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+
+        }
+    };
+
+
+    private Messenger mGetReplyMessenger = new Messenger(new MessagerHandler());
+
+    private static class MessagerHandler extends Handler {
+
+
+        @Override
+        public void handleMessage(Message msg) {
+
+            switch (msg.what) {
+                case 2:
+                    Bundle data = msg.getData();
+                    String key = data.getString("reply");
+                    Log.i(TAG, "receive msg from Service:" + key);
+                    break;
+                default:
+                    super.handleMessage(msg);
+            }
+        }
+
+        private void getString(String msg) {
+        }
+    }
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        setContentView(R.layout.activity_main);
+        TextView tv = findViewById(R.id.test);
+        tv.setText("点击启动服务");
+        tv.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MessengerActivity.this, MessagerService.class);
+                bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+            }
+        });
+    }
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (mConnection != null) {
+            unbindService(mConnection);
+        }
+
+    }
+}
 
 ```
 
+
+下面是一张图解，最后发现其实是在handler进行通讯了，都持有一个Handler
+
+
+
+![Alt text](图像1517846753.png "Messager 进程间通信图")
+
 ### 使用AIDL
+通过Messager这种方式进行进程间通信的方法，可以发现，Messager是串行的方式处理客户端发来的消息的，如果大量的消息同时发送到服务端
 
 ### 使用ContentProvide
 
