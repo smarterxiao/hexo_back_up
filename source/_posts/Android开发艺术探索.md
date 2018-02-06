@@ -1928,8 +1928,477 @@ public class MessengerActivity extends Activity {
 ![Alt text](图像1517846753.png "Messager 进程间通信图")
 
 ### 使用AIDL
-通过Messager这种方式进行进程间通信的方法，可以发现，Messager是串行的方式处理客户端发来的消息的，如果大量的消息同时发送到服务端
 
+通过Messager这种方式进行进程间通信的方法，可以发现，Messager是串行的方式处理客户端发来的消息的，如果大量的消息同时发送到服务端，那么使用Messager就不合适了，同时Messager的主要作用是用来传递消息，很多时候我们需要跨进程调用调用服务端的方法，所以Messenger就无法做到了。但是我们可以使用AIDL来实现跨进程的方法调用，AIDL也是Messenger的底层实现，因此Messenger本质上也是AIDL，只不过是系统做了分装而已
+
+1. 服务端
+服务端首先要创建一个Service用来监听客户端的请求，然后创建一个AIDL文件，将暴露出来给客户端的接口在这个AIDL文件中声明，最后在Service中实现这个AIDL接口即可
+
+2. 客户端
+客户端所需要做的事情就稍微简单一些，首先需要绑定服务端的Service，绑定成功了，将服务端返回的Binder对象转成AIDL接口所属的类型，接着就可以调用AIDL中的方法了。
+上面描述的只是一个感性的过程，AIDL的时间过程远不止这么简单，接下来会对其中的细节和难点进行完整的介绍。
+
+3. AIDL接口的创建
+首先看AIDL接口的创建
+
+```
+// IBookManager.aidl
+package com.smart.kaifa;
+
+// Declare any non-default types here with import statements
+import com.smart.kaifa.Book;
+interface IBookManager {
+    /**
+     * Demonstrates some basic types that you can use as parameters
+     * and return values in AIDL.
+     */
+    void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat,
+            double aDouble, String aString);
+   List<Book> getBookList();
+  void addBook(in Book book);
+}
+
+```
+
+在AIDL文件中，并不是所有的数据类型都是可以使用的，那么到底AIDL文件支持哪些数据类型呢？如下
+
+* 基本数据类型(int 、long、char、boolean、double)
+
+* String和CharSequence
+* List：只支持ArrayList，并且每个元素都必须能够被AIDL支持
+* Map：只支持HashMap，里面的每个元素都必须被AIDL支持，包括key和value
+* Parcelable:所有实现了Parcelable接口的对象
+* AIDL：所有的AIDL接口本身也可以在AIDL文件中使用
+
+以上6中数据类型就是AIDL所支持的所有类型，其中自定义的Parcelable对象和AIDL对象必须要显示import进来，不管他们是否和当前的AIDL文件位于同一个包内。比如IBookManager.aidl这个文件，里面用到了Book这个类，这个类实现了Parcelable接口和IBookManager.adil这个文件，但是遵守AIDL的规范，我们任然需要显示的import进来。AIDL中会大量使用Parcelable，至于如果使用Parcelable接口来序列化对象。
+
+另外一个需要注意的地方是如果AIDL文件中使用了自定义的Parcelable对象，那么必须新建一个和他同名的AIDL文件，并且什么它为Parcelable类型，在上面的IBookManager.aidl，这个时候我们必须要创建Book.aidl文件在里面添加如下内容
+
+```
+// Book.aidl
+package com.smart.kaifa;
+
+// Declare any non-default types here with import statements
+parcelable Book;
+
+```
+
+我们需要注意。AIDL中每个实现了Parcelable接口的类都需要按照上面那种方式去创建相对应的AIDL文件并什么那个类为Parcelable。初次之外，AIDL中处理基本数据列行，其他类型的参数必须标记上方向；in、out、inout in表示输入类型参数，out表示输出型参数，inout表示输入输出型参数，但是不能都使用inout。这个在底层是有开销的
+为了方便AIDL开发，一般所有的AIDL相关的文件放在一个文件夹中
+
+```
+public class BookManagerService extends Service {
+
+    private  static final String TAG="BMS";
+
+    private CopyOnWriteArrayList<Book> mBookList=new CopyOnWriteArrayList<>();
+
+    private Binder mBinder=new IBookManager.Stub() {
+        @Override
+        public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, String aString) throws RemoteException {
+
+        }
+
+        @Override
+        public List<Book> getBookList() throws RemoteException {
+            return mBookList;
+        }
+
+        @Override
+        public void addBook(Book book) throws RemoteException {
+            mBookList.add(book);
+        }
+    };
+
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mBinder;
+    }
+
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        mBookList.add(new Book(1,"wahaha"));
+        mBookList.add(new Book(2,"xiao"));
+    }
+}
+
+```
+上面是一个服务端Service的典型实现，首先在onCreate中初始化添加了两本图书的信息，然后创建了一个Binder对象并且在onBind中返回他，这个对象继承自IBookManager.Stub，并实现了他内部的AIDL方法。这个过程在Binder那一节已经介绍过了，这里采用了CopyOnWriteArrayList，是为了防止多个客户端访问的情景，使用CopyOnWriteArrayList实现线程同步
+
+```
+  <service android:name=".BookManagerService" android:process=".remote"></service>
+```
+
+客户端的实现
+
+
+
+```
+
+public class BookManagerActivity extends Activity {
+
+    private static final String TAG = "BookManagerActivity";
+
+    private ServiceConnection mConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+
+            IBookManager bookManager = IBookManager.Stub.asInterface(service) ;
+
+            try {
+                List<Book> bookList = bookManager.getBookList();
+                Log.i("test",bookList.toString());
+            }catch (Exception e){
+
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+
+
+        }
+    };
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        Intent intent = new Intent(this, BookManagerService.class);
+        bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+    }
+
+    @Override
+    protected void onDestroy() {
+        unbindService(mConnection);
+        super.onDestroy();
+
+    }
+}
+
+```
+
+这样就可以了，但是注意服务端的方法可能会很久之后才被执行，所以建议在子线程中进行操作，防止ANR
+
+输出结果
+
+```
+ [Book{bookId=1, bookName='wahaha'}, Book{bookId=2, bookName='xiao'}]
+```
+
+然后在进一步，修改服务端数据，然后在客户端在打印出来
+
+
+```
+public class BookManagerActivity extends Activity {
+
+    private static final String TAG = "BookManagerActivity";
+
+    private ServiceConnection mConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+
+            IBookManager bookManager = IBookManager.Stub.asInterface(service);
+
+            try {
+                List<Book> bookList = bookManager.getBookList();
+                Log.i("——----------------", bookList.toString());
+                //设置数据
+                bookManager.addBook(new Book(100, "礼拜"));
+                //在获取
+                bookList = bookManager.getBookList();
+                Log.i("||||||||||||", bookList.toString());
+            } catch (Exception e) {
+
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+
+
+        }
+    };
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        Intent intent = new Intent(this, BookManagerService.class);
+        bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+    }
+
+    @Override
+    protected void onDestroy() {
+        unbindService(mConnection);
+        super.onDestroy();
+
+    }
+}
+
+```
+
+输出结果
+
+```
+[Book{bookId=1, bookName='wahaha'}, Book{bookId=2, bookName='xiao'}, Book{bookId=100, bookName='礼拜'}]
+```
+
+在进一步
+这个时候有一个需求就是客户端厌倦了，想让服务端主动告知当前的书籍内容，就是一个观察者模式，这个时候就要在创建一个AIDL接口去实现
+IOnNewBookArrivedListener 接口
+```
+
+// IOnNewBookArrivedListener.aidl
+package com.smart.kaifa;
+
+// Declare any non-default types here with import statements
+import com.smart.kaifa.Book;
+interface IOnNewBookArrivedListener {
+    /**
+     * Demonstrates some basic types that you can use as parameters
+     * and return values in AIDL.
+     */
+    void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat,
+            double aDouble, String aString);
+
+    void onNewBookArrived(in Book newBook);
+
+
+}
+
+```
+
+新加了之后要在原先的AIDL文件中加上方法来注册Listener
+```
+
+package com.smart.kaifa;
+
+// Declare any non-default types here with import statements
+import com.smart.kaifa.Book;
+interface IBookManager {
+    /**
+     * Demonstrates some basic types that you can use as parameters
+     * and return values in AIDL.
+     */
+    void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat,
+            double aDouble, String aString);
+
+
+    List<Book> getBookList();
+    void addBook(in Book book);
+
+
+    void registerListener(IOnNewBookArrivedListener listener);
+    void unregisterListener(IOnNewBookArrivedListener listener);
+}
+
+```
+
+
+服务器端代码的修改
+
+```
+public class BookManagerService extends Service {
+
+    private static final String TAG = "BMS";
+    private AtomicBoolean atomicBoolean = new AtomicBoolean(false);
+
+    private CopyOnWriteArrayList<Book> mBookList = new CopyOnWriteArrayList<>();
+    private CopyOnWriteArrayList<IOnNewBookArrivedListener> mListenerList = new CopyOnWriteArrayList<>();
+
+    private Binder mBinder = new IBookManager.Stub() {
+        @Override
+        public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, String aString) throws RemoteException {
+
+        }
+
+        @Override
+        public List<Book> getBookList() throws RemoteException {
+            return mBookList;
+        }
+
+        @Override
+        public void addBook(Book book) throws RemoteException {
+            mBookList.add(book);
+        }
+
+        @Override
+        public void registerListener(IOnNewBookArrivedListener listener) throws RemoteException {
+            //获取客户端对象
+            if (!mListenerList.contains(listener)) {
+                mListenerList.add(listener);
+            }
+        }
+
+        @Override
+        public void unregisterListener(IOnNewBookArrivedListener listener) throws RemoteException {
+            if (mListenerList.contains(listener)) {
+                mListenerList.remove(listener);
+            }
+        }
+    };
+
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mBinder;
+    }
+
+
+    private void onNewBookArrived(Book book) {
+        mBookList.add(book);
+        for (int i = 0; i < mListenerList.size(); i++) {
+            IOnNewBookArrivedListener iOnNewBookArrivedListener = mListenerList.get(i);
+
+            try {
+                iOnNewBookArrivedListener.onNewBookArrived(book);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        mBookList.add(new Book(1, "wahaha"));
+        mBookList.add(new Book(2, "xiao"));
+
+
+        new Thread(new ServiceWorker()).start();
+    }
+
+
+    private class ServiceWorker implements Runnable {
+
+
+        @Override
+        public void run() {
+            while (!atomicBoolean.get()) {
+                try {
+                    Thread.sleep(3000);
+
+                } catch (Exception e) {
+
+                }
+
+                int bookId = mBookList.size() + 1;
+                Book newBook = new Book(bookId, "new bool #" + bookId);
+                onNewBookArrived(newBook);
+            }
+        }
+    }
+}
+
+```
+
+
+客户端代码
+
+
+```
+
+public class BookManagerActivity extends Activity {
+
+    private static final String TAG = "BookManagerActivity";
+    private static final int TAG_ID = 1;
+
+    private Handler mHandler=new Handler(){
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case  1:
+
+
+                    Log.i(TAG,"receove book"+msg.obj);
+                    break;
+
+                default:
+                    super.handleMessage(msg);
+            }
+
+
+
+        }
+    };
+
+    private ServiceConnection mConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+
+            bookManager = IBookManager.Stub.asInterface(service);
+
+            try {
+                List<Book> bookList = bookManager.getBookList();
+                Log.i("——----------------", bookList.toString());
+                //设置数据
+                bookManager.addBook(new Book(100, "礼拜"));
+                //在获取
+                bookList = bookManager.getBookList();
+                Log.i("||||||||||||", bookList.toString());
+
+
+                bookManager.registerListener(onNewBookArrivedListener);
+            } catch (Exception e) {
+
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+
+
+        }
+    };
+    private IBookManager bookManager;
+    private IOnNewBookArrivedListener onNewBookArrivedListener= new IOnNewBookArrivedListener.Stub() {
+        @Override
+        public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, String aString) throws RemoteException {
+
+        }
+
+        @Override
+        public void onNewBookArrived(Book newBook) throws RemoteException {
+            mHandler.obtainMessage(1,newBook).sendToTarget();
+        }
+    };
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        Intent intent = new Intent(this, BookManagerService.class);
+        bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if(bookManager!=null&&bookManager.asBinder().isBinderAlive()){
+            try {
+                bookManager.unregisterListener(onNewBookArrivedListener);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+        }
+
+        unbindService(mConnection);
+        super.onDestroy();
+
+
+    }
+}
+
+```
+
+可以这么理解 客户端连接服务端 这个时候客户端持有一个服务端的Stub，在客户端启动服务端之后，服务端也持有一个客户端的Stub，这样就实现了双方的通信，看客户端将传递过去IOnNewBookArrivedListener.Stub()，然后服务端在绑定服务的时候传递IBookManager.Stub() 这样就互相持有对象的一个stub，这样就可以通信了。
+
+但是这个时候我们关闭的时候发现并没有移除，定时器还在每隔3s传递一次数据。这个是因为虽然在移除的时候和注册的时候传递的是同一个对象，但是在服务端，获取的是不用的对象，可以理解为地址不同但是值相同的对象，所以用这种方式无法解开注册，这个时候系统为我们提供了一个跨进程删除listener的接口，RemoteCallbackList
 ### 使用ContentProvide
 
 ### 使用Socket
