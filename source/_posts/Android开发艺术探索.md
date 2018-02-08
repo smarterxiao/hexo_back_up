@@ -2399,6 +2399,243 @@ public class BookManagerActivity extends Activity {
 可以这么理解 客户端连接服务端 这个时候客户端持有一个服务端的Stub，在客户端启动服务端之后，服务端也持有一个客户端的Stub，这样就实现了双方的通信，看客户端将传递过去IOnNewBookArrivedListener.Stub()，然后服务端在绑定服务的时候传递IBookManager.Stub() 这样就互相持有对象的一个stub，这样就可以通信了。
 
 但是这个时候我们关闭的时候发现并没有移除，定时器还在每隔3s传递一次数据。这个是因为虽然在移除的时候和注册的时候传递的是同一个对象，但是在服务端，获取的是不用的对象，可以理解为地址不同但是值相同的对象，所以用这种方式无法解开注册，这个时候系统为我们提供了一个跨进程删除listener的接口，RemoteCallbackList
+
+```
+public class RemoteCallbackList<E extends IInterface>
+
+```
+
+所有的AIDL接口都实现了IInterface 接口，他的工作原理很简单，他在内部有一个Map结果专门用来保存所有的AIDL回调，这个Map的key是IBinder类型，value是Callback类型，如下图所示。
+```
+ArrayMap<IBander,Callback> mCallbacks=new arrayMap<IBander,Callback>
+```
+其中Callback中分装了真正远程listener，当客户端注册listener的时候，他会把这个listener的信息存入mCallbacks中，其中key和value分别通过下面的方式获得：
+
+```
+IBinder key=listener.asBinder();
+Callback value=new Callback(listener,cookie)
+```
+在这个东西的底层，使用的是一个Map,虽然说多次跨进程传输客户端的同一个客户端的同一个对象会在服务端生成不同的对象，但是这些新生成的对象有一个共同点，那就是他们底层的Binder是同一个，利用这个特性，就可以实现上面我们无法实现的功能，当客户端注册的时候，我们只要遍历服务端所有的listener，罩住那个和解除注册listener具有相同的binder对象的服务端listener并且把它删除就可以了。这个就是remoteCallBackList为我们做的事情。同时remoteCallBackList还有一个很有用的功能，就是当客户端进程终止之后，他会自动移除客户端所注册的listener，另外，remoteCallbackList内部自动实现了线程同步的功能，所以我们使用它来注册和解注册时，不需要做额外的线程同步工作。由此可见这个类还是很有用的。
+
+RemoteCallbackLlist使用起来很简单，我们要对BookManagerService做一些修改，首先要创建一个RemoteCallbackList对象来替代之前的CopyOnWriteArrayList。
+
+```
+private RemoteCallbackList<IOnNewBookArrivedLisstener> mListenerList=new remoteCallbackList<IOnNewBookArrivedListener>;
+
+```
+
+然后，修改registerListener和unregisterListener这两个接口的实现，如下
+
+```
+@Override
+  public void registerListener(IOnNewBookArrivedListener listener) throws RemoteException {
+
+   mListenerList.register(listener);
+
+  }
+
+  @Override
+  public void unregisterListener(IOnNewBookArrivedListener listener) throws RemoteException {
+      mListenerList.unregister(listener);
+  }
+
+```
+
+
+接下来要修改onNewBookArrived方法，当有新书时，我们要通知所有已注册的listener，如下所示。
+
+```
+
+    private void onNewBookArrived(Book book) {
+        mBookList.add(book);
+        final int N = mListenerList.beginBroadcast();
+        for (int i = 0; i < N; i++) {
+            IOnNewBookArrivedListener listener = mListenerList.getBroadcastItem(i);
+            if (listener != null) {
+
+                try {
+                    listener.onNewBookArrived(book);
+                } catch (Exception e) {
+
+                }
+
+            }
+
+        }
+
+        mListenerList.finishBroadcast();
+    }
+
+
+
+```
+
+BookManagerService的修改已经修改完毕了，使用RemoteCallbackList，有一点需要注意，我们无法向操作list一样去操作他，虽然他的名字中也带有一个List，但是他并不是一个List，遍历RemoteCallbackList，必须要按照下面的方式执行，其中 **beginBroadcast** 和 **finishBoradcask** 必须要配对使用，哪怕我们仅仅要获取RemoteCallbackList中的元素个数，这是必须要注意的地方。
+
+```
+final int N = mListenerList.beginBroadcast();
+for (int i = 0; i < N; i++) {
+    IOnNewBookArrivedListener listener = mListenerList.getBroadcastItem(i);
+    if (listener != null) {
+        // TODO
+
+    }
+
+}
+
+mListenerList.finishBroadcast();
+
+```
+
+到这里AIDL的使用方式基本已经介绍完了，但是，有几点还需要再次说明一下。我们知道，客户端调用远程服务的方法，被调用的方法运行在服务端的Binder线程池中，同时客户端的线程会挂起，这个时候如果服务端的方法执行比较耗时，就会导致客户端线程长时间阻塞在这里，而如果这个客户端的线程是UI线程的话，就会导致客户端ANR，这个要求在客户端使用子线程去访问，但是客户端的OnServiceConnected和OnServiceDisconnected方法都运行在UI线程中，所以也不可以在他们里面直接调用服务端的耗时方法，这点要注意。另外由于服务端方法本省运行在服务端的Binder线程池中，所以服务单本身就可以执行大量的耗时操作，这个时候切记不要在服务端的方法中开启线程去执行异步，除非你能明确自己在干什么。否则不建议这么做。
+
+这个时候可以模拟一下服务端的方法是耗时操作
+
+```
+@Override
+      public List<Book> getBookList() throws RemoteException {
+          SystemClock.sleep(10000);
+          return mBookList;
+      }
+```
+这个时候就会提示ANR。
+要避免这样的问题，只要将调用客户端的调用放在子线程中
+
+```
+private ServiceConnection mConnection = new ServiceConnection() {
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service) {
+
+        bookManager = IBookManager.Stub.asInterface(service);
+
+        try {
+
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    List<Book> bookList = null;
+                    try {
+                        bookList = bookManager.getBookList();
+                        Log.i("——----------------", bookList.toString());
+                        //设置数据
+                        bookManager.addBook(new Book(100, "礼拜"));
+                        //在获取
+                        bookList = bookManager.getBookList();
+                        Log.i("||||||||||||", bookList.toString());
+
+
+                        bookManager.registerListener(onNewBookArrivedListener);
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+
+                }
+            }).start();
+
+        } catch (Exception e) {
+
+        }
+    }
+
+
+```
+同理，当远程服务端需要调用客户端的listener中的方法时，被调用的方法运行在Binder线程池中，只不过是客户端的线程池中，所以同样不可以在服务端中调用客户端的耗时方法，比如onNewBookArrived方法,所以要放在非UI线程
+
+```
+    private void onNewBookArrived(final Book book) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                mBookList.add(book);
+                final int N = mListenerList.beginBroadcast();
+                for (int i = 0; i < N; i++) {
+                    IOnNewBookArrivedListener listener = mListenerList.getBroadcastItem(i);
+                    if (listener != null) {
+                        try {
+                            listener.onNewBookArrived(book);
+                        } catch (Exception e) {
+                        }
+                    }
+                }
+                mListenerList.finishBroadcast();
+            }
+        }).start();
+    }
+```
+
+另外，由于客户端的IOnNewBookArrivedListener中的onNewBookArrived方法运行在客户端的Binder线程池中
+```
+private IOnNewBookArrivedListener onNewBookArrivedListener= new IOnNewBookArrivedListener.Stub() {
+    @Override
+    public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, String aString) throws RemoteException {
+
+    }
+
+    @Override
+    public void onNewBookArrived(Book newBook) throws RemoteException {
+        mHandler.obtainMessage(1,newBook).sendToTarget();
+    }
+};
+```
+
+因此不能在这个里面执行UI操作。
+
+为了程序的健壮性，我们还需要你做一件事情，Binder是可能意外死亡的，通常是服务端进程意外终止的，所以当我们需要重新连接服务。有两种方法，第一种方法是给Binder设置Deathrecipient监听，当Binder死亡的时候，我们会受到binderDied方法的回调，然后我们在binderDied重新连接远程服务。另外一种方法是在onServiceDisconnected重新连接，可以随便使用一种。区别是onServiceDisconnected在客户端的UI线程中被回调，而binderDIed在客户端的Binder线程池中被回调。也就是说在BinderDied中我们不能访问UI，这个就是区别。
+
+下面就是要进行权限验证功能，防止其他人非法连接。
+这里有两种方法。
+第一种方法：我们可以在onBind中进行验证，验证不通过就直接返回null，这样验证失败的客户端就无法绑定服务。至于验证方式可以有多重，比如使用permission这种方式验证。不过要在清单文件中加权限
+
+```
+<permission android:name="xxxx" android:protectionLevel="normal"></permission>
+```
+uses-permission和permission 的区别
+
+* uses-permission是申请权限:这个常用，就不介绍了
+
+* permission是自己定义权限
+ 它可以采用由 Android 定义（如 android.Manifest.permission 中所列）或由其他应用声明的任何权限。或者，它也可以定义自己的权限。新权限用 < permission > 元素来声明。 例如，Activity 可受到如下保护：
+```
+<permission android:description="string resource"
+android:icon="drawable resource"
+android:label="string resource"
+android:name="string"
+android:permissionGroup="string"
+android:protectionLevel=["normal" | "dangerous" |
+"signature" | "signatureOrSystem"] />
+
+```
+
+* android:description 对权限的描述，一般两句话，第一句描述这个权限所针对的操作，第二句话告诉用户授予APP这个权限带来的后果
+* android:icon 图片资源路径
+* android:label 对权限的一个简短描述
+* android:name 权限的唯一标识，一般都是使用包名加权限名
+* android:permissionGroup 权限所属权限组的名称
+* android:protectionLevel 权限的等级
+  * normal 最低的等级，声明次权限的app，系统默认授予次权限，不会提示用户
+  * dangerous 权限对应的操作有安全风险，系统在安装声明此权限的app时会提示用户
+  * signature 权限声明的操作只针对使用同一个证书签名的app开放
+  * signatureOrSystem 于signature 类似，只是增加了rom中自带的app的声明
+  * 注意：android:name属性是必须的，其他的可选，未写的系统会制定默认值
+
+简单的使用
+
+```
+<manifest . . . >
+    <permission android:name="com.example.project.DEBIT_ACCT" . . . />
+    <uses-permission android:name="com.example.project.DEBIT_ACCT" />
+    . . .
+    <application . . .>
+     <activity android:name="com.example.project.FreneticActivity"
+                  android:permission="com.example.project.DEBIT_ACCT"
+                 . . . >
+          . . .
+        </activity>
+    </application>
+</manifest>
+```
+这样就为这个activity这个组件单独加了一个权限
+
 ### 使用ContentProvide
 
 ### 使用Socket
