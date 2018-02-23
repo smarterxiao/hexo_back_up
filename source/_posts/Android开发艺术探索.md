@@ -2666,8 +2666,214 @@ public boolean onTransact(int code ,Parcel data,Parcel reply,int flags) throws R
 ContentProvide是Android中提供的专门用于不同应用间进行数据共享。从这一点看，他天生就适合进程间通信。和Messenger一样，ContentProvider的底层实现同样也是Binder，由此可见，Binder在Android系统中是多么重要。
 我们无需关心底层细节即可轻松实现IPC，ContentProvide虽然使用起来简单，但是他的细节有很多，比如防止sql注入，权限控制等等。
 
+这里只是单纯的讲解一下他的跨进程工作机制
+
+系统预制了许多ContentProvide ，比如通讯录信息，日程表信息，要跨进程访问这些信息，只需要通过ContentResolver的query，update，insert和delete方法就可以。这里自定义一个ContentProvide，并演示如何在其他应用中使用contentProvide。下面要实现6个抽象方法，
+
+```
+
+public class BookProvide extends ContentProvider {
+
+    @Override
+    public boolean onCreate() {
+        Log.i("test", "onCreate   :"+Thread.currentThread().getName());
+        return false;
+    }
+
+    @Nullable
+    @Override
+    public Cursor query(@NonNull Uri uri, @Nullable String[] projection, @Nullable String selection, @Nullable String[] selectionArgs, @Nullable String sortOrder) {
+        Log.i("test", "query   :"+Thread.currentThread().getName());
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public String getType(@NonNull Uri uri) {
+        Log.i("test", "getType   :"+Thread.currentThread().getName());
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public Uri insert(@NonNull Uri uri, @Nullable ContentValues values) {
+        Log.i("test", "insert   :"+Thread.currentThread().getName());
+        return null;
+    }
+
+    @Override
+    public int delete(@NonNull Uri uri, @Nullable String selection, @Nullable String[] selectionArgs) {
+        Log.i("test", "delete   :"+Thread.currentThread().getName());
+        return 0;
+    }
+
+    @Override
+    public int update(@NonNull Uri uri, @Nullable ContentValues values, @Nullable String selection, @Nullable String[] selectionArgs) {
+        Log.i("test", "update   :"+Thread.currentThread().getName());
+        return 0;
+    }
+}
 
 
+```
+
+除了oncreate 运行在主线程，其他都运行在Binder线程池（这个后面讲）
+
+ContentProvide主要以表格的形式组织数据，并且可以包含多个表，和数据库有点类似。除了表格形式，ContentProvide还支持文件数据，比如图片，视频等。文件数据和表格数据的结构不同，因此处理这类数据是可以在ContentProvide中返回文件的句柄给外界，让从而让文件来访问COntentProvide中的文件信息，Android提供了MediaStore功能就是文件类型的ContentProvide，详情可以参考MediaStore。另外虽然ContentProvide底层数据看起来想一个Sqlite数据库，但是ContentProvide对底层数据没有任何要求。我们既可以使用Sqlite，也可以使用普通文件。甚至可以采用内存中的一个对象进行数据存储。这一点可以在后面的章节中进行介绍。
+
+在实现了那6个方法之后，我们需要在清单文件中注册，
+
+```
+<provider
+     android:authorities="com.xxx.xxx"// ContentProvide的唯一标识
+     android:process=":provide" //运行在其他进程中
+     android:permission="com.xxx" //自定义权限
+     android:name=".BookProvide" //名称
+     ></provider>
+```
+
+`android:authorities="com.xxx.xxx" ` 这个东西是唯一标识，通过这个标识，外部应用就可以访问我们的BookProvider。因此`android:authorities="com.xxx.xxx" `必须是唯一的，所以建议使用包名，然后为了安全起见，给他增加了权限验证。当然还可以加入 `   android:readPermission="xxx"`和`  android:writePermission="xxx"`
+* readPermission:使用Content Provider的查询功能所必需的权限，即使用ContentProvider里的query()函数的权限；
+* writePermission：使用ContentProvider的修改功能所必须的权限，即使用ContentProvider的insert()、update()、delete()函数的权限；
+* permission：客户端读、写 Content Provider 中的数据所必需的权限名称。 本属性为一次性设置读和写权限提供了快捷途径。 不过，readPermission和writePermission属性优先于本设置。 如果同时设置了readPermission属性，则其将控制对 Content Provider 的读取。 如果设置了writePermission属性，则其也将控制对 Content Provider 数据的修改。也就是说如果只设置permission权限，那么拥有这个权限的应用就可以实现对这里的ContentProvider进行读写；如果同时设置了permission和readPermission那么具有readPermission权限的应用才可以读，拥有permission权限的才能写！也就是说只拥有permission权限是不能读的，因为readPermission的优先级要高于permission；如果同时设置了readPermission、writePermission、permission那么permission就无效了。
+
+注册了ContentProvide之后就可以在外部应用中访问它了，为了方便，其实是偷懒，就在同一个app中进行，不过开两个进程
+
+加入自定义权限
+```
+<uses-permission android:name="com.xxx"/>
+ <permission
+     android:name="com.xxx"
+     android:label="provider pomission"
+     android:protectionLevel="normal" />
+ <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"></uses-permission>
+
+```
+
+//看一下不同的线程信息 是放在Binder线程池中的
+```
+02-23 23:39:34.130 8865-8865/? I/test: onCreate   :main
+02-23 23:39:34.136 8865-8878/? I/test: query   :Binder:8865_2
+02-23 23:39:34.138 8865-8877/? I/test: query   :Binder:8865_1
+02-23 23:39:34.139 8865-8878/? I/test: query   :Binder:8865_2
+```
+
+```
+
+public class ProvideActivity extends Activity {
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_provide);
+        Button query = findViewById(R.id.button);
+        Button add = findViewById(R.id.button4);
+        Button delete = findViewById(R.id.button2);
+        Button update = findViewById(R.id.button3);
+        Button start = findViewById(R.id.button5);
+        query.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+        delete.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+        update.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+        add.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+        start.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+              // 请求
+                Uri url = Uri.parse("content://com.xxx.xxx");
+
+                getContentResolver().query(url, null, null, null, null);
+                getContentResolver().query(url, null, null, null, null);
+                getContentResolver().query(url, null, null, null, null);
+            }
+        });
+
+    }
+}
+
+```
+
+activity 布局
+```
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <Button
+        android:id="@+id/button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="query"
+        tools:layout_editor_absoluteX="0dp"
+        tools:layout_editor_absoluteY="2dp" />
+
+    <Button
+        android:id="@+id/button2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="delete"
+        app:layout_constraintTop_toBottomOf="@+id/button"
+        tools:layout_editor_absoluteX="0dp" />
+
+    <Button
+        android:id="@+id/button3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="update"
+        app:layout_constraintTop_toBottomOf="@+id/button2"
+        tools:layout_editor_absoluteX="0dp" />
+
+    <Button
+        android:id="@+id/button4"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="add"
+        app:layout_constraintTop_toBottomOf="@+id/button3"
+        tools:layout_editor_absoluteX="0dp" />
+
+    <Button
+        android:id="@+id/button5"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="start"
+        app:layout_constraintTop_toBottomOf="@+id/button4"
+        tools:layout_editor_absoluteX="0dp" />
+
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Button"
+        tools:layout_editor_absoluteX="335dp"
+        tools:layout_editor_absoluteY="313dp" />
+</android.support.constraint.ConstraintLayout>
+```
 ### 使用Socket
 
 ## Binder 连接池
