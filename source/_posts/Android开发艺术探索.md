@@ -2663,6 +2663,11 @@ public boolean onTransact(int code ,Parcel data,Parcel reply,int flags) throws R
 
 ### 使用ContentProvide
 
+ContentProvide是Android中提供的专门用于不同应用间进行数据共享。从这一点看，他天生就适合进程间通信。和Messenger一样，ContentProvider的底层实现同样也是Binder，由此可见，Binder在Android系统中是多么重要。
+我们无需关心底层细节即可轻松实现IPC，ContentProvide虽然使用起来简单，但是他的细节有很多，比如防止sql注入，权限控制等等。
+
+
+
 ### 使用Socket
 
 ## Binder 连接池
