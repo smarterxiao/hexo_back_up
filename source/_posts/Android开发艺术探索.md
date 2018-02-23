@@ -527,7 +527,7 @@ http://www.baidu.com:80/search/info
 这个其实就是一个类似网址的结果
 
 
-|   英文  | 解释     |    
+|   英文  | 解释     |
 | ------------- |:-------------:|
 | scheme     |     URI的模式，比如Http、file、content等,如果RUI中没有指定scheme，那么整个URI的其他参数无效，这意味着整个URI无效|
 | Host       | URI的主机名，比如www.baidu.com,如果host未指定,那么整个URI中的其他参数无效，这也意味着URI是无效的   |
@@ -934,13 +934,13 @@ public interface IBookManager extends android.os.IInterface
   /** Local-side IPC implementation stub class. */
   //这个是一个内部类Stub   继承Binder 接口并实现IBookManager这个接口，在内部类中实现
   public static abstract class Stub extends android.os.Binder implements com.smart.kaifa.IBookManager
-    {   
+    {
        //这个是Binder的唯一标识，一般用当前Binder的类名标识，比如本例中的 com.smart.kaifa.IBookManager
         private static final java.lang.String DESCRIPTOR = "com.smart.kaifa.IBookManager";
         //定义三个ID用于标记着三个方法
         static final int TRANSACTION_basicTypes = (android.os.IBinder.FIRST_CALL_TRANSACTION + 0);
         static final int TRANSACTION_getBookList = (android.os.IBinder.FIRST_CALL_TRANSACTION + 1);
-        static final int TRANSACTION_addBook = (android.os.IBinder.FIRST_CALL_TRANSACTION + 2);  
+        static final int TRANSACTION_addBook = (android.os.IBinder.FIRST_CALL_TRANSACTION + 2);
 
           /** Construct the stub at attach it to the interface. */
 
@@ -967,13 +967,13 @@ public interface IBookManager extends android.os.IInterface
               return new com.smart.kaifa.IBookManager.Stub.Proxy(obj);
           }
 
-          //这个方法用户返回当前Binder对象  
+          //这个方法用户返回当前Binder对象
           @Override
           public android.os.IBinder asBinder(){
                 return this;
             }
 
-          //这个方法运行在服务端中的Binder线程池中，当客户端发起跨进程请求的时候，远程请求会通过系统底层分装后交给此方法来处理，该方法的原型是 public Boolean onTransact（int code, android.os.Parcel data, android.os.Parcel reply, int flags）  
+          //这个方法运行在服务端中的Binder线程池中，当客户端发起跨进程请求的时候，远程请求会通过系统底层分装后交给此方法来处理，该方法的原型是 public Boolean onTransact（int code, android.os.Parcel data, android.os.Parcel reply, int flags）
           //服务端通过code可以确定客户端所请求的目标方法是什么，接着从data中取出目标方法所需要的参数（如果目标方法有参数的话），然后执行目标方法，当目标方法执行完毕后，就像reply中写入返回值（如果目标方法有返回值的话）
           //onTransacct方法执行的过程就是这样的，需要注意的是，如果此方法返回false。那么客户端的请求就会失败，因此我们可以利用这个特性来做权限验证，毕竟我们也不希望随便一个进程就可以远程调用我们的服务
           @Override
@@ -983,7 +983,7 @@ public interface IBookManager extends android.os.IInterface
                       {
                           reply.writeString(DESCRIPTOR);
                           return true;
-                      }         
+                      }
                   case TRANSACTION_basicTypes:
                       {
                           data.enforceInterface(DESCRIPTOR);
@@ -1167,7 +1167,7 @@ public interface IBookManager extends IInterface{
    //定义三个ID用于标记着三个方法
    static final int TRANSACTION_basicTypes = (android.os.IBinder.FIRST_CALL_TRANSACTION + 0);
    static final int TRANSACTION_getBookList = (android.os.IBinder.FIRST_CALL_TRANSACTION + 1);
-   static final int TRANSACTION_addBook = (android.os.IBinder.FIRST_CALL_TRANSACTION + 2);  
+   static final int TRANSACTION_addBook = (android.os.IBinder.FIRST_CALL_TRANSACTION + 2);
    //定义三个抽象方法
    public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, java.lang.String aString) throws android.os.RemoteException;
    public java.util.List<com.smart.kaifa.Book> getBookList() throws android.os.RemoteException;
@@ -1202,13 +1202,13 @@ public class BookMangerImpl extends Binder implements IBookManager{
        return new com.smart.kaifa.IBookManager.Stub.Proxy(obj);
    }
 
-   //这个方法用户返回当前Binder对象  
+   //这个方法用户返回当前Binder对象
    @Override
    public android.os.IBinder asBinder(){
          return this;
      }
 
-   //这个方法运行在服务端中的Binder线程池中，当客户端发起跨进程请求的时候，远程请求会通过系统底层分装后交给此方法来处理，该方法的原型是 public Boolean onTransact（int code, android.os.Parcel data, android.os.Parcel reply, int flags）  
+   //这个方法运行在服务端中的Binder线程池中，当客户端发起跨进程请求的时候，远程请求会通过系统底层分装后交给此方法来处理，该方法的原型是 public Boolean onTransact（int code, android.os.Parcel data, android.os.Parcel reply, int flags）
    //服务端通过code可以确定客户端所请求的目标方法是什么，接着从data中取出目标方法所需要的参数（如果目标方法有参数的话），然后执行目标方法，当目标方法执行完毕后，就像reply中写入返回值（如果目标方法有返回值的话）
    //onTransacct方法执行的过程就是这样的，需要注意的是，如果此方法返回false。那么客户端的请求就会失败，因此我们可以利用这个特性来做权限验证，毕竟我们也不希望随便一个进程就可以远程调用我们的服务
    @Override
@@ -1218,7 +1218,7 @@ public class BookMangerImpl extends Binder implements IBookManager{
                {
                    reply.writeString(DESCRIPTOR);
                    return true;
-               }         
+               }
            case TRANSACTION_basicTypes:
                {
                    data.enforceInterface(DESCRIPTOR);
@@ -2635,6 +2635,31 @@ android:protectionLevel=["normal" | "dangerous" |
 </manifest>
 ```
 这样就为这个activity这个组件单独加了一个权限
+
+
+第二种方法是：我们可以在onTransact中进行权限验证，如果验证失败，直接返回false，这样服务端就不用终止执行AIDL中的方法达到保护服务端的目的，具体的验证方式有很多，可以采用permission验证。具体实现方式和第一种是一样的，还可以采用Uid和Pid来做验证，通过getCallingUid和getCallingPid可以拿到客户端所属的Uid和Pid，通过这两个参数我们可以做一些验证工作，比如验证包名。下面就是一个demo 既验证了Permission同时也验证了包名。如果一个应用向远程调用一个服务，要使用自定义权限BOOK_Service，其次要包含包名xiao.smart
+
+
+```
+
+public boolean onTransact(int code ,Parcel data,Parcel reply,int flags) throws RemoteException{
+  int check=checkCallubgOrSelfPerssion("BOOK_Service");
+  if(check=PackageManager.PERMISSION_DENIED){
+    return false;
+  }
+  String packageName=null;
+  String[] packages=getPackageManager().getPackageManagerforUid(getCalling_Uid);
+  if(packages!=null&&packages.length>0){
+    packageName=package[0];
+  }
+  if(!packageName.startWith("xiao.smart")){
+    return false;
+  }
+  return super.onTransact(code,data,reply,flags);
+}
+
+
+```
 
 ### 使用ContentProvide
 
