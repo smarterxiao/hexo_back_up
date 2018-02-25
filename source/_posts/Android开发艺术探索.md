@@ -3405,6 +3405,29 @@ public class SocketActivity extends Activity implements View.OnClickListener {
 
 ![Alt text](图像1519566752.png "binder 连接池")
 
+下面来写一个demo来展示一下
+ISecurityCenter 是一个通用的接口提供加密功能
+```
+public interface ISecurityCenter {
+    String encrypt(String content);
+    String decrypt(String password);
+}
+
+```
+ICompute 接口提供加法功能
+```
+public interface ICompute {
+
+    int add(int a,int b);
+}
+
+```
+
+
+
+
+
+
 
 ## 选用合适的IPC方式
 
