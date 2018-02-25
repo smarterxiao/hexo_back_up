@@ -2874,7 +2874,231 @@ activity 布局
         tools:layout_editor_absoluteY="313dp" />
 </android.support.constraint.ConstraintLayout>
 ```
+
+现在这个demo已经跑通了
+然后进一步完善
+
+首先创建一个数据库的操作类,使用android 提供的SQLiteOpenHelper
+
+```
+public class DbOpenHelper extends SQLiteOpenHelper {
+    private static final String DB_NAME = "book_provide.db";
+    public static final String BOOK_NAME = "book";
+    public static final String USER_NAME = "user";
+    private static final int DB_VERSION = 1;
+    //创建表的语句
+    private String CREATE_BOOK_TABLE = "CREATE TABLE IF NOT EXISTS " + BOOK_NAME + " ( _id INTEGER PRIMARY KEY, " + "name TEXT)";
+    private String CREATE_USER_TABLE = "CREATE TABLE IF NOT EXISTS " + USER_NAME + " ( _id INTEGER PRIMARY KEY, " + "name TEXT," + "sex INT)";
+    public DbOpenHelper(Context context, String name, SQLiteDatabase.CursorFactory factory, int version) {
+        super(context, name, factory, version);
+    }
+    public DbOpenHelper(Context context, String name, SQLiteDatabase.CursorFactory factory, int version, DatabaseErrorHandler errorHandler) {
+        super(context, name, factory, version, errorHandler);
+    }
+    public DbOpenHelper(Context context) {
+        super(context, DB_NAME, null, DB_VERSION);
+    }
+    @Override
+    public void onCreate(SQLiteDatabase db) {
+        db.execSQL(CREATE_BOOK_TABLE);
+        db.execSQL(CREATE_USER_TABLE);
+    }
+    @Override
+    public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+
+    }
+}
+
+```
+
+
+然后在ContentProvide中使用sql
+
+```
+public class BookProvide extends ContentProvider {
+    private static final String TAG = "BookProvide";
+    private static final String AUTHORITY = "com.xxx.xxx";
+    private static final Uri BOOK_URI = Uri.parse("content://" + AUTHORITY + "/book");
+    private static final Uri USER_URI = Uri.parse("content://" + AUTHORITY + "/user");
+    public static final int book_uri_code = 0;
+    public static final int user_uri_code = 1;
+    private static final UriMatcher sUriMathcer = new UriMatcher(UriMatcher.NO_MATCH);
+    static {
+        sUriMathcer.addURI(AUTHORITY, "book", book_uri_code);
+        sUriMathcer.addURI(AUTHORITY, "user", user_uri_code);
+    }
+    private Context mContext;
+    private SQLiteDatabase mDb;
+
+
+    /**
+     * 初始化并模拟数据
+     */
+    private void initProvideDate() {
+        mDb = new DbOpenHelper(mContext).getWritableDatabase();
+        mDb.execSQL("delete from " + DbOpenHelper.BOOK_NAME);
+        mDb.execSQL("delete from " + DbOpenHelper.USER_NAME);
+        mDb.execSQL("insert into  book values(3,'Android');");
+        mDb.execSQL("insert into  book values(4,'IOS');");
+        mDb.execSQL("insert into  book values(5,'HTML5');");
+        mDb.execSQL("insert into  user values(1,'jake',1);");
+        mDb.execSQL("insert into  user values(2,'jasmine',0);");
+
+    }
+
+
+    private String getTableName(Uri uri) {
+        String tableName = null;
+        switch (sUriMathcer.match(uri)) {
+            case book_uri_code:
+                tableName = DbOpenHelper.BOOK_NAME;
+                break;
+            case user_uri_code:
+                tableName = DbOpenHelper.USER_NAME;
+                break;
+            default:
+                break;
+        }
+        return tableName;
+    }
+
+
+    @Override
+    public boolean onCreate() {
+        //这个是放在主线程的 要注意
+        Log.i("test", "onCreate   :" + Thread.currentThread().getName());
+        mContext = getContext();
+        initProvideDate();
+        return true;
+    }
+
+    @Nullable
+    @Override
+    public Cursor query(@NonNull Uri uri, @Nullable String[] projection, @Nullable String selection, @Nullable String[] selectionArgs, @Nullable String sortOrder) {
+        Log.i("test", "query   :" + Thread.currentThread().getName());
+        String table = getTableName(uri);
+        if (table == null) {
+            throw new IllegalArgumentException("Unsupported URI :" + uri);
+        }
+        return mDb.query(table, projection, selection, selectionArgs, null, null, sortOrder, null);
+    }
+    @Nullable
+    @Override
+    public String getType(@NonNull Uri uri) {
+        Log.i("test", "getType   :" + Thread.currentThread().getName());
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public Uri insert(@NonNull Uri uri, @Nullable ContentValues values) {
+        Log.i("test", "insert   :" + Thread.currentThread().getName());
+        String table = getTableName(uri);
+        if (table == null) {
+            throw new IllegalArgumentException("Unsupported URI :" + uri);
+        }
+        mDb.insert(table, null, values);
+        return uri;
+    }
+
+    @Override
+    public int delete(@NonNull Uri uri, @Nullable String selection, @Nullable String[] selectionArgs) {
+        Log.i("test", "delete   :" + Thread.currentThread().getName());
+        String table = getTableName(uri);
+        if (table == null) {
+            throw new IllegalArgumentException("Unsupported URI :" + uri);
+        }
+        int count = mDb.delete(table, selection, selectionArgs);
+        if (count > 0) {
+            getContext().getContentResolver().notifyChange(uri, null);
+        }
+        return count;
+    }
+
+    @Override
+    public int update(@NonNull Uri uri, @Nullable ContentValues values, @Nullable String selection, @Nullable String[] selectionArgs) {
+        Log.i("test", "update   :" + Thread.currentThread().getName());
+        String table = getTableName(uri);
+        if (table == null) {
+            throw new IllegalArgumentException("Unsupported URI :" + uri);
+        }
+        int row = mDb.update(table, values, selection, selectionArgs);
+        if (row > 0) {
+            getContext().getContentResolver().notifyChange(uri, null);
+        }
+        return row;
+    }
+}
+
+```
+
+
+
+在activity中使用
+
+```
+public class ProvideActivity extends Activity {
+    private Uri url;
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_provide);
+        url = Uri.parse("content://com.xxx.xxx/book");
+        ContentValues values = new ContentValues();
+        values.put("_id", 6);
+        values.put("name", "程序设计的艺术");
+        getContentResolver().insert(url, values);
+        Cursor query1 = getContentResolver().query(url, new String[]{"_id", "name"}, null, null, null);
+        while (query1.moveToNext()) {
+            Book book = new Book();
+            book.bookId = query1.getInt(0);
+            book.bookName = query1.getString(1);
+            Log.i("test", "query book :" + book.toString());
+        }
+        query1.close();
+        url = Uri.parse("content://com.xxx.xxx/user");
+        Cursor query = getContentResolver().query(url, new String[]{"_id", "name", "sex"}, null, null, null);
+        while (query.moveToNext()) {
+            User user = new User();
+            user.userId = query.getInt(0);
+            user.userName = query.getString(1);
+            Log.i("test", "query user :" + user.toString());
+        }
+        query.close();
+    }
+}
+```
+
+输出的日志
+
+```
+
+02-25 16:13:51.708 29236-29236/com.smart.kaifa I/test: query book :Book{bookId=3, bookName='Android'}
+02-25 16:13:51.708 29236-29236/com.smart.kaifa I/test: query book :Book{bookId=4, bookName='IOS'}
+02-25 16:13:51.708 29236-29236/com.smart.kaifa I/test: query book :Book{bookId=5, bookName='HTML5'}
+02-25 16:13:51.708 29236-29236/com.smart.kaifa I/test: query book :Book{bookId=6, bookName='程序设计的艺术'}
+02-25 16:13:51.728 29236-29236/com.smart.kaifa I/test: query user :User{userId=1, userName='jake', isMale=false}
+02-25 16:13:51.728 29236-29236/com.smart.kaifa I/test: query user :User{userId=2, userName='jasmine', isMale=false}
+```
+
+这里有一个注意点，因为ContentProvide的增删改查方法都是放在Binder线程池中的，因此在做的时候要注意线程同步，如果是同一个SqliteDatebase，可以正确应对并发的问题，但是如果是有多个SqliteDatebase这个时候并发就会有问题。
+
+
 ### 使用Socket
+socket分为两种，TCP和UDP
+* TCP是安全的，应为他在通信的时候有一个三次握手的机制，确定目的地址存在且可以通信的情况下，他才会进行通信
+* UDP是不安全的，他不管目的地址是否存在，把数据直接发送。
+这里演示一个聊天室的应用，
+
+要使用网络通信，首先要添加网络通信的权限
+
+
+```
+<uses-permission android:name="android.permission.INTERNET"></uses-permission>
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"></uses-permission>
+```
+
+
 
 ## Binder 连接池
 
