@@ -3098,9 +3098,313 @@ socket分为两种，TCP和UDP
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"></uses-permission>
 ```
 
+其次不能在主线程中访问网络，会抛出如下异常，android.os.NetworkOnMainThreadException
+这个程序比较简单，首先在一个远程服务创建一个TCP服务，然后在主界面中连接TCP服务，连接上之后就可以给服务端发送消息，为了更好的展示Socket工作机制，在服务端做了处理，可以多个客户端连接。
 
+先看一下服务端的设计
+
+```
+public class SocketService extends Service {
+
+    private boolean mIsServiceDestoryed = false;
+
+    private String[] mDefinedMessages = new String[]{"你好", "你叫什么名字啊", "今天天气不错呦"};
+
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        new Thread(new TcpServer()).start();
+    }
+
+
+    class TcpServer implements Runnable {
+
+
+        @Override
+        public void run() {
+            ServerSocket serverSocket = null;
+            try {
+                serverSocket = new ServerSocket(8688);
+
+            } catch (Exception e) {
+
+            }
+
+            while (!mIsServiceDestoryed) {
+                try {
+                    //接受客户端请求
+                    final Socket socket = serverSocket.accept();
+                    Log.i("test", "accept");
+                    new Thread() {
+                        @Override
+                        public void run() {
+                            try {
+                                responseClient(socket);
+                            } catch (Exception e) {
+
+                            }
+                        }
+                    }.start();
+
+                } catch (Exception e) {
+
+                }
+            }
+
+        }
+    }
+
+
+    private void responseClient(Socket client) throws IOException {
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+
+
+        PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(client.getOutputStream())), true);
+
+        out.print("欢迎来到聊天室");
+
+        while (!mIsServiceDestoryed) {
+            String str = in.readLine();
+            Log.i("client :", "" + str);
+            if (str == null) {
+                break;
+            }
+            int i = new Random().nextInt(mDefinedMessages.length);
+            String msg = mDefinedMessages[i];
+            out.println(msg);
+            Log.i("send :", msg);
+            out.close();
+            in.close();
+            client.close();
+        }
+
+    }
+
+
+}
+
+
+```
+清单文件配置
+```
+<service
+        android:name=".SocketService"
+        android:process=":xxxxx"></service>
+
+    <activity android:name=".SocketActivity">
+
+        <intent-filter>
+            <action android:name="android.intent.action.MAIN" />
+
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+    </activity>
+```
+
+
+客户端的UI
+```
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:orientation="vertical"
+    android:layout_height="match_parent">
+
+
+
+    <EditText
+        android:id="@+id/edit"
+        android:hint="@string/app_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <TextView
+        android:id="@+id/text"
+        android:background="#00ffff"
+        android:text=" "
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <Button
+        android:id="@+id/botton"
+        android:text="发送"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+</LinearLayout>
+```
+
+客户端的代码
+```
+public class SocketActivity extends Activity implements View.OnClickListener {
+
+    private static final int MESSAGE_RECEIVE_NEW_MSG = 1;
+    private static final int MESSAGE_SOCKET_CONNECTED = 2;
+    private Button mSendButton;
+    private TextView mMessageTextView;
+    private EditText mMessageEditText;
+
+    private PrintWriter mPrintWriter;
+
+    private Socket mClientSocket;
+
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case MESSAGE_RECEIVE_NEW_MSG:
+                    mMessageTextView.setText(mMessageTextView.getText() + (String) msg.obj);
+                    break;
+
+                case MESSAGE_SOCKET_CONNECTED:
+                    mSendButton.setEnabled(true);
+                    break;
+
+                default:
+                    break;
+            }
+
+
+            super.handleMessage(msg);
+        }
+    };
+
+
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        setContentView(R.layout.activity_socket);
+
+        mMessageTextView = findViewById(R.id.text);
+        mMessageEditText = findViewById(R.id.edit);
+        mSendButton = findViewById(R.id.botton);
+
+        Intent service = new Intent(this, SocketService.class);
+        startService(service);
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+              //连接远程服务器
+                connectTcpService();
+            }
+        }).start();
+
+        mSendButton.setOnClickListener(this);
+    }
+
+    @Override
+    protected void onDestroy() {
+
+        if (mClientSocket != null) {
+            try {
+                mClientSocket.shutdownInput();
+                mClientSocket.close();
+            } catch (Exception e) {
+
+            }
+        }
+        super.onDestroy();
+
+    }
+
+
+    private void connectTcpService() {
+
+        Socket socket = null;
+
+
+        while (socket == null) {
+            try {
+                socket = new Socket("localhost", 8688);
+                mClientSocket = socket;
+                mPrintWriter = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
+                mHandler.sendEmptyMessage(MESSAGE_SOCKET_CONNECTED);
+            } catch (Exception e) {
+
+            }
+
+            try {
+                BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                //开启一个死循环监听服务端的返回，有消息就通过handler发送
+                while (!SocketActivity.this.isFinishing()) {
+                    String message = br.readLine();
+                    Log.i("test", "" + message);
+                    if (message != null) {
+                        String time = formateDateTime(System.currentTimeMillis());
+                        final String showedMsg = "server " + time + " : " + message;
+                        mHandler.obtainMessage(MESSAGE_RECEIVE_NEW_MSG, showedMsg).sendToTarget();
+                    }
+                }
+                Log.i("test", "quit...");
+                mPrintWriter.close();
+                br.close();
+                socket.close();
+            } catch (Exception e) {
+            }
+        }
+    }
+
+
+    @Override
+    public void onClick(final View v) {
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if (v == mSendButton) {
+                    final String msg = mMessageEditText.getText().toString();
+                    if (!TextUtils.isEmpty(msg) && mPrintWriter != null) {
+                        mPrintWriter.println(msg);
+                        mMessageEditText.setText("");
+                        String time = formateDateTime(System.currentTimeMillis());
+                        final String showMsg = "self  " + time + ":" + msg + "\n";
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                mMessageTextView.setText(mMessageTextView.getText() + showMsg);
+                            }
+                        });
+
+                    }
+                }
+            }
+        }).start();
+
+
+    }
+
+
+    // 格式化时间
+    private String formateDateTime(long time) {
+
+        return new SimpleDateFormat("(HH:mm:ss)").format(new Date(time));
+    }
+}
+
+```
+
+
+![Alt text](device-2018-02-25-214156.png "socket 聊天室截图")
 
 ## Binder 连接池
+这里有一个点，就是现在有100个业务需要使用AIDL来进行通信，那么我们应该怎么处理呢，创建100个Service吗？所以这里就需要减少Service的使用，将他尽量放在一个Service中进行处理。
+
+在这种模式下，整个工作机制是这样的：每个业务模块创建自己的AIDL接口并实现此接口。这个时候不同业务模块之间是不能有耦合的，所有实现细节我们要单独开来，然后像Service端提供自己唯一标识和其对应的Binder对象。对于服务端来讲，只需要一个Service就可以了，服务端提供一个queryBinder接口，这个接口更具业务模块特征来返回相应的Binder给她们。不同的业务模块拿到所需要的Binder对象后就可以远程调用方法了。由此可见Binder连接池的主要作用是将每个业务模块的Binder请求统一转发到远程服务中执行了。从而避免重复重复创建Service的过程。她的工作原理如下
+
+![Alt text](图像1519566752.png "binder 连接池")
+
 
 ## 选用合适的IPC方式
 
