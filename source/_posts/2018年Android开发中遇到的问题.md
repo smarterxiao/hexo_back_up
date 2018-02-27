@@ -15,7 +15,7 @@ tags:
 16:31:09.49222636OpenGLRendererBitmap too large to be uploaded into a texture (1125x4359, max=4096x4096
 ```
 这个是由于开启了硬件加速之后，android openGL对图片的绘制大小有要求，最大是`max=4096x4096` 所以最简单的解决办法就是关闭硬件加速
-这里有四个级别的硬件加速，在小米4手机上面展示1000*2096分辨率的长图片会出现这个问题
+这里有四个级别的硬件加速，在小米4手机上面展示1000*2096分辨率的长图片会出现这个问题，或者使用短一点的图片尺寸小于 2750px
 * Application
 ```
 <application
