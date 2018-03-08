@@ -709,7 +709,7 @@ View
 * getRight()
 * getBottom()
 * getTop()
-
+* getLocationOnScreen()  获取View到屏幕的距离
 ## 滑动的七种方法
 
 ```
