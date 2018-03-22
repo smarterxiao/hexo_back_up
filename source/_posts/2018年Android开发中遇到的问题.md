@@ -265,3 +265,7 @@ List<aaa> finishBeanTP = gson.fromJson("xxxxxxx", new TypeToken<List<aaa>>() {}.
 glide 加载GIf的方法
 
 private final String GIF_PATH = "file:///android_asset/licai_refresh_header.gif"; Glide.with(context).load(GIF_PATH).asGif().dontAnimate().centerCrop().diskCacheStrategy(DiskCacheStrategy.SOURCE).into(iv);
+## 2018.3.21
+如果使用git报错：
+fatal: could not read Username for 'https://github.com': No such file or directo
+不知道解决办法可以升级一下git版本看一下 ，我是这样解决的

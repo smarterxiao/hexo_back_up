@@ -1119,7 +1119,7 @@ public interface IBookManager extends android.os.IInterface
 
 
 ```
-通过上面的分析，可以了解了Binder的工作机制，但是还有两点需要额外说明一下：首先，当客户端发起远程请求时，由于房钱线程会被挂起知道服务端进程返回数据，所以如果一个远程方法很耗时，这个时候就不能在UI线程中发起此远程请求；其次由于服务端Binder方法运行在Binder线程池中，所以Binder方法不管是否耗时都应该采取同步的方式实现，应为他已经运行在一个线程中了。为了更好的说明Binder下面给出一个Binder的工作机制图
+通过上面的分析，可以了解了Binder的工作机制，但是还有两点需要额外说明一下：首先，当客户端发起远程请求时，由于当前线程会被挂起直到服务端进程返回数据，所以如果一个远程方法很耗时，这个时候就不能在UI线程中发起此远程请求；其次由于服务端Binder方法运行在Binder线程池中，所以Binder方法不管是否耗时都应该采取同步的方式实现，应为他已经运行在一个线程中了。为了更好的说明Binder下面给出一个Binder的工作机制图
 
 
 
@@ -3414,6 +3414,47 @@ public interface ISecurityCenter {
 }
 
 ```
+ISecurityCenter 存根的实现
+```
+public class SecurityCenterImpl extends ISecurityCenter.Stub {
+    private static final char SECOND_CODE = '^';
+
+    /**
+     * Demonstrates some basic types that you can use as parameters
+     * and return values in AIDL.
+     *
+     * @param anInt
+     * @param aLong
+     * @param aBoolean
+     * @param aFloat
+     * @param aDouble
+     * @param aString
+     */
+    @Override
+    public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, String aString) throws RemoteException {
+
+    }
+
+    @Override
+    public String encrypt(String content) throws RemoteException {
+        char[] chars = content.toCharArray();
+        Log.i("test","---");
+        for (int i = 0; i < chars.length; i++) {
+            chars[i] ^= SECOND_CODE;
+        }
+        Log.i("test","---");
+        return new String(chars);
+    }
+
+    @Override
+    public String decrypt(String password) throws RemoteException {
+        Log.i("test","--////////*****");
+        return encrypt(password);
+    }
+}
+
+```
+
 ICompute 接口提供加法功能
 ```
 public interface ICompute {
@@ -3422,8 +3463,237 @@ public interface ICompute {
 }
 
 ```
+ICompute 存根的实现
+```
+public class ComputeImpl extends ICompute.Stub {
+    /**
+     * Demonstrates some basic types that you can use as parameters
+     * and return values in AIDL.
+     *
+     * @param anInt
+     * @param aLong
+     * @param aBoolean
+     * @param aFloat
+     * @param aDouble
+     * @param aString
+     */
+    @Override
+    public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, String aString) throws RemoteException {
+
+    }
+
+    @Override
+    public int add(int a, int b) throws RemoteException {
+
+        return a+b;
+    }
+}
+
+```
+
+BinderPool 接口提供 用来实现线程池
+```
+interface IBinderPool {
+    /**
+     * Demonstrates some basic types that you can use as parameters
+     * and return values in AIDL.
+     */
+    void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat,
+            double aDouble, String aString);
 
 
+            IBinder queryBinder(int binderCode);
+}
+
+```
+
+
+
+
+BinderPool
+```
+public class BinderPool {
+    private static final String TAG = "BinderPool";
+    public static final int BINDER_NONE = -1;
+    public static final int BINDER_COMPUTE = 0;
+    public static final int BINDER_SECURITY_CENTER = 1;
+
+    private Context mContext;
+    private IBinderPool mBinderPool;
+
+
+    private IBinder.DeathRecipient mBinderPoolDeathRecipient = new IBinder.DeathRecipient() {
+        @Override
+        public void binderDied() {
+
+            mBinderPool.asBinder().unlinkToDeath(mBinderPoolDeathRecipient, 0);
+            mBinderPool = null;
+            connectBinderPoolService();
+
+        }
+    };
+
+    public static class BinderPoolImpl extends IBinderPool.Stub {
+
+        /**
+         * Demonstrates some basic types that you can use as parameters
+         * and return values in AIDL.
+         *
+         * @param anInt
+         * @param aLong
+         * @param aBoolean
+         * @param aFloat
+         * @param aDouble
+         * @param aString
+         */
+        @Override
+        public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, String aString) throws RemoteException {
+
+        }
+        //不同情况返回不同的存根实现
+        @Override
+        public IBinder queryBinder(int binderCode) throws RemoteException {
+            IBinder binder = null;
+            switch (binderCode) {
+                case BINDER_SECURITY_CENTER:
+                    binder = new SecurityCenterImpl();
+                    break;
+
+                case BINDER_COMPUTE:
+                    binder = new ComputeImpl();
+                    break;
+
+                default:
+                    break;
+
+            }
+            return binder;
+        }
+    }
+
+
+    private static volatile BinderPool sInstance;
+
+    //这个是java 1.5之后提供的一个多线程控制工具
+    private CountDownLatch mConnectBinderPoolCountDownLatch;
+    ServiceConnection mBinderPoolConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            mBinderPool = IBinderPool.Stub.asInterface(service);
+            try {
+                mBinderPool.asBinder().linkToDeath(mBinderPoolDeathRecipient, 0);
+            } catch (Exception e) {
+
+            }
+            mConnectBinderPoolCountDownLatch.countDown();
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+
+        }
+    };
+
+
+    private BinderPool(Context context) {
+        mContext = context.getApplicationContext();
+        connectBinderPoolService();
+    }
+
+    private synchronized void connectBinderPoolService() {
+
+
+        mConnectBinderPoolCountDownLatch = new CountDownLatch(1);
+
+        Intent service = new Intent(mContext, BinderPoolService.class);
+
+        mContext.bindService(service, mBinderPoolConnection, Context.BIND_AUTO_CREATE);
+    }
+
+
+    public static BinderPool getsInstance(Context context) {
+        if (sInstance == null) {
+            //加入线程所 防止死锁或者重复创建
+            synchronized (BinderPool.class) {
+                if (sInstance == null) {
+                    sInstance = new BinderPool(context);
+                }
+            }
+        }
+
+        return sInstance;
+    }
+
+
+    public IBinder queryBinder(int binderCode) {
+
+        IBinder binder = null;
+        try {
+            if (mBinderPool != null) {
+                binder = mBinderPool.queryBinder(binderCode);
+            }
+        } catch (Exception e) {
+        }
+
+        return binder;
+    }
+
+
+}
+
+```
+BinderPoolService
+```
+public class BinderPoolService extends Service {
+    private static final String TAG = "BinderPoolService";
+    private Binder mBinderPool = new BinderPool.BinderPoolImpl();
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mBinderPool;
+    }
+}
+```
+
+
+activity中启动服务
+```
+private void doWork() {
+    Log.i("msg", "点击");
+    BinderPool binderPool = BinderPool.getsInstance(this);
+    IBinder sequrityBinder = binderPool.queryBinder(BinderPool.BINDER_SECURITY_CENTER);
+    ISecurityCenter iSecurityCenter = SecurityCenterImpl.asInterface(sequrityBinder);
+    String msg = "helloword-安卓";
+    Log.i("msg", msg);
+    try {
+        String password = iSecurityCenter.encrypt(msg);
+        Log.i("password  ", password);
+        Log.i("password  ", iSecurityCenter.decrypt(password));
+    } catch (Exception e) {
+        Log.e("test", e.getMessage());
+    }
+
+
+    IBinder computerBinder = binderPool.queryBinder(BinderPool.BINDER_COMPUTE);
+    ICompute iCompute = ComputeImpl.asInterface(computerBinder);
+    try {
+        int value = iCompute.add(100, 200);
+        Log.i("100+200=   ", value + "");
+    } catch (Exception e) {
+
+    }
+
+}
+```
+
+
+结果
+```
+/msg: helloword-安卓
+password: 6;221)1,:s寗匍
+password: helloword-安卓
+```
 
 
 
@@ -3431,8 +3701,104 @@ public interface ICompute {
 
 ## 选用合适的IPC方式
 
+|   名称  | 优点     |    缺点 |使用场景|
+| ------------- |:-------------:| :-------------:|:-------------:|
+|Bundle|简单易用|只能传输Bundle支持的数据类型|四大组件间进程通讯|
+|文件共享|简单易用|不适合高并发场景，并且无法做到进程间的即时通讯|五并发访问情形，交换简单的数据实时性不高的场景|
+|AIDL|功能强大，支持一对多并发通信，支持实时通信|使用稍微复杂，需要处理好线程同步|一对多通信并且有RPC需求|
+|Messenger|功能一般，支持一对多串行通信，支持实时通信|不能很好的处理高并发情形，不能支持RPC，数据通过Message进行传输，英雌只能传输Bundle支持的数据类型|低并发的一对多即时通信，五RPC需求，或者无需返回结果的RPC需求|
+|ContentProvide|在数据访问方面功能强大，支持一对多并发数据共享，可通过call方法拓展其他操作|可以理解为受约束的AIDL，主要提供数据源的CRUD操作|一对多的进程间的数据共享|
+|socket|功能强大，可以通过=网络传输字节流，支持一对多并发实时通信|实现细节稍微有点繁琐，不支持直接RPC|网络数据交换|
+
+## 这里在总结一下IPC
 
 
+```
+package com.smart.kaifa;
+public interface IBookManager extends android.os.IInterface {
+    //系统帮我们生成的IBookManager 里面有一个抽象的Stub  在这个抽象的Stub里面有一个代理类
+    //Stub 抽象类继承了com.smart.kaifa.IBookManager  接口 需要在下面的BookManagerService中具体的实现
+    public static abstract class Stub extends android.os.Binder implements com.smart.kaifa.IBookManager {
+
+       public static com.smart.kaifa.IBookManager asInterface(android.os.IBinder obj) {
+              这个时候在bind服务的时候会调用，IBookManager.Stub.asInterface(service)  之后就返回代理，所以这是一个存根代理模式，并初始化proxy
+              return new com.smart.kaifa.IBookManager.Stub.Proxy(obj);
+       }
+
+         //这个是Stub内部代理类
+        private static class Proxy implements com.smart.kaifa.IBookManager {
+            //这里研究一个代理内部的方法
+            @Override
+            public java.util.List<com.smart.kaifa.Book> getBookList() throws android.os.RemoteException {
+                // 这个是系统的实现，不用管：就是讲我们调用的方法什么的进行打包,就是存储了客户端的数据信息，包括包名什么的  默认有6个 这个涉及到native层的代码了
+                //在Java空间和C++都实现了Parcel，由于它在C/C++中，直接使用了内存来读取数据，因此，它更有效率 具体c的代码就不研究了
+                android.os.Parcel _data = android.os.Parcel.obtain();
+                android.os.Parcel _reply = android.os.Parcel.obtain();
+                java.util.List<com.smart.kaifa.Book> _result;
+                try {
+                    // 设置标记，可以这么理解 就是告诉其他进程我要调用这个接口里面的东西  DESCRIPTOR   private static final java.lang.String DESCRIPTOR = "com.smart.kaifa.IBookManager";
+                    _data.writeInterfaceToken(DESCRIPTOR);
+                    // 这个时候会调用 remote 就是stub，然后通过他来区分不同的方法     
+                    mRemote.transact(Stub.TRANSACTION_getBookList, _data, _reply, 0);
+                    //解除标记
+                    _reply.readException();
+                    _result = _reply.createTypedArrayList(com.smart.kaifa.Book.CREATOR);
+                return _result;
+            }
+        }    
+    }
+}
+
+```
+BookManagerService 用法
+```
+public class BookManagerService extends Service {
+    private  static final String TAG="BMS";
+    private CopyOnWriteArrayList<Book> mBookList=new CopyOnWriteArrayList<>();
+    //实现抽象方法
+    private Binder mBinder=new IBookManager.Stub() {
+        @Override
+        public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, String aString) throws RemoteException {
+        }
+        @Override
+        public List<Book> getBookList() throws RemoteException {
+            return mBookList;
+        }
+        @Override
+        public void addBook(Book book) throws RemoteException {
+            mBookList.add(book);
+        }
+    };
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        // 返回binder
+        return mBinder;
+    }
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        mBookList.add(new Book(1,"wahaha"));
+        mBookList.add(new Book(2,"xiao"));
+    }
+}
+```
+
+在Activity中绑定 BookManagerService 会传出ServiceConnection 连接成功之后返回Binder
+
+```
+private ServiceConnection mConnection = new ServiceConnection() {
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service) {
+      //通过这个方法拿到代理类，这个时候就可以调用服务端代码了
+      IBookManager  bookManager = IBookManager.Stub.asInterface(service);
+
+    }
+    @Override
+    public void onServiceDisconnected(ComponentName name) {
+    }
+};
+```
 # 第三章 View的事件体系
 # 第四章 View的工作原理
 # 第五章 理解RemoteViews
