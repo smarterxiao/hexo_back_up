@@ -3800,6 +3800,342 @@ private ServiceConnection mConnection = new ServiceConnection() {
 };
 ```
 # 第三章 View的事件体系
+这个是非常重要的一个内容，一般面试的时候都会问一下的
+
+## View基础知识
+### 什么是View？
+View是android中所有控件的基类，用户的交互其实是可View直接交互的，可以把它理解为界面层的抽象，所有的View可以理解为屏幕中间的一块矩形区域
+ViewGroup是一个控件组。
+
+### View的位置？
+系统是通过坐标系来确认View的位置的，View主要有四个属性：top，left，right，bottom。
+* top View最上面距离父控件顶的距离
+* left View最左面距离父控件左面的距离
+* right View最右面距离父控件左面的距离
+* bottom View最下面距离父控件顶的距离
+
+需要注意一下这里的坐标系，他是相对于父控件来讲的。
+这里用图来说明一下
+
+
+![Alt text](图像1521983638.png "一个例子")
+
+
+如何获取这四个值呢
+* left=view.getLeft();
+* right=view.getRight();
+* Top=view.getTop();
+* Bottom=view.getBottom();
+
+控件的 width=right-left
+控件的 height=bottom-top
+
+这里要注意下：android 3.0 之后为view新加了4个属性，分别为x,y,translationX和translationY
+其中x和y是View的左上角坐标，而translationX和translationY是View左上角相对于父容器的偏移量这几个值也是相对于父容器的坐标值。并且translationX和translationY的默认值是0。和View的四个基本位置参数一样，view也为他们提供了get和set方法，换算关系如下
+x=left+translationX
+y=top+translationY
+需要注意的是，在View的平移过程中，top和left表示原始右上角的位置信息。其值不会发生改变，此时发生改变的是x，y，translationX和translationY
+
+在5.0以后新加了x这个属性，这个是z轴的距离，用来显示阴影，想象一下桌子上面悬挂一个灯泡 然后会在桌子边缘有一个阴影。而x是桌子的高度 这样可以控制影子的大小。
+
+这里补充一点，怎么样获取控件到屏幕的距离呢，而不是到父控件的距离,这里有两个方法
+* getLocationOnScreen():用来获取一个View在屏幕中的位置
+* getLocationInWindow():用来获取一个View在其所在窗口中的位置
+
+```
+int[] screenLocation = new int [2];
+int[] windowLocation = new int [2];
+getLocationInWindow();
+getLocationOnScreen(windowLocation)
+```
+
+在activity中他们获取的值是一样的，如果不是在activity中，就不一样了，因为activity是一个全屏的windows，而dialog不是一个全屏的dialog,在toast中和dialog是一致的,这个后面会介绍的
+
+下面写一个demo来验证一下x=left+translationX和y=top+translationY的换算关系
+
+布局
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#00ffff"
+    tools:context="com.smart.kaifa.MainActivity">
+    <FrameLayout
+        android:layout_width="200dp"
+        android:layout_height="400dp"
+        android:layout_marginLeft="100dp"
+        android:background="#ffff00">
+
+        <TextView
+            android:background="#ff0000"
+            android:id="@+id/test"
+            android:layout_width="20dp"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="20dp"
+            android:layout_height="20dp" />
+    </FrameLayout>
+</FrameLayout>
+
+```
+
+代码
+```
+public class MainActivity extends AppCompatActivity {
+
+    private int left;
+    private int right;
+    private int bottom;
+    private int top;
+    private int width;
+    private int height;
+    private float x;
+    private float y;
+    private float translationX;
+    private float scrollX;
+    private float translationY;
+    private float scrollY;
+    private View viewById;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        viewById = findViewById(R.id.test);
+
+
+    }
+    //activity 真正可见的时间点
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        // TODO Auto-generated method stub
+        if(hasFocus){
+            left = viewById.getLeft();
+            right = viewById.getRight();
+            bottom = viewById.getBottom();
+            top = viewById.getTop();
+            width = viewById.getWidth();
+            height = viewById.getHeight();
+            x = viewById.getX();
+            y = viewById.getY();
+            translationX = viewById.getTranslationX();
+            translationY = viewById.getTranslationY();
+            scrollX = viewById.getScrollX();
+            scrollY = viewById.getScrollY();
+
+            Log.i("第一次： left：", left + "");
+            Log.i("第一次： right：", right + "");
+            Log.i("第一次： bottom：", bottom + "");
+            Log.i("第一次： top：", top + "");
+            Log.i("第一次： width：", width + "");
+            Log.i("第一次： height：", height + "");
+            Log.i("第一次： x：", x + "");
+            Log.i("第一次： y：", y + "");
+            Log.i("第一次： translationX：", translationX + "");
+            Log.i("第一次： translationY：", translationY + "");
+            Log.i("第一次： scrollX：", scrollX + "");
+            Log.i("第一次： scrollY：", scrollY + "");
+
+
+            ObjectAnimator animator = ObjectAnimator.ofFloat(viewById, "translationX", 200);
+            animator.setDuration(1000);
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    super.onAnimationEnd(animation);
+                    left = viewById.getLeft();
+                    right = viewById.getRight();
+                    bottom = viewById.getBottom();
+                    top = viewById.getTop();
+                    width = viewById.getWidth();
+                    height = viewById.getHeight();
+                    x = viewById.getX();
+                    y = viewById.getY();
+                    translationX = viewById.getTranslationX();
+                    translationY = viewById.getTranslationY();
+                    scrollX = viewById.getScrollX();
+                    scrollY = viewById.getScrollY();
+                    Log.i("第二次： ********", "***************************************************************************");
+                    Log.i("第二次： left：", left + "");
+                    Log.i("第二次： right：", right + "");
+                    Log.i("第二次： bottom：", bottom + "");
+                    Log.i("第二次： top：", top + "");
+                    Log.i("第二次： width：", width + "");
+                    Log.i("第二次： height：", height + "");
+                    Log.i("第二次： x：", x + "");
+                    Log.i("第二次： y：", y + "");
+                    Log.i("第二次： translationX：", translationX + "");
+                    Log.i("第二次： translationY：", translationY + "");
+                    Log.i("第二次： scrollX：", scrollX + "");
+                    Log.i("第二次： scrollY：", scrollY + "");
+                }
+            });
+            animator.start();
+
+        }
+        super.onWindowFocusChanged(hasFocus);
+    }
+
+
+}
+
+```
+
+
+```
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： left：: 70
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： right：: 140
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： bottom：: 140
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： top：: 70
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： width：: 70
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： height：: 70
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： x：: 70.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： y：: 70.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： translationX：: 0.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： translationY：: 0.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： scrollX：: 0.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： scrollY：: 0.0
+03-25 22:13:17.314 18794-18794/com.smart.kaifa I/第二次： ********: ***************************************************************************
+03-25 22:13:17.314 18794-18794/com.smart.kaifa I/第二次： left：: 70
+03-25 22:13:17.314 18794-18794/com.smart.kaifa I/第二次： right：: 140
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： bottom：: 140
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： top：: 70
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： width：: 70
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： height：: 70
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： x：: 270.0
+03-25 22:13:17.316 18794-18794/com.smart.kaifa I/第二次： y：: 70.0
+03-25 22:13:17.316 18794-18794/com.smart.kaifa I/第二次： translationX：: 200.0
+03-25 22:13:17.316 18794-18794/com.smart.kaifa I/第二次： translationY：: 0.0
+03-25 22:13:17.316 18794-18794/com.smart.kaifa I/第二次： scrollX：: 0.0
+03-25 22:13:17.317 18794-18794/com.smart.kaifa I/第二次： scrollY：: 0.0
+```
+
+可以看到:需要注意的是，在View的平移过程中，top和left表示原始右上角的位置信息。其值不会发生改变，此时发生改变的是x，y，translationX和translationY
+
+x=left+translationX
+y=top+translationY
+这个是是不变的，交换一下顺序
+left=x-translationX   
+top=y-translationY
+
+可以这么理解 x是当前相对控件的位置，而translationX是平移的距离。所以他们的差值就是开始的位置
+
+熟悉了控件的摆放位置之后，下面就了解一下用户手指的操作时间
+
+### Motion和TouchSlop
+1. MotionEvent
+这个是手指触摸屏幕后产生的事件：
+* ACTION_DOWN： 按下
+* ACTION_MOVE：移动
+* ACTION_UP：离开
+MotionEvent也为我们提供了两种坐标
+
+MotionEvent.getX();MotionEvent.getY();  这个返回的是点击位置相对于当前View左上角的x和y坐标
+MotionEvent.getRawX();MotionEvent.getRawY();这个返回的是点击位置相对于屏幕左上角的坐标
+
+布局
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#00ffff"
+    tools:context="com.smart.kaifa.MainActivity">
+    <FrameLayout
+        android:layout_width="200dp"
+        android:layout_height="400dp"
+        android:layout_marginLeft="100dp"
+        android:background="#ffff00">
+        <com.smart.kaifa.TestTouchView
+            android:background="#ff0000"
+            android:id="@+id/test"
+            android:layout_width="20dp"
+            android:layout_marginLeft="20dp"
+            android:layout_marginTop="20dp"
+            android:layout_height="20dp" />
+    </FrameLayout>
+</FrameLayout>
+
+```
+代码
+```
+public class TestTouchView extends android.support.v7.widget.AppCompatTextView {
+    public TestTouchView(Context context) {
+        super(context);
+    }
+    public TestTouchView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestTouchView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        Log.i("x ：",event.getX()+"");
+        Log.i("y ：",event.getY()+"");
+        Log.i("rawX ：",event.getRawX()+"");
+        Log.i("rawY ：",event.getRawY()+"");
+        return super.onTouchEvent(event);
+    }
+}
+
+```
+结果
+```
+第一次点击
+03-25 22:39:10.299 24542-24542/com.smart.kaifa I/x ：: 33.0
+03-25 22:39:10.300 24542-24542/com.smart.kaifa I/y ：: 8.0
+03-25 22:39:10.300 24542-24542/com.smart.kaifa I/rawX ：: 453.0
+03-25 22:39:10.301 24542-24542/com.smart.kaifa I/rawY ：: 358.0
+
+第二次点击
+03-25 22:39:20.016 24542-24542/com.smart.kaifa I/x ：: 39.0
+03-25 22:39:20.017 24542-24542/com.smart.kaifa I/y ：: 20.0
+03-25 22:39:20.017 24542-24542/com.smart.kaifa I/rawX ：: 459.0
+03-25 22:39:20.017 24542-24542/com.smart.kaifa I/rawY ：: 370.0
+```
+
+
+2. TouchSlop
+这个是系统提供的被认为滑动的最小距离，换句话说,如果一次滑动距离小于这个值，就表示没有滑动，防止手抖，这个是和设备相关的一个变量，每一个设备值可能是不同的，
+`ViewConfiguration.get(getContext).getScaledTouchSlop`来获取，过滤一些临界值
+
+### VelocityTracker GrstureDetrctor和Scroller
+1. VelocityTracker 用来速度追踪
+速度追踪，用于追踪手指在滑动过程中的速度，包括水平和竖直方向的速度
+使用 在view的`onTouchEvent`中
+```
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        //设置追踪
+        VelocityTracker velocityTracker = VelocityTracker.obtain();
+        velocityTracker.addMovement(event);
+        // 收获结果
+        velocityTracker.computeCurrentVelocity(1000);
+        float xVelocity = velocityTracker.getXVelocity();
+        float yVelocity= velocityTracker.getYVelocity();
+        return super.onTouchEvent(event);
+    }
+```
+在一步中有两点要注意：第一点：获取速度之前必须先计算速度`velocityTracker.computeCurrentVelocity`
+第二点是：这里的速度是指一段时间内手指所滑动过的像素数，比如讲时间间隔设置为1000ms，在1s内手指水平方向滑动100个像素，速度就是100，速度可以是负数，当手指从右往左滑动的时候就是负值：
+速度=(终点位置-起始位置)/时间
+不需要的时候要回收
+```
+      velocityTracker.clear();
+     velocityTracker.recycle();
+```
+
+2. GrstureDetrctor 用来速度追踪
+手势检测，用于辅助检测用户的单击，滑动，长按，双击等行为
+##
+
+
 # 第四章 View的工作原理
 # 第五章 理解RemoteViews
 # 第六章 Android的Drawable
