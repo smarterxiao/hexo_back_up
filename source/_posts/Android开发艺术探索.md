@@ -4133,6 +4133,363 @@ public class TestTouchView extends android.support.v7.widget.AppCompatTextView {
 
 2. GrstureDetrctor 用来速度追踪
 手势检测，用于辅助检测用户的单击，滑动，长按，双击等行为
+使用
+```
+public class TestTouchView extends android.support.v7.widget.AppCompatTextView implements GestureDetector.OnDoubleTapListener {
+
+    private GestureDetector mGestureDetector;
+
+    public TestTouchView(Context context) {
+        super(context);
+        init();
+    }
+
+    public TestTouchView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    private void init() {
+
+        mGestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
+
+            /**
+             * 手指按下屏幕会触发
+             *
+             * @param e
+             * @return
+             */
+            @Override
+            public boolean onDown(MotionEvent e) {
+                Log.i("----------------", "onDown");
+                return false;
+            }
+
+            /**
+             * 手指按下屏幕会触发,还没松开或拖动，由一个ACTION_DOWN触发
+             * 注意和onDown的区别，它是一种状态
+             *
+             * @param e
+             * @return
+             */
+            @Override
+            public void onShowPress(MotionEvent e) {
+                Log.i("----------------", "onShowPress");
+            }
+
+            /**
+             * 手指（轻轻触摸屏幕后）松开，伴随着1个MotionEvent ACTION_UP 而触发，这个是单击行为
+             *
+             * @param e
+             * @return
+             */
+            @Override
+            public boolean onSingleTapUp(MotionEvent e) {
+                Log.i("----------------", "onSingleTapUp");
+                return false;
+            }
+
+            /**
+             * 手指按下屏幕并且拖动，有一个ACTION_DOWN和多个ACTION_MOVE触发，这是触动行为
+             *
+             * @param e1
+             * @param e2
+             * @param distanceX
+             * @param distanceY
+             * @return
+             */
+            @Override
+            public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                Log.i("----------------", "onScroll");
+                return false;
+            }
+
+            /**
+             * 长久按住屏幕不放，就是长按
+             *
+             * @param e
+             */
+            @Override
+            public void onLongPress(MotionEvent e) {
+                Log.i("----------------", "onLongPress");
+            }
+
+            /**
+             * 用户按下屏幕，快速滑动后松开，由1个ACTION_DOWN、多个ACTION_MOVE，和一个ACTION_UP组成
+             *
+             * @param e1
+             * @param e2
+             * @param velocityX
+             * @param velocityY
+             * @return
+             */
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                Log.i("----------------", "onFling");
+                return false;
+            }
+
+        });
+        mGestureDetector.setOnDoubleTapListener(this);
+        mGestureDetector.setIsLongpressEnabled(false);
+        // 这里注意： 要返回true 不然GestureDetector的一些回调不会执行，比如onscroll
+        setOnTouchListener(new OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                mGestureDetector.onTouchEvent(event);
+                Log.i("----------------", "onTouch");
+                return true;
+            }
+
+
+        });
+    }
+
+    public TestTouchView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        Log.i("----------------", "onTouchEvent");
+        return mGestureDetector.onTouchEvent(event);
+    }
+
+    /**
+     * 严格的单击行为，注意他和onSingleTabUp的区别，如果触发了onSingleTapConfirmed，那么后面不可能在精耕者另一次单击行为，即这只可能是一次单击事件。，而不是双击中的一次单击
+     *
+     * @param e
+     * @return
+     */
+    @Override
+    public boolean onSingleTapConfirmed(MotionEvent e) {
+        Log.i("----------------", "onSingleTapConfirmed");
+        return false;
+    }
+
+    /**
+     * 双击，由两次连续的单机组成，他不可能和onSingleTapConfirmed共存
+     *
+     * @param e
+     * @return
+     */
+    @Override
+    public boolean onDoubleTap(MotionEvent e) {
+        Log.i("----------------", "onDoubleTap");
+        return false;
+    }
+
+    /**
+     * 表示发生了双击行为，在双击期间，ACTION_DOWN、ACTION_MOVE和ACTION_UP会触发此回调
+     *
+     * @param e
+     * @return
+     */
+    @Override
+    public boolean onDoubleTapEvent(MotionEvent e) {
+        Log.i("----------------", "onDoubleTapEvent");
+        return false;
+    }
+    // 这里也可以拦截
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (mGestureDetector.onTouchEvent(ev)) {
+            return mGestureDetector.onTouchEvent(ev);
+        }
+        return super.dispatchTouchEvent(ev);
+    }
+}
+
+```
+
+
+|   方法名  | 描述     |    所属接口|
+| ------------- |:-------------:| :-------------:|
+| onDown        |     手指按下屏幕会触发|OnGestureListener |
+| onShowPress     |   手指按下屏幕会触发,还没松开或拖动，由一个ACTION_DOWN触发,注意和onDown的区别，它是一种状态   |  OnGestureListener |
+| onSingleTapUp      |手指（轻轻触摸屏幕后）松开，伴随着1个MotionEvent ACTION_UP 而触发，这个是单击行为   |OnGestureListener |
+| onScroll       |手指按下屏幕并且拖动，有一个ACTION_DOWN和多个ACTION_MOVE触发，这是触动行为  |OnGestureListener  |
+| onLongPress       |长久按住屏幕不放，就是长按   |OnGestureListener  |
+| onFling     |用户按下屏幕，快速滑动后松开，由1个ACTION_DOWN、多个ACTION_MOVE，和一个ACTION_UP组成  |OnGestureListener  |
+| onSingleTapConfirmed|严格的单击行为，注意他和onSingleTabUp的区别，如果触发了onSingleTapConfirmed，那么后面不可能在精耕者另一次单击行为，即这只可能是一次单击事件。，而不是双击中的一次单击|OnDoubleTapListener|
+| onDoubleTap     |双击，由两次连续的单机组成，他不可能和onSingleTapConfirmed共存  |OnDoubleTapListener  |
+| onDoubleTapEvent   |表示发生了双击行为，在双击期间，ACTION_DOWN、ACTION_MOVE和ACTION_UP会触发此回调   |OnDoubleTapListener  |
+
+
+一次单击
+```
+03-26 22:30:34.055 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:30:34.056 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:30:34.057 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:34.101 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:34.101 28182-28182/com.smart.kaifa I/----------------: onSingleTapUp
+03-26 22:30:34.102 28182-28182/com.smart.kaifa I/----------------: onSingleTapUp
+03-26 22:30:34.102 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:34.357 28182-28182/com.smart.kaifa I/----------------: onSingleTapConfirmed
+```
+
+一次双击
+可以看到`onSingleTapConfirmed`是在最后的调用的，这样就可以在双击中获取单击，防止用户连续点击了
+```
+03-26 22:30:52.937 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:30:52.939 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:30:52.939 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:52.957 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:52.958 28182-28182/com.smart.kaifa I/----------------: onSingleTapUp
+03-26 22:30:52.958 28182-28182/com.smart.kaifa I/----------------: onSingleTapUp
+03-26 22:30:52.958 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:53.063 28182-28182/com.smart.kaifa I/----------------: onDoubleTap
+03-26 22:30:53.063 28182-28182/com.smart.kaifa I/----------------: onDoubleTapEvent
+03-26 22:30:53.063 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:30:53.063 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:30:53.063 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:53.091 28182-28182/com.smart.kaifa I/----------------: onDoubleTapEvent
+03-26 22:30:53.091 28182-28182/com.smart.kaifa I/----------------: onDoubleTapEvent
+03-26 22:30:53.091 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:53.101 28182-28182/com.smart.kaifa I/----------------: onDoubleTapEvent
+03-26 22:30:53.101 28182-28182/com.smart.kaifa I/----------------: onDoubleTapEvent
+03-26 22:30:53.101 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:53.102 28182-28182/com.smart.kaifa I/----------------: onDoubleTapEvent
+03-26 22:30:53.102 28182-28182/com.smart.kaifa I/----------------: onSingleTapUp
+03-26 22:30:53.102 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:53.363 28182-28182/com.smart.kaifa I/----------------: onSingleTapConfirmed
+
+
+```
+
+一次移动
+```
+03-26 22:31:26.057 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:31:26.057 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:31:26.058 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.147 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.151 28182-28182/com.smart.kaifa I/----------------: onShowPress
+03-26 22:31:26.151 28182-28182/com.smart.kaifa I/----------------: onShowPress
+03-26 22:31:26.163 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.180 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.180 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.196 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.196 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.213 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.213 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.230 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.230 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.246 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.246 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.263 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.263 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.280 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.280 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.296 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.296 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.313 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.313 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.330 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.330 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.346 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.346 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.363 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.363 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.379 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.380 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.396 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.397 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.413 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.413 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.430 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.430 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.447 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.447 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.463 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.463 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.480 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.480 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.497 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.497 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.513 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.513 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.530 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.530 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.547 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.547 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.563 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.564 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.580 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:31:26.580 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:31:26.597 28182-28182/com.smart.kaifa I/----------------: onScroll
+```
+
+一次飞动
+```
+03-26 22:30:17.226 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:30:17.227 28182-28182/com.smart.kaifa I/----------------: onDown
+03-26 22:30:17.227 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:17.240 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:17.266 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:30:17.266 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:17.283 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:30:17.283 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:17.300 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:30:17.300 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:17.316 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:30:17.316 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:17.334 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:30:17.334 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:17.344 28182-28182/com.smart.kaifa I/----------------: onScroll
+03-26 22:30:17.344 28182-28182/com.smart.kaifa I/----------------: onTouch
+03-26 22:30:17.348 28182-28182/com.smart.kaifa I/----------------: onFling
+03-26 22:30:17.348 28182-28182/com.smart.kaifa I/----------------: onTouch
+```
+
+### Scroller
+弹性滑动对象：用于实现view的弹性滑动，当我们使用scrollTo进行滑动的时候，是瞬间完成的，没有过度。体验不好。这个需要View和`computerScroll`一起
+
+```
+public class TestTouchView extends FrameLayout {
+
+
+    private Scroller scroller;
+
+    public TestTouchView(Context context) {
+        super(context);
+        init();
+    }
+
+    public TestTouchView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    private void init() {
+
+        scroller = new Scroller(getContext());
+
+        smoothScrollTo(-1000, 100);
+    }
+
+    private void smoothScrollTo(int x, int y) {
+        int x1 = getScrollX();
+        int dx = x - x1;
+        Log.i("--------", "smoothScrollTo");
+        scroller.startScroll(0, 0, dx, 0, 10000);
+        invalidate();
+    }
+
+    @Override
+    public void computeScroll() {
+        if (scroller.computeScrollOffset()) {
+            Log.i("computeScroll CurrX:", "" + scroller.getCurrX());
+            scrollTo(scroller.getCurrX(), scroller.getCurrY());
+            postInvalidate();
+        }
+
+    }
+}
+```
+
+记住 scorller针对的对象是TestTouchView内部的东西，和padding类似 ，如果TestTouchView内部由两个控件，那么两个控件都会移动的，还有一点，方向是反方向的，传入`scroller.startScroll(0, 0, -1000, 0, 10000)`是往右侧移动，可以理解为手机屏幕移动了-1000，但是内容没有移动。
+
 ##
 
 
