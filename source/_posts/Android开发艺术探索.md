@@ -4490,7 +4490,721 @@ public class TestTouchView extends FrameLayout {
 
 记住 scorller针对的对象是TestTouchView内部的东西，和padding类似 ，如果TestTouchView内部由两个控件，那么两个控件都会移动的，还有一点，方向是反方向的，传入`scroller.startScroll(0, 0, -1000, 0, 10000)`是往右侧移动，可以理解为手机屏幕移动了-1000，但是内容没有移动。
 
-##
+##View的滑动
+上面简单介绍了View的一些基础知识和概念,现在开始介绍一个很重要的内容：View的滑动，在Android设备上，滑动几乎是应用的标配，不管是下拉刷新还是侧滑
+这里View的滑动可以归纳为三种方式：
+* 第一种是通过View本身提供的scrollTo和scrollBy方法来实现滑动。
+* 第二种是通过动画给View施加平移效果来实现滑动。
+* 第三种是通过改变VIew的LayoutParams是的View重新布局从而实现滑动
+
+### 第一种：使用View本身提供的scrollTo和scrollBy实现滑动
+
+这里可以看一下他的源码：他是通过改变scrollx和scrolly的值来改变的，而scrollx和scrolly是可以view的属性，可以通过get和set方法获取和设置的
+```
+// 到某一个具体的位置去，然后将上一次滑动的数值保存
+public void scrollTo(int x, int y) {
+    if (mScrollX != x || mScrollY != y) {
+        int oldX = mScrollX;
+        int oldY = mScrollY;
+        mScrollX = x;
+        mScrollY = y;
+        invalidateParentCaches();
+        onScrollChanged(mScrollX, mScrollY, oldX, oldY);
+        if (!awakenScrollBars()) {
+            postInvalidateOnAnimation();
+        }
+    }
+}
+// 一次偏移多少的偏移量，scrollBy其实是调用scrollTo的
+public void scrollBy(int x, int y) {
+     scrollTo(mScrollX + x, mScrollY + y);
+ }
+```
+这里要说一下，在滑动过程中，mScrollx始终等于左View边缘和view内容左边缘在水平方向上面的距离的,而mScrollY始终等于View上边缘与内容边缘的竖直方向的距离，mscrollx和mscrolly只能改变 **View内容的位置** 而不能改变View在布局中的位置。并且mScrolly和mScrollX的单位为像素，并且当View左边缘在View内容左边缘的右边的时候，mScrollX为正值，反之为负值。当View上边缘在View内容上边缘下方的时候，mScrollX为正值，反之为负值。换句话说，如果从左向右移动，那么mScrollx为负值，反之为正值。如果从上往下滑动，那么mScrollY为负值，反之为正值。
+来一张图示意一下。
+
+
+![Alt text](图像1522504775.png "示意图")
+
+
+
+
+
+实心的是view内容，空心的是View的边框，开始的时候实心内容是在View边框中，有一部分是露在外边的，这个时候使用scrollTo移动100px，移动的是View中的内容，边框位置不变，可以看到View的内容就完全显示在View中间了。但是从人的角度来看，View的位置是不动的，所以是View像左移动了100px，就是-100px。和人的感觉是相反的。
+没有滚动之前的效果
+
+
+![Alt text](device-2018-03-31-224723.png "效果")
+
+一次scrollTo操作
+```
+
+public class MainActivity extends AppCompatActivity {
+
+    private int left;
+    private int right;
+    private int bottom;
+    private int top;
+    private int width;
+    private int height;
+    private float x;
+    private float y;
+    private float translationX;
+    private float scrollX;
+    private float translationY;
+    private float scrollY;
+    private View viewById;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        viewById = findViewById(R.id.test);
+    }
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        // TODO Auto-generated method stub
+        if (hasFocus) {
+            left = viewById.getLeft();
+            right = viewById.getRight();
+            bottom = viewById.getBottom();
+            top = viewById.getTop();
+            width = viewById.getWidth();
+            height = viewById.getHeight();
+            x = viewById.getX();
+            y = viewById.getY();
+            translationX = viewById.getTranslationX();
+            translationY = viewById.getTranslationY();
+            scrollX = viewById.getScrollX();
+            scrollY = viewById.getScrollY();
+            Log.i("第一次： left：", left + "");
+            Log.i("第一次： right：", right + "");
+            Log.i("第一次： bottom：", bottom + "");
+            Log.i("第一次： top：", top + "");
+            Log.i("第一次： width：", width + "");
+            Log.i("第一次： height：", height + "");
+            Log.i("第一次： x：", x + "");
+            Log.i("第一次： y：", y + "");
+            Log.i("第一次： translationX：", translationX + "");
+            Log.i("第一次： translationY：", translationY + "");
+            Log.i("第一次： scrollX：", scrollX + "");
+            Log.i("第一次： scrollY：", scrollY + "");
+            Handler handler = new Handler();
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            viewById.scrollTo(-100, -100);
+                            left = viewById.getLeft();
+                            right = viewById.getRight();
+                            bottom = viewById.getBottom();
+                            top = viewById.getTop();
+                            width = viewById.getWidth();
+                            height = viewById.getHeight();
+                            x = viewById.getX();
+                            y = viewById.getY();
+                            translationX = viewById.getTranslationX();
+                            translationY = viewById.getTranslationY();
+                            scrollX = viewById.getScrollX();
+                            scrollY = viewById.getScrollY();
+                            Log.i("第二次： ********", "***************************************************************************");
+                            Log.i("第二次： left：", left + "");
+                            Log.i("第二次： right：", right + "");
+                            Log.i("第二次： bottom：", bottom + "");
+                            Log.i("第二次： top：", top + "");
+                            Log.i("第二次： width：", width + "");
+                            Log.i("第二次： height：", height + "");
+                            Log.i("第二次： x：", x + "");
+                            Log.i("第二次： y：", y + "");
+                            Log.i("第二次： translationX：", translationX + "");
+                            Log.i("第二次： translationY：", translationY + "");
+                            Log.i("第二次： scrollX：", scrollX + "");
+                            Log.i("第二次： scrollY：", scrollY + "");
+                        }
+                    });
+                }
+            }, 1000);
+        }
+        super.onWindowFocusChanged(hasFocus);
+    }
+}
+
+```
+改变的值
+```
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： left：: 0
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： right：: 700
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： bottom：: 700
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： top：: 0
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： width：: 700
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： height：: 700
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： x：: 0.0
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： y：: 0.0
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： translationX：: 0.0
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： translationY：: 0.0
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： scrollX：: 0.0
+03-31 22:33:47.107 30190-30190/com.smart.kaifa I/第一次： scrollY：: 0.0
+03-31 22:33:48.110 30190-30190/com.smart.kaifa I/第二次： ********: ***************************************************************************
+03-31 22:33:48.110 30190-30190/com.smart.kaifa I/第二次： left：: 0
+03-31 22:33:48.110 30190-30190/com.smart.kaifa I/第二次： right：: 700
+03-31 22:33:48.110 30190-30190/com.smart.kaifa I/第二次： bottom：: 700
+03-31 22:33:48.110 30190-30190/com.smart.kaifa I/第二次： top：: 0
+03-31 22:33:48.111 30190-30190/com.smart.kaifa I/第二次： width：: 700
+03-31 22:33:48.111 30190-30190/com.smart.kaifa I/第二次： height：: 700
+03-31 22:33:48.111 30190-30190/com.smart.kaifa I/第二次： x：: 0.0
+03-31 22:33:48.111 30190-30190/com.smart.kaifa I/第二次： y：: 0.0
+03-31 22:33:48.111 30190-30190/com.smart.kaifa I/第二次： translationX：: 0.0
+03-31 22:33:48.111 30190-30190/com.smart.kaifa I/第二次： translationY：: 0.0
+03-31 22:33:48.111 30190-30190/com.smart.kaifa I/第二次： scrollX：: -100.0
+03-31 22:33:48.112 30190-30190/com.smart.kaifa I/第二次： scrollY：: -100.0
+```
+
+
+![Alt text](device-2018-03-31-224548.png "效果")
+
+如果直接修改scorllx和scrolly的属性,这个效果和scrollto的效果是一样的
+```
+public class MainActivity extends AppCompatActivity {
+
+    private int left;
+    private int right;
+    private int bottom;
+    private int top;
+    private int width;
+    private int height;
+    private float x;
+    private float y;
+    private float translationX;
+    private float scrollX;
+    private float translationY;
+    private float scrollY;
+    private View viewById;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        viewById = findViewById(R.id.test);
+
+
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        // TODO Auto-generated method stub
+        if (hasFocus) {
+            left = viewById.getLeft();
+            right = viewById.getRight();
+            bottom = viewById.getBottom();
+            top = viewById.getTop();
+            width = viewById.getWidth();
+            height = viewById.getHeight();
+            x = viewById.getX();
+            y = viewById.getY();
+            translationX = viewById.getTranslationX();
+            translationY = viewById.getTranslationY();
+            scrollX = viewById.getScrollX();
+            scrollY = viewById.getScrollY();
+
+            Log.i("第一次： left：", left + "");
+            Log.i("第一次： right：", right + "");
+            Log.i("第一次： bottom：", bottom + "");
+            Log.i("第一次： top：", top + "");
+            Log.i("第一次： width：", width + "");
+            Log.i("第一次： height：", height + "");
+            Log.i("第一次： x：", x + "");
+            Log.i("第一次： y：", y + "");
+            Log.i("第一次： translationX：", translationX + "");
+            Log.i("第一次： translationY：", translationY + "");
+            Log.i("第一次： scrollX：", scrollX + "");
+            Log.i("第一次： scrollY：", scrollY + "");
+
+            Handler handler = new Handler();
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            viewById.setScrollY(-100);
+                            viewById.setScrollX(-100);
+                            left = viewById.getLeft();
+                            right = viewById.getRight();
+                            bottom = viewById.getBottom();
+                            top = viewById.getTop();
+                            width = viewById.getWidth();
+                            height = viewById.getHeight();
+                            x = viewById.getX();
+                            y = viewById.getY();
+                            translationX = viewById.getTranslationX();
+                            translationY = viewById.getTranslationY();
+                            scrollX = viewById.getScrollX();
+                            scrollY = viewById.getScrollY();
+                            Log.i("第二次： ********", "***************************************************************************");
+                            Log.i("第二次： left：", left + "");
+                            Log.i("第二次： right：", right + "");
+                            Log.i("第二次： bottom：", bottom + "");
+                            Log.i("第二次： top：", top + "");
+                            Log.i("第二次： width：", width + "");
+                            Log.i("第二次： height：", height + "");
+                            Log.i("第二次： x：", x + "");
+                            Log.i("第二次： y：", y + "");
+                            Log.i("第二次： translationX：", translationX + "");
+                            Log.i("第二次： translationY：", translationY + "");
+                            Log.i("第二次： scrollX：", scrollX + "");
+                            Log.i("第二次： scrollY：", scrollY + "");
+                        }
+                    });
+                }
+            }, 1000);
+        }
+        super.onWindowFocusChanged(hasFocus);
+    }
+}
+
+```
+```
+03-31 22:37:05.765 31212-31212/com.smart.kaifa I/第一次： left：: 0
+03-31 22:37:05.765 31212-31212/com.smart.kaifa I/第一次： right：: 700
+03-31 22:37:05.765 31212-31212/com.smart.kaifa I/第一次： bottom：: 700
+03-31 22:37:05.765 31212-31212/com.smart.kaifa I/第一次： top：: 0
+03-31 22:37:05.765 31212-31212/com.smart.kaifa I/第一次： width：: 700
+03-31 22:37:05.765 31212-31212/com.smart.kaifa I/第一次： height：: 700
+03-31 22:37:05.766 31212-31212/com.smart.kaifa I/第一次： x：: 0.0
+03-31 22:37:05.766 31212-31212/com.smart.kaifa I/第一次： y：: 0.0
+03-31 22:37:05.766 31212-31212/com.smart.kaifa I/第一次： translationX：: 0.0
+03-31 22:37:05.766 31212-31212/com.smart.kaifa I/第一次： translationY：: 0.0
+03-31 22:37:05.766 31212-31212/com.smart.kaifa I/第一次： scrollX：: 0.0
+03-31 22:37:05.766 31212-31212/com.smart.kaifa I/第一次： scrollY：: 0.0
+03-31 22:37:06.768 31212-31212/com.smart.kaifa I/第二次： ********: ***************************************************************************
+03-31 22:37:06.768 31212-31212/com.smart.kaifa I/第二次： left：: 0
+03-31 22:37:06.768 31212-31212/com.smart.kaifa I/第二次： right：: 700
+03-31 22:37:06.768 31212-31212/com.smart.kaifa I/第二次： bottom：: 700
+03-31 22:37:06.768 31212-31212/com.smart.kaifa I/第二次： top：: 0
+03-31 22:37:06.768 31212-31212/com.smart.kaifa I/第二次： width：: 700
+03-31 22:37:06.768 31212-31212/com.smart.kaifa I/第二次： height：: 700
+03-31 22:37:06.769 31212-31212/com.smart.kaifa I/第二次： x：: 0.0
+03-31 22:37:06.769 31212-31212/com.smart.kaifa I/第二次： y：: 0.0
+03-31 22:37:06.769 31212-31212/com.smart.kaifa I/第二次： translationX：: 0.0
+03-31 22:37:06.769 31212-31212/com.smart.kaifa I/第二次： translationY：: 0.0
+03-31 22:37:06.769 31212-31212/com.smart.kaifa I/第二次： scrollX：: -100.0
+03-31 22:37:06.769 31212-31212/com.smart.kaifa I/第二次： scrollY：: -100.0
+```
+
+![Alt text](device-2018-03-31-224548.png "效果")
+
+
+如果使用TranslationX平移100 是view的边框平移100
+```
+public class MainActivity extends AppCompatActivity {
+
+    private int left;
+    private int right;
+    private int bottom;
+    private int top;
+    private int width;
+    private int height;
+    private float x;
+    private float y;
+    private float translationX;
+    private float scrollX;
+    private float translationY;
+    private float scrollY;
+    private View viewById;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        viewById = findViewById(R.id.test);
+
+
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        // TODO Auto-generated method stub
+        if (hasFocus) {
+            left = viewById.getLeft();
+            right = viewById.getRight();
+            bottom = viewById.getBottom();
+            top = viewById.getTop();
+            width = viewById.getWidth();
+            height = viewById.getHeight();
+            x = viewById.getX();
+            y = viewById.getY();
+            translationX = viewById.getTranslationX();
+            translationY = viewById.getTranslationY();
+            scrollX = viewById.getScrollX();
+            scrollY = viewById.getScrollY();
+
+            Log.i("第一次： left：", left + "");
+            Log.i("第一次： right：", right + "");
+            Log.i("第一次： bottom：", bottom + "");
+            Log.i("第一次： top：", top + "");
+            Log.i("第一次： width：", width + "");
+            Log.i("第一次： height：", height + "");
+            Log.i("第一次： x：", x + "");
+            Log.i("第一次： y：", y + "");
+            Log.i("第一次： translationX：", translationX + "");
+            Log.i("第一次： translationY：", translationY + "");
+            Log.i("第一次： scrollX：", scrollX + "");
+            Log.i("第一次： scrollY：", scrollY + "");
+
+
+            Handler handler = new Handler();
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            viewById.setTranslationX(100);//重点
+                            viewById.setTranslationY(100);//重点
+                            left = viewById.getLeft();
+                            right = viewById.getRight();
+                            bottom = viewById.getBottom();
+                            top = viewById.getTop();
+                            width = viewById.getWidth();
+                            height = viewById.getHeight();
+                            x = viewById.getX();
+                            y = viewById.getY();
+                            translationX = viewById.getTranslationX();
+                            translationY = viewById.getTranslationY();
+                            scrollX = viewById.getScrollX();
+                            scrollY = viewById.getScrollY();
+                            Log.i("第二次： ********", "***************************************************************************");
+                            Log.i("第二次： left：", left + "");
+                            Log.i("第二次： right：", right + "");
+                            Log.i("第二次： bottom：", bottom + "");
+                            Log.i("第二次： top：", top + "");
+                            Log.i("第二次： width：", width + "");
+                            Log.i("第二次： height：", height + "");
+                            Log.i("第二次： x：", x + "");
+                            Log.i("第二次： y：", y + "");
+                            Log.i("第二次： translationX：", translationX + "");
+                            Log.i("第二次： translationY：", translationY + "");
+                            Log.i("第二次： scrollX：", scrollX + "");
+                            Log.i("第二次： scrollY：", scrollY + "");
+                        }
+                    });
+                }
+            }, 1000);
+        }
+        super.onWindowFocusChanged(hasFocus);
+    }
+}
+
+```
+
+```
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： left：: 0
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： right：: 700
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： bottom：: 700
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： top：: 0
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： width：: 700
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： height：: 700
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： x：: 0.0
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： y：: 0.0
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： translationX：: 0.0
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： translationY：: 0.0
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： scrollX：: 0.0
+03-31 22:39:21.987 31988-31988/com.smart.kaifa I/第一次： scrollY：: 0.0
+03-31 22:39:22.990 31988-31988/com.smart.kaifa I/第二次： ********: ***************************************************************************
+03-31 22:39:22.990 31988-31988/com.smart.kaifa I/第二次： left：: 0
+03-31 22:39:22.990 31988-31988/com.smart.kaifa I/第二次： right：: 700
+03-31 22:39:22.991 31988-31988/com.smart.kaifa I/第二次： bottom：: 700
+03-31 22:39:22.991 31988-31988/com.smart.kaifa I/第二次： top：: 0
+03-31 22:39:22.991 31988-31988/com.smart.kaifa I/第二次： width：: 700
+03-31 22:39:22.991 31988-31988/com.smart.kaifa I/第二次： height：: 700
+03-31 22:39:22.991 31988-31988/com.smart.kaifa I/第二次： x：: 100.0
+03-31 22:39:22.992 31988-31988/com.smart.kaifa I/第二次： y：: 100.0
+03-31 22:39:22.992 31988-31988/com.smart.kaifa I/第二次： translationX：: 100.0
+03-31 22:39:22.992 31988-31988/com.smart.kaifa I/第二次： translationY：: 100.0
+03-31 22:39:22.992 31988-31988/com.smart.kaifa I/第二次： scrollX：: 0.0
+03-31 22:39:22.992 31988-31988/com.smart.kaifa I/第二次： scrollY：: 0.0
+```
+
+![Alt text](device-2018-03-31-224323.png "效果")
+
+
+
+
+修改x和y的属性
+```
+public class MainActivity extends AppCompatActivity {
+
+    private int left;
+    private int right;
+    private int bottom;
+    private int top;
+    private int width;
+    private int height;
+    private float x;
+    private float y;
+    private float translationX;
+    private float scrollX;
+    private float translationY;
+    private float scrollY;
+    private View viewById;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        viewById = findViewById(R.id.test);
+
+
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        // TODO Auto-generated method stub
+        if (hasFocus) {
+            left = viewById.getLeft();
+            right = viewById.getRight();
+            bottom = viewById.getBottom();
+            top = viewById.getTop();
+            width = viewById.getWidth();
+            height = viewById.getHeight();
+            x = viewById.getX();
+            y = viewById.getY();
+            translationX = viewById.getTranslationX();
+            translationY = viewById.getTranslationY();
+            scrollX = viewById.getScrollX();
+            scrollY = viewById.getScrollY();
+
+            Log.i("第一次： left：", left + "");
+            Log.i("第一次： right：", right + "");
+            Log.i("第一次： bottom：", bottom + "");
+            Log.i("第一次： top：", top + "");
+            Log.i("第一次： width：", width + "");
+            Log.i("第一次： height：", height + "");
+            Log.i("第一次： x：", x + "");
+            Log.i("第一次： y：", y + "");
+            Log.i("第一次： translationX：", translationX + "");
+            Log.i("第一次： translationY：", translationY + "");
+            Log.i("第一次： scrollX：", scrollX + "");
+            Log.i("第一次： scrollY：", scrollY + "");
+
+
+            Handler handler = new Handler();
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            viewById.setX(100);
+                            viewById.setY(100);
+                            left = viewById.getLeft();
+                            right = viewById.getRight();
+                            bottom = viewById.getBottom();
+                            top = viewById.getTop();
+                            width = viewById.getWidth();
+                            height = viewById.getHeight();
+                            x = viewById.getX();
+                            y = viewById.getY();
+                            translationX = viewById.getTranslationX();
+                            translationY = viewById.getTranslationY();
+                            scrollX = viewById.getScrollX();
+                            scrollY = viewById.getScrollY();
+                            Log.i("第二次： ********", "***************************************************************************");
+                            Log.i("第二次： left：", left + "");
+                            Log.i("第二次： right：", right + "");
+                            Log.i("第二次： bottom：", bottom + "");
+                            Log.i("第二次： top：", top + "");
+                            Log.i("第二次： width：", width + "");
+                            Log.i("第二次： height：", height + "");
+                            Log.i("第二次： x：", x + "");
+                            Log.i("第二次： y：", y + "");
+                            Log.i("第二次： translationX：", translationX + "");
+                            Log.i("第二次： translationY：", translationY + "");
+                            Log.i("第二次： scrollX：", scrollX + "");
+                            Log.i("第二次： scrollY：", scrollY + "");
+                        }
+                    });
+                }
+            }, 1000);
+
+
+        }
+        super.onWindowFocusChanged(hasFocus);
+    }
+
+
+}
+
+```
+
+如果修改x和y的值，会导致translationX和translationY的值相应改变，
+x=left+translationX
+y=top+translationY
+这个关系式是不变的，而left和top是控件的固有属性，在平移的过程之中不会发生变化，所以x和translationX会相对线性的改变
+```
+03-31 22:46:29.420 1993-1993/com.smart.kaifa I/第一次： left：: 0
+03-31 22:46:29.420 1993-1993/com.smart.kaifa I/第一次： right：: 700
+03-31 22:46:29.420 1993-1993/com.smart.kaifa I/第一次： bottom：: 700
+03-31 22:46:29.420 1993-1993/com.smart.kaifa I/第一次： top：: 0
+03-31 22:46:29.420 1993-1993/com.smart.kaifa I/第一次： width：: 700
+03-31 22:46:29.420 1993-1993/com.smart.kaifa I/第一次： height：: 700
+03-31 22:46:29.421 1993-1993/com.smart.kaifa I/第一次： x：: 0.0
+03-31 22:46:29.421 1993-1993/com.smart.kaifa I/第一次： y：: 0.0
+03-31 22:46:29.421 1993-1993/com.smart.kaifa I/第一次： translationX：: 0.0
+03-31 22:46:29.421 1993-1993/com.smart.kaifa I/第一次： translationY：: 0.0
+03-31 22:46:29.421 1993-1993/com.smart.kaifa I/第一次： scrollX：: 0.0
+03-31 22:46:29.421 1993-1993/com.smart.kaifa I/第一次： scrollY：: 0.0
+03-31 22:46:30.424 1993-1993/com.smart.kaifa I/第二次： ********: ***************************************************************************
+03-31 22:46:30.424 1993-1993/com.smart.kaifa I/第二次： left：: 0
+03-31 22:46:30.425 1993-1993/com.smart.kaifa I/第二次： right：: 700
+03-31 22:46:30.425 1993-1993/com.smart.kaifa I/第二次： bottom：: 700
+03-31 22:46:30.425 1993-1993/com.smart.kaifa I/第二次： top：: 0
+03-31 22:46:30.425 1993-1993/com.smart.kaifa I/第二次： width：: 700
+03-31 22:46:30.425 1993-1993/com.smart.kaifa I/第二次： height：: 700
+03-31 22:46:30.425 1993-1993/com.smart.kaifa I/第二次： x：: 100.0
+03-31 22:46:30.426 1993-1993/com.smart.kaifa I/第二次： y：: 100.0
+03-31 22:46:30.426 1993-1993/com.smart.kaifa I/第二次： translationX：: 100.0
+03-31 22:46:30.426 1993-1993/com.smart.kaifa I/第二次： translationY：: 100.0
+03-31 22:46:30.426 1993-1993/com.smart.kaifa I/第二次： scrollX：: 0.0
+03-31 22:46:30.426 1993-1993/com.smart.kaifa I/第二次： scrollY：: 0.0
+```
+
+![Alt text](device-2018-03-31-224323.png "效果")
+
+### 第二种：属性动画，属性动画是改变View的属性值
+
+如果是android3.0以下的版本可以使用nineoldandroids ，但是现在已经基本上不用兼容android2.3的版本了
+上面已经有一个demo了
+
+```
+
+public class MainActivity extends AppCompatActivity {
+
+    private int left;
+    private int right;
+    private int bottom;
+    private int top;
+    private int width;
+    private int height;
+    private float x;
+    private float y;
+    private float translationX;
+    private float scrollX;
+    private float translationY;
+    private float scrollY;
+    private View viewById;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        viewById = findViewById(R.id.test);
+
+
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        // TODO Auto-generated method stub
+        if(hasFocus){
+            left = viewById.getLeft();
+            right = viewById.getRight();
+            bottom = viewById.getBottom();
+            top = viewById.getTop();
+            width = viewById.getWidth();
+            height = viewById.getHeight();
+            x = viewById.getX();
+            y = viewById.getY();
+            translationX = viewById.getTranslationX();
+            translationY = viewById.getTranslationY();
+            scrollX = viewById.getScrollX();
+            scrollY = viewById.getScrollY();
+
+            Log.i("第一次： left：", left + "");
+            Log.i("第一次： right：", right + "");
+            Log.i("第一次： bottom：", bottom + "");
+            Log.i("第一次： top：", top + "");
+            Log.i("第一次： width：", width + "");
+            Log.i("第一次： height：", height + "");
+            Log.i("第一次： x：", x + "");
+            Log.i("第一次： y：", y + "");
+            Log.i("第一次： translationX：", translationX + "");
+            Log.i("第一次： translationY：", translationY + "");
+            Log.i("第一次： scrollX：", scrollX + "");
+            Log.i("第一次： scrollY：", scrollY + "");
+
+
+            ObjectAnimator animator = ObjectAnimator.ofFloat(viewById, "translationX", 200);
+            animator.setDuration(1000);
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    super.onAnimationEnd(animation);
+                    left = viewById.getLeft();
+                    right = viewById.getRight();
+                    bottom = viewById.getBottom();
+                    top = viewById.getTop();
+                    width = viewById.getWidth();
+                    height = viewById.getHeight();
+                    x = viewById.getX();
+                    y = viewById.getY();
+                    translationX = viewById.getTranslationX();
+                    translationY = viewById.getTranslationY();
+                    scrollX = viewById.getScrollX();
+                    scrollY = viewById.getScrollY();
+                    Log.i("第二次： ********", "***************************************************************************");
+                    Log.i("第二次： left：", left + "");
+                    Log.i("第二次： right：", right + "");
+                    Log.i("第二次： bottom：", bottom + "");
+                    Log.i("第二次： top：", top + "");
+                    Log.i("第二次： width：", width + "");
+                    Log.i("第二次： height：", height + "");
+                    Log.i("第二次： x：", x + "");
+                    Log.i("第二次： y：", y + "");
+                    Log.i("第二次： translationX：", translationX + "");
+                    Log.i("第二次： translationY：", translationY + "");
+                    Log.i("第二次： scrollX：", scrollX + "");
+                    Log.i("第二次： scrollY：", scrollY + "");
+                }
+            });
+            animator.start();
+        }
+        super.onWindowFocusChanged(hasFocus);
+    }
+}
+
+```
+
+结果
+```
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： left：: 70
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： right：: 140
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： bottom：: 140
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： top：: 70
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： width：: 70
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： height：: 70
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： x：: 70.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： y：: 70.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： translationX：: 0.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： translationY：: 0.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： scrollX：: 0.0
+03-25 22:13:16.307 18794-18794/com.smart.kaifa I/第一次： scrollY：: 0.0
+03-25 22:13:17.314 18794-18794/com.smart.kaifa I/第二次： ********: ***************************************************************************
+03-25 22:13:17.314 18794-18794/com.smart.kaifa I/第二次： left：: 70
+03-25 22:13:17.314 18794-18794/com.smart.kaifa I/第二次： right：: 140
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： bottom：: 140
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： top：: 70
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： width：: 70
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： height：: 70
+03-25 22:13:17.315 18794-18794/com.smart.kaifa I/第二次： x：: 270.0
+03-25 22:13:17.316 18794-18794/com.smart.kaifa I/第二次： y：: 70.0
+03-25 22:13:17.316 18794-18794/com.smart.kaifa I/第二次： translationX：: 200.0
+03-25 22:13:17.316 18794-18794/com.smart.kaifa I/第二次： translationY：: 0.0
+03-25 22:13:17.316 18794-18794/com.smart.kaifa I/第二次： scrollX：: 0.0
+03-25 22:13:17.317 18794-18794/com.smart.kaifa I/第二次： scrollY：: 0.0
+```
 
 
 # 第四章 View的工作原理
