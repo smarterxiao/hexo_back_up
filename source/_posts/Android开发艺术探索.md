@@ -5347,6 +5347,167 @@ public class MainActivity extends AppCompatActivity {
 
 ### 不同滑动方式的对比
 
+* scrollTo和scrollBy ：主要适合对View内容的滑动
+* 动画：操作简单，主要适合没有交互的View和实现复杂动画效果
+* 改变布局参数：操作稍微复杂，使用与有交互的View
+
+## 弹性滑动
+知道了View的滑动，我们还要知道如何实现View的弹性滑动，实现弹性滑动的方式有很多，比如通过handler#postDelayed...
+### Scroller ：之前说过
+
+```
+public class TestTouchView extends FrameLayout {
+
+
+    private Scroller scroller;
+
+    public TestTouchView(Context context) {
+        super(context);
+        init();
+    }
+
+    public TestTouchView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    private void init() {
+
+        scroller = new Scroller(getContext());
+
+        smoothScrollTo(-1000, 100);
+    }
+
+    private void smoothScrollTo(int x, int y) {
+        int x1 = getScrollX();
+        int dx = x - x1;
+        Log.i("--------", "smoothScrollTo");
+        scroller.startScroll(0, 0, dx, 0, 10000);
+        invalidate();
+    }
+
+    @Override
+    public void computeScroll() {
+        if (scroller.computeScrollOffset()) {
+            Log.i("computeScroll CurrX:", "" + scroller.getCurrX());
+            scrollTo(scroller.getCurrX(), scroller.getCurrY());
+            postInvalidate();
+        }
+
+    }
+}
+```
+
+注意一下这里滑动是View的内容的滑动，不包括View本身，其实也是通过修改scrollX和scrollY来实现的
+注意一下 这里说一下原理：
+首先创建了一个Scroller，然后使用`  scroller.startScroll(0, 0, dx, 0, 10000)`之后`  invalidate()`这个时候会调用View的`onDraw`方法。然后`onDraw`方法有调用了View的`computeScroll`,就是我们重写的这个方法，这样就不断重新绘制，直到完成
+
+### 通过动画
+
+```
+   ObjectAnimator.ofFloat(viewById,"translationX",0,100).setDuration(1000).start();
+```
+这里也可以通过值动画（属性动画的一种）来玩成
+```
+
+public class MainActivity extends AppCompatActivity {
+
+    private View viewById;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        viewById = findViewById(R.id.test);
+        final int startx=0;
+        final int endx=100;
+        ValueAnimator animator = ValueAnimator.ofInt(0, 1).setDuration(1000);
+        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float animatedFraction = animation.getAnimatedFraction();
+                viewById.scrollTo((int) (startx+endx*animatedFraction),0);
+            }
+        });
+        animator.start();
+    }
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+    }
+
+
+}
+```
+这个和Scroller一样
+### 也可以使用延时策略
+如果使用handler，这个不一定流畅，因为调度handler是会有延时的
+
+## View的事件分发机制
+上面介绍了View的基础知识和View的滑动，这里介绍一下View的事件分发机制
+### 点击事件的传递规则
+这里分析的对象是MotionEvent。事件传递的过程其实就是MotionEvent的传递
+
+三个传递的方法
+
+
+* dispatchTouchEvent(MotionEvent event)
+用来进行事件分发，如果事件能够传递到当前View，则这个方法一定会被调用，返回值结果手当前View的onTouchEvent和下级的dispatchTouchEvent方法影响，表示是否消耗当前事件
+* onInterceptTouchEvent(MotionEvent event)
+在这个方法中是内部调用的方法，用来判断是否拦截某个事件，如果当前View拦截了某个事件，那么在同一个事件序列当中，此方法不会再被调用，返回结果表示是否拦截了当前的事件
+* onTouchEvent(MotionEvent event)
+
+在dispatchTouchEvent中调用，用来处理点击事件，返回结果表示是否消耗了当前事件，如果不消耗，则同一事件序列中，当前View无法再次接收到事件
+
+
+这里用伪代码来描述一下
+
+```
+public boolean dispatchTouchEvent(MotionEvent ev){
+  boolean consume=false;
+  if(onInterceptTouchEvent(ev)){
+    consume=onTouchEvent(ev);
+
+  }else{
+    consume=child.dispatchTouchTvent(ev);
+  }
+  return consume;
+}
+```
+上面的伪代码已经将三者的关系表现的很清楚了。通过上面的伪代码，我们可以大致了解点击事件传递规则：对于一个根ViewGroup来说，点击事件产生后，首先会传递给它，这个时候会调用他的`dispatchTouchEvent`方法，如果他的`onInterceptTouchEvent`返回true，表示要拦截这个事件，这个时候事件就会交给这个控件`onTouchEvent`，如果这个ViewGroup的`onInterceptTouchEvent`方法返回false，表示不拦截，这个时候当前的事件就会传递给子控件，接着子控件的`dispatchTouchEvent`就会被调用。如此反复
+当一个VIew需要处理事件的时候，如果他设置了`OnTouchListener`，那么`OnTouchListener`中的`OnTouch`方法就会被调用。这个时候事件的处理要看`OnTouch`的返回值，如果返回false,则当前的`OnTouch`方法就会被调用。如果返回true,则当前的`OnTouch`方法就不会被调用。因此，给View设置OnTouchListener，其优先级比OnTouchRvent要搞。在Ontouch方法中如果设置有OnClickListener,那么他的OnClick方法就会被调用，OnClickListener是优先级最低的。
+
+当一个点击事件产生之后，他的传递过程遵循如下顺序：Activity->Window->View，即事件总是先传递给Activity，Activity传递给Window，最后Window在传递给顶级的View，然后在按照事件分发的及机制分发事件。考虑到一种情况，如果一个VIew的OnTouchEvent返回false，那么他的父容器的OnTouchEvent就会被调用，以此类推，如果所有的元素都不处理这个事件，那么这个事件将会最终传递给Activity处理。即Activity的OnTouchEvent 会被调用
+一个事件传递的demo
+```
+
+```
+
+
+这里有一些注意点：
+* 同一个事件是从手指按下到离开，包含down 和若干个move最后是up
+* 正常情况下，一个事件序列只能被一个View拦截且消耗，这一条原因可以参考下一条，因为一旦一个元素拦截了这个事件，那么同一个事件序列内的所有事件都会直接交给他处理。英雌同一个事件序列的事件不能分别有两个View处理，但是通过特殊的手段可以做到，比如讲一个本该自己处理的事件传递给其他控件，在自己的`OnTouchEvent`方法中调用其他控件的`OnTouchEvent`方法
+* 某个View一旦决定拦截，那么这一个事件序列都只能由他来处理（如果事件序列能够传递的话），并且它的`onInterceptTouchEvent`不会再被调用，这个也很好理解。就是说如果当一个View决定拦截一个事件之后，那么系统会把同一个事件徐磊内的其他方法都直接交给他处理。因此就不用再调用这个View的`OnInterceptTouchEvent`方法。
+* 某个View一旦开始处理事件，如果它不消耗Action_Down事件，（`ontouchEvent`返回了false），那么，同一个事件序列中的其他事件都不会再交给他来处理，并且事件将重新交给他的父元素去处理，即父元素的`OnTouchEvent`方法会被调用。意思就是事件一旦交给一个View处理，那么他就必须消耗掉，否则同一事件序列中剩下的事件就不会再交给他来处理了。
+* 如果View不消耗除Action_Down以外的其他事件，那么这个点击事件就会消失。此时父元素的OnTouchEvent并不会被调用，并且当前View可以持续受到后续的事件，最终这些消失的点击事件会传递给Activity处理
+
+* ViewGroup默认不拦截任何事件。Android源码中ViewGroup的`onInterceptTouch-Event`方法默认返回false
+* View没有`onInterceptTouch-Event`方法，一旦有点击事件传递给他，那么他的OnTouchEvent方法就会被调用
+* View的`onTouchEvent`默认都会消耗事件，返回true，除非他是不可点击的（clickable和longClickable同时为false）。View的longClickable属性默认为false，clickable属性要分情况，比如Botton的clickable属性默认为true，而textview的clickable属性默认为false
+* View的enable属性不影响onTouchEvent的返回值。哪怕一个View是disable状态，只要他的clickable或者longClickable有一个为true，那么他的onTouchEvent就返回true
+* onclick会发生的前提是当前View是可以点击的，并且他收到了down和up事件
+* 事件传递过程是由外向内的，即从父控件传递给子控件。通过`requestDisallowInterceptTouchEvent`方法可以在子元素中干预父元素的时间分发过程，但是ActionDown除外
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
