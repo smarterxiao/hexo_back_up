@@ -5477,32 +5477,448 @@ public boolean dispatchTouchEvent(MotionEvent ev){
 当一个VIew需要处理事件的时候，如果他设置了`OnTouchListener`，那么`OnTouchListener`中的`OnTouch`方法就会被调用。这个时候事件的处理要看`OnTouch`的返回值，如果返回false,则当前的`OnTouch`方法就会被调用。如果返回true,则当前的`OnTouch`方法就不会被调用。因此，给View设置OnTouchListener，其优先级比OnTouchRvent要搞。在Ontouch方法中如果设置有OnClickListener,那么他的OnClick方法就会被调用，OnClickListener是优先级最低的。
 
 当一个点击事件产生之后，他的传递过程遵循如下顺序：Activity->Window->View，即事件总是先传递给Activity，Activity传递给Window，最后Window在传递给顶级的View，然后在按照事件分发的及机制分发事件。考虑到一种情况，如果一个VIew的OnTouchEvent返回false，那么他的父容器的OnTouchEvent就会被调用，以此类推，如果所有的元素都不处理这个事件，那么这个事件将会最终传递给Activity处理。即Activity的OnTouchEvent 会被调用
+
 一个事件传递的demo
+布局
 ```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.smart.kaifa.MainActivity">
+    <com.smart.kaifa.TestTouchView
+        android:id="@+id/test"
+        android:layout_width="400dp"
+        android:layout_height="400dp"
+        android:background="#ff00ff">
+        <com.smart.kaifa.TestTouchView1
+            android:layout_width="300dp"
+            android:layout_height="300dp"
+            android:background="#00ffff">
+            <com.smart.kaifa.TestView
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:background="#00ff00"
+                android:text="dkdk" />
+            <com.smart.kaifa.Test1View
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_marginLeft="60dp"
+                android:background="#0000ff"
+                android:text="dkdk" />
+        </com.smart.kaifa.TestTouchView1>
+    </com.smart.kaifa.TestTouchView>
+</FrameLayout>
 
 ```
+Activity
+```
+public class MainActivity extends AppCompatActivity {
+
+    private View viewById;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        viewById = findViewById(R.id.test);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+
+
+    }
+
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        Log.i("哇哈哈   MainActivity", "dispatchTouchEvent========");
+        return super.dispatchTouchEvent(ev);
+    }
+
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        Log.i("哇哈哈   MainActivity", "onTouchEvent========");
+        return super.onTouchEvent(event);
+    }
+}
+
+```
+
+
+TestTouchView
+```
+public class TestTouchView extends FrameLayout {
+
+    public TestTouchView(Context context) {
+        super(context);
+
+    }
+
+    public TestTouchView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+
+    }
+
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        Log.i("哇哈哈   TestTouchView", "dispatchTouchEvent========");
+        return super.dispatchTouchEvent(ev);
+    }
+
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        Log.i("哇哈哈   TestTouchView", "onInterceptTouchEvent========");
+        return super.onInterceptTouchEvent(ev);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        Log.i("哇哈哈   TestTouchView", "onTouchEvent========");
+        return super.onTouchEvent(event);
+    }
+}
+
+```
+
+TestView
+```
+public class TestView extends View {
+
+    public TestView(Context context) {
+        super(context);
+    }
+
+
+    public TestView(Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public TestView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        Log.i("哇哈哈   TestView","dispatchTouchEvent========");
+        return super.dispatchTouchEvent(ev);
+    }
+
+
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        Log.i("哇哈哈   TestView","onTouchEvent========");
+        return super.onTouchEvent(event);
+    }
+}
+```
+
+activity和View 是没有`onInterceptTouchEvent`
 
 
 这里有一些注意点：
-* 同一个事件是从手指按下到离开，包含down 和若干个move最后是up
-* 正常情况下，一个事件序列只能被一个View拦截且消耗，这一条原因可以参考下一条，因为一旦一个元素拦截了这个事件，那么同一个事件序列内的所有事件都会直接交给他处理。英雌同一个事件序列的事件不能分别有两个View处理，但是通过特殊的手段可以做到，比如讲一个本该自己处理的事件传递给其他控件，在自己的`OnTouchEvent`方法中调用其他控件的`OnTouchEvent`方法
-* 某个View一旦决定拦截，那么这一个事件序列都只能由他来处理（如果事件序列能够传递的话），并且它的`onInterceptTouchEvent`不会再被调用，这个也很好理解。就是说如果当一个View决定拦截一个事件之后，那么系统会把同一个事件徐磊内的其他方法都直接交给他处理。因此就不用再调用这个View的`OnInterceptTouchEvent`方法。
-* 某个View一旦开始处理事件，如果它不消耗Action_Down事件，（`ontouchEvent`返回了false），那么，同一个事件序列中的其他事件都不会再交给他来处理，并且事件将重新交给他的父元素去处理，即父元素的`OnTouchEvent`方法会被调用。意思就是事件一旦交给一个View处理，那么他就必须消耗掉，否则同一事件序列中剩下的事件就不会再交给他来处理了。
-* 如果View不消耗除Action_Down以外的其他事件，那么这个点击事件就会消失。此时父元素的OnTouchEvent并不会被调用，并且当前View可以持续受到后续的事件，最终这些消失的点击事件会传递给Activity处理
+1. 同一个事件是从手指按下到离开，包含down 和若干个move最后是up
+2. 正常情况下，一个事件序列只能被一个View拦截且消耗，这一条原因可以参考下一条，因为一旦一个元素拦截了这个事件，那么同一个事件序列内的所有事件都会直接交给他处理。因此同一个事件序列的事件不能分别有两个View处理，但是通过特殊的手段可以做到，比如讲一个本该自己处理的事件传递给其他控件，在自己的`OnTouchEvent`方法中调用其他控件的`OnTouchEvent`方法
+3. 某个View一旦决定拦截，那么这一个事件序列都只能由他来处理（如果事件序列能够传递的话），并且它的`onInterceptTouchEvent`不会再被调用，这个也很好理解。就是说如果当一个View决定拦截一个事件之后，那么系统会把同一个事件徐磊内的其他方法都直接交给他处理。因此就不用再调用这个View的`OnInterceptTouchEvent`方法。
+这里：在TestTouchView中拦截`onInterceptTouchEvent`返回true,但是没有在onTouchEvent中处理他,这个时候TestTouchView的子控件就收不到事件，并且由于事件没有处理，就会传递给activity，之后就不会再调用拦截的方法，直接交给处理的人，
+```
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onInterceptTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+```
 
-* ViewGroup默认不拦截任何事件。Android源码中ViewGroup的`onInterceptTouch-Event`方法默认返回false
-* View没有`onInterceptTouch-Event`方法，一旦有点击事件传递给他，那么他的OnTouchEvent方法就会被调用
-* View的`onTouchEvent`默认都会消耗事件，返回true，除非他是不可点击的（clickable和longClickable同时为false）。View的longClickable属性默认为false，clickable属性要分情况，比如Botton的clickable属性默认为true，而textview的clickable属性默认为false
-* View的enable属性不影响onTouchEvent的返回值。哪怕一个View是disable状态，只要他的clickable或者longClickable有一个为true，那么他的onTouchEvent就返回true
-* onclick会发生的前提是当前View是可以点击的，并且他收到了down和up事件
-* 事件传递过程是由外向内的，即从父控件传递给子控件。通过`requestDisallowInterceptTouchEvent`方法可以在子元素中干预父元素的时间分发过程，但是ActionDown除外
+这里：在TestTouchView1中拦截`onInterceptTouchEvent`返回true，并且在TestTouchView中处理事件，TestTouchView的`onTouchEvent`方法返回true,这个时候事件会分发，虽然是在TestTouchView1中拦截的，但是由于不是在TestTouchView1中处理，系统在第一次down的时候知道了事件是TestTouchView处理的，就不会再分发给TestTouchView1了
+```
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+    onInterceptTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onTouchEvent========
+```
+4. 如果View不消耗除Action_Down以外的其他事件，那么这个点击事件就会消失。此时父元素的OnTouchEvent并不会被调用，并且当前View可以持续受到后续的事件，最终这些消失的点击事件会传递给Activity处理
+默认都没有拦截事件，这个时候如果在View上面移动，可以看到只有down事件是全部传递了，move和up都没有经过子View，这个直接传递给了activity的onTouchEvent来处理
+```
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   Test1View: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: onTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+```
+5. 某个View一旦开始处理事件，如果它不消耗Action_Down事件，（`ontouchEvent`返回了false），那么，同一个事件序列中的其他事件都不会再交给他来处理，并且事件将重新交给他的父元素去处理，即父元素的`OnTouchEvent`方法会被调用。意思就是事件一旦交给一个View处理，那么他就必须消耗掉，否则同一事件序列中剩下的事件就不会再交给他来处理了。
+6. ViewGroup默认不拦截任何事件。Android源码中ViewGroup的`onInterceptTouch-Event`方法默认返回false
+7. View没有`onInterceptTouch-Event`方法，一旦有点击事件传递给他，那么他的OnTouchEvent方法就会被调用
+8. View的`onTouchEvent`默认都会消耗事件，返回true，除非他是不可点击的（clickable和longClickable同时为false）。View的longClickable属性默认为false，clickable属性要分情况，比如Botton的clickable属性默认为true，而textview的clickable属性默认为false
+
+Test1View 是一个button
+```
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   Test1View: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   Test1View: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   Test1View: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   Test1View: dispatchTouchEvent========
+    onTouchEvent========
+```
+TestView 是一个textview
+```
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestView: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: onTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+    onTouchEvent========
+
+```
+
+可以看到 bottom是有clickable的，所以默认onTouchEvent返回true，之后所有的事件都交给Test1View处理，而TestView是textview，不是clickable，，所以默认onTouchEvent返回false，之后所有的事件都交给activitty处理处理
+9. View的enable属性不影响onTouchEvent的返回值。哪怕一个View是disable状态，只要他的clickable或者longClickable有一个为true，那么他的onTouchEvent就返回true
+10. onclick会发生的前提是当前View是可以点击的，并且他收到了down和up事件
+11. 事件传递过程是由外向内的，即从父控件传递给子控件。通过`requestDisallowInterceptTouchEvent`方法可以在子元素中干预父元素的时间分发过程，但是ActionDown除外
+
+```
+public class TestTouchView1 extends FrameLayout {
+    public TestTouchView1(@NonNull Context context) {
+        super(context);
+    }
+    public TestTouchView1(@NonNull Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+    }
+    public TestTouchView1(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        Log.i("哇哈哈   TestTouchView1", "dispatchTouchEvent========");
+        return true;
+    }
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        Log.i("哇哈哈   TestTouchView1", "onInterceptTouchEvent========");
+        switch (ev.getAction()) {
+            case MotionEvent.ACTION_DOWN:  //这里不能拦截了，不然事件就不会传递给子控件。但是在子控件中
+                return false;
+            case MotionEvent.ACTION_MOVE:   //表示父类需要
+                return true;
+            case MotionEvent.ACTION_UP:
+                return true;
+            default:
+                break;
+        }
+        return false;    //如果设置拦截，除了down,其他都是父类处理
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        Log.i("哇哈哈   TestTouchView1", "onTouchEvent========");
+        return super.onTouchEvent(event);
+    }
+}
+
+```
+
+```
+public class Test1View extends Button {
+
+    public Test1View(Context context) {
+        super(context);
+
+    }
+
+
+    public Test1View(Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public Test1View(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+//        getParent().requestDisallowInterceptTouchEvent(false);
+
+        Log.i("哇哈哈   Test1View","dispatchTouchEvent========");
+        return super.dispatchTouchEvent(ev);
+    }
+
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        Log.i("哇哈哈   Test1View","onTouchEvent========");
+        switch (event.getAction()){
+            case MotionEvent.ACTION_DOWN:
+                getParent().requestDisallowInterceptTouchEvent(true);
+                Log.d("TAG", "You down button");
+                break;
+            case MotionEvent.ACTION_UP:
+                Log.d("TAG", "You up button");
+                break;
+            case MotionEvent.ACTION_MOVE:
+                Log.d("TAG", "You move button");
+        }
+        return true;
+//        return super.onTouchEvent(event);
+    }
+}
+
+```
+
+可以看到虽然父控件拦截了up和move事件，但是子控件使用了`  getParent().requestDisallowInterceptTouchEvent`告诉父控件不要拦截，父控件就不会拦截
+```
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+    onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   MainActivity: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: dispatchTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView: onInterceptTouchEvent========
+com.smart.kaifa I/哇哈哈   TestTouchView1: dispatchTouchEvent========
+```
 
 
 
+### 事件分发源码分析：有四个组件
+
+* activity
+
+dispatchTouchEvent
+
+```
+public boolean dispatchTouchEvent(MotionEvent ev) {
+
+    //如果是down 调用空方法onUserInteraction()
+    // 然后将event传递给window
+    // 1
+     if (ev.getAction() == MotionEvent.ACTION_DOWN) {
+         onUserInteraction();
+     }
+     //getWindow() 得到phoneWindow
+     //2
+     if (getWindow().superDispatchTouchEvent(ev)) {
+         return true;
+     }
+     return onTouchEvent(ev);
+ }
+
+public void onUserInteraction() {
+ }
+
+```
+
+onTouchEvent
+* window
 
 
+```
+//3
+@Override
+  public boolean superDispatchTouchEvent(MotionEvent event) {
+      //这里将事件传递给 最顶层的ViewGroup
+      return mDecor.superDispatchTouchEvent(event);
+  }
 
+```
+* viewgroup
 
+* view
 
 
 
