@@ -1,0 +1,2 @@
+ npm install --save hexo-filter-flowchart
+安装 流程图插件
