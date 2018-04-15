@@ -6510,16 +6510,645 @@ public boolean dispatchTouchEvent(MotionEvent event) {
 
 
 ```flow
-st=>start: Start
-op=>operation: Your Operation
-cond=>condition: Yes or No?
+
+st=>start: start
+op1=>operation: activity dispatchTouchEvent
+op2=>operation: window.superDispatchTouchEvent
+op3=>operation: mDecor.superDispatchTouchEvent
+op4=>operation: viewgroup.dispatchTouchEvent
+op5=>operation: viewgroup.requestDisallowInterceptTouchEvent
+op6=>operation: viewgroup.onInterceptTouchEvent
+op7=>operation: viewgroup.dispatchTransformedTouchEvent
+op8=>operation: view.dispatchTouchEvent
+op10=>operation: view.onTouchEvent
+op12=>operation: viewgroup.onTouchEvent
+op13=>operation: activity.onTouchEvent
+cond1=>condition: 子控件是否设置了requestDisallowInterceptTouchEvent
+cond2=>condition: viewgroup是否拦截事件onInterceptTouchEvent
+cond3=>condition: 处理事件：是自己处理还是交给子控件处理
+cond4=>condition: 子控件是否设置了TouchListener
+cond5=>condition: 子控件是否设置了ClickListener
 e=>end
-st->op->cond
-cond(yes)->e
-cond(no)->op
+st->op1->op2->op3->op4->op5->cond1
+cond1(yes)->op6->cond2
+cond1(no)->cond2
+cond2(yes)->op12->op13
+cond2(no)->op7->op
+cond3(yes)->op12->cond5
+cond3(no)->op8->cond4
+cond4(yes)->e
+cond4(no)->op10->cond5
+cond5(yes)->e
+cond5(no)->op12->op13->e
+
+```
+
+## View的滑动冲突
+这个是开发的时候经常遇到的问题
+### 常见的滑动冲突场景
+* 场景1 : 外部滑动方向和内部滑动方向不一致
+* 场景2 ：外部华东方向和内部滑动方向一致
+* 场景3 ：上面两种嵌套的情况
+
+这里先说场景1 ： 这个主要是Viewpager和Fragment配合的时候所组成的页面滑动，主流应用几乎都会使用这个效果。在fragment中有listview。Viewpager内部帮助我们处理了这种冲突，但是如果是scrollView就会遇到冲突。
+再说一下场景2 ： 这种情况就稍微复杂一点，因为是内部和外部同时都会监听同一个方向的滚动，所以系统不知道要将事件分发给谁。一般是内部滑动，外部跟着滑动
+最后说一下场景3 ：场景1和场景2两种情况嵌套，英雌这个比较复杂。
+
+### 事件冲突的处理规则
+不管冲突多么复杂，总归是有规则的。
+第一种情况可以根据三角形来计算，如果是水平方向的dx大于垂直方向的dy，就用dx，反之一样
+第二种情况要依据具体的情况来解答
+第三种情况更加复杂，后面举个例子
+
+### 滑动冲突的解决方式
+
+1. 外部拦截法
+所谓的外部拦截法法，就是点击事件都会先经过父控件处理，然后进行分发，如果不需要，就拦截。需要重写`onInterceptTouchEvent`
+
+```
+@Override
+   public boolean onInterceptTouchEvent(MotionEvent ev) {
+       boolean intercepted = false;
+       boolean need = false;// 父控件是否需要点击事件
+       int x = (int) ev.getX();
+       int y = (int) ev.getY();
+       switch (ev.getAction()) {
+           case MotionEvent.ACTION_DOWN:
+               intercepted=false;
+         break;
+           case MotionEvent.ACTION_MOVE:
+               if(need){
+                   intercepted=true;
+               }else{
+                   intercepted=false;
+               }
+                   break;
+           case MotionEvent.ACTION_UP:
+               intercepted=false;
+               break;
+           default:
+               break;
+       }
+       return intercepted;
+   }
+
+```
+这个就是一个典型的外部拦截法的处理，针对不同的冲突，只需要适当修改拦截的条件就可以。首先down必须返回false，不然所有事件就会被父控件拦截。move事件更具具体情况进行拦截。up一定要返回false，因为单纯up事件是没有意义的。
+考虑到一种情况：如果父控件在up时返回true，那么导致子控件无法接受到up事件，就无法触发子控件的onclick事件了。但是父控件这个比较特殊，一旦他开始拦截任何一个事件，那么后续的事件都会交给他来处理。而up作为最后一个事件也必定可以传递给父控件，即便父容器onInterceptTouchEvent在up是返回false
+
+2. 内部拦截发
+这种方式是父控件不拦截事件，所有事件全部传递给子控件，子控件来处理。这种复方石和android事件分发机制不一致。需要配合requestDisallowInterceptTouchEvent来实现
+
+```
+@Override
+public boolean dispatchTouchEvent(MotionEvent ev) {
+
+    int x = (int) ev.getX();
+    int y = (int) ev.getY();
+
+    switch (ev.getAction()) {
+        case MotionEvent.ACTION_DOWN:
+         getParent().requestDisallowInterceptTouchEvent(true);
+            break;
+        case MotionEvent.ACTION_MOVE:
+          if(父控件需要){
+              getParent().requestDisallowInterceptTouchEvent(false);
+          }
+            break;
+        case MotionEvent.ACTION_UP:
+
+            break;
+        default:
+            break;
+    }
+    return super.dispatchTouchEvent(ev);
+}
+
+```
+
+3. 实战
+实战：父控件拦截法
+下面通过一个demo来运用这两种方法
+如果一个控件实现ViewGroup，一定要实现onLayout方法
+
+这个是activity
+```
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        initView();
+    }
+    private void initView() {
+        LayoutInflater inflater = getLayoutInflater();
+        HorizontalScrollViewEx horizontalScrollView = findViewById(R.id.hsv);
+        int screenWidth = 1440;
+        int screenHeight = 1800;
+        // 添加View
+        for (int i = 0; i < 3; i++) {
+            ViewGroup layout = (ViewGroup) inflater.inflate(R.layout.test, horizontalScrollView, false);
+            layout.getLayoutParams().width = screenWidth;
+            TextView textView = layout.findViewById(R.id.title);
+            textView.setText("page i" + 1);
+            layout.setBackgroundColor(Color.rgb(255 / (i + 1), 255 / (i + 1), 0));
+            createList(layout);
+            horizontalScrollView.addView(layout);
+        }
+    }
+    private void createList(ViewGroup layout) {
+        ListView listView = layout.findViewById(R.id.list);
+        ArrayList<String> datas = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            datas.add("name" + i);
+        }
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, R.layout.content_list_item, R.id.name, datas);
+        listView.setAdapter(adapter);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+    }
+}
+
+```
+
+```
+public class HorizontalScrollViewEx extends FrameLayout {
+    private static final String TAG = "HorizontalScrollViewEx";
+    private int mChildrenSize=3;
+    private int mCHildWidth=1440;
+    private int mChildIndex;
+    private int mLastX = 0;
+    private int mLastY = 0;
+    private int mLastXIntercept = 0;
+    private int mLastYIntercept = 0;
+
+    private Scroller mScroller;
+    private VelocityTracker mVelpcityTracker;
+
+
+    private void init() {
+        mScroller = new Scroller(getContext());
+        mVelpcityTracker = VelocityTracker.obtain();
+    }
+
+    public HorizontalScrollViewEx(Context context) {
+        super(context);
+        init();
+    }
+
+    public HorizontalScrollViewEx(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public HorizontalScrollViewEx(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    // 判断是否拦截
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent event) {
+        boolean intercepted = false;
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                intercepted = false;
+                if (!mScroller.isFinished()) {
+                    //动画没有结束强制结束动画
+                    mScroller.abortAnimation();
+                    intercepted = true;
+                }
+                break;
+            case MotionEvent.ACTION_MOVE:
+
+                int deltaX = x - mLastXIntercept;
+                int deltaY = x - mLastYIntercept;
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                    intercepted = true;
+                } else {
+                    intercepted = false;
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+                intercepted = false;
+                break;
+        }
+
+        Log.i("哇哈哈", "intercepted :" + intercepted);
+        mLastX = x;
+        mLastY = y;
+        mLastXIntercept = x;
+        mLastYIntercept = y;
+        return intercepted;
+    }
+
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        int childLeft = 0;
+        final int childCount = getChildCount();
+        mChildrenSize = childCount;
+
+        for (int i = 0; i < childCount; i++) {
+            final View childView = getChildAt(i);
+            if (childView.getVisibility() != View.GONE) {
+                final int childWidth = childView.getMeasuredWidth();
+                childView.layout(childLeft, 0, childLeft + childWidth,
+                        childView.getMeasuredHeight());
+                childLeft += childWidth;
+            }
+        }
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        mVelpcityTracker.addMovement(event);
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                if (!mScroller.isFinished()) {
+                    //动画没有结束强制结束动画
+                    mScroller.abortAnimation();
+                }
+                break;
+            case MotionEvent.ACTION_MOVE:
+
+                int deltaX = x - mLastX;
+                int deltaY = x - mLastY;
+                scrollBy(-deltaX, 0);
+
+                break;
+            case MotionEvent.ACTION_UP:
+                int scrollX = getScrollX();
+                int scrollToChildIndex = scrollX / mCHildWidth;
+                mVelpcityTracker.computeCurrentVelocity(1000);
+                float xVelocity = mVelpcityTracker.getXVelocity();
+                if (Math.abs(xVelocity) >= 50) {
+                    mChildIndex = xVelocity > 0 ? mChildIndex - 1 : mChildIndex + 1;
+
+                } else {
+                    mChildIndex = (scrollX + mCHildWidth / 2) / mCHildWidth;
+                }
+                mChildIndex = Math.max(0, Math.min(mChildIndex, mChildrenSize - 1));
+                int dx = mChildIndex * mCHildWidth - scrollX;
+                smoothScrollBy(dx, 0);
+                mVelpcityTracker.clear();
+                break;
+        }
+
+
+        mLastY = y;
+        mLastX = x;
+        return super.onTouchEvent(event);
+    }
+
+    private void smoothScrollBy(int dx, int i) {
+        mScroller.startScroll(getScrollX(), 0, dx, 0, 500);
+        invalidate();
+    }
+
+
+    @Override
+    public void computeScroll() {
+        if (mScroller.computeScrollOffset()) {
+            scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
+            postInvalidate();
+        }
+
+
+        super.computeScroll();
+    }
+}
+
+
 ```
 
 
+xml
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.smart.kaifa.MainActivity">
+
+<com.smart.kaifa.HorizontalScrollViewEx
+    android:id="@+id/hsv"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+</com.smart.kaifa.HorizontalScrollViewEx>
+</FrameLayout>
+
+```
+
+实战：子控件拦截法
+```
+
+public class ListViewEx extends ListView {
+    private static final String TAG = "ListEx";
+    private HorizontalScrollViewEx2 horizontalScrollViewEx2;
+    private int mLastX = 0;
+    private int mLastY = 0;
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        horizontalScrollViewEx2= (HorizontalScrollViewEx2)( getParent());
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                // 父控件不要拦截
+                horizontalScrollViewEx2.requestDisallowInterceptTouchEvent(true);
+                break;
+            case MotionEvent.ACTION_MOVE:
+
+                int deltaX = x - mLastX;
+                int deltaY = x - mLastY;
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                    horizontalScrollViewEx2.requestDisallowInterceptTouchEvent(false);
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+
+                break;
+        }
+        mLastX = x;
+        mLastY = y;
+        return super.dispatchTouchEvent(event);
+    }
+
+
+    public ListViewEx(Context context) {
+        super(context);
+    }
+
+    public ListViewEx(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    public ListViewEx(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+    }
+}
+
+```
+
+```
+public class HorizontalScrollViewEx2 extends ViewGroup {
+    private int mChildrenSize = 3;
+
+    public HorizontalScrollViewEx2(Context context) {
+        super(context);
+        init();
+    }
+
+    public HorizontalScrollViewEx2(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    private void init() {
+        mScroller = new Scroller(getContext());
+        mVelpcityTracker = VelocityTracker.obtain();
+    }
+
+    public HorizontalScrollViewEx2(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    private Scroller mScroller;
+    private int mLastX = 0;
+    private int mLastY = 0;
+    private VelocityTracker mVelpcityTracker;
+    private int mCHildWidth = 1440;
+    private int mChildIndex;
+    private int mLastXIntercept = 0;
+    private int mLastYIntercept = 0;
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        int childLeft = 0;
+        final int childCount = getChildCount();
+        mChildrenSize = childCount;
+        for (int i = 0; i < childCount; i++) {
+            final View childView = getChildAt(i);
+//            if (childView.getVisibility() != View.GONE) {
+                final int childWidth = childView.getMeasuredWidth();
+                childView.layout(childLeft, 0, childLeft + childWidth,
+                       1000);
+                childLeft += childWidth;
+//            }
+        }
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        int measuredWidth = 0;
+        int measuredHeight = 0;
+        final int childCount = getChildCount();
+        measureChildren(widthMeasureSpec, heightMeasureSpec);
+
+        int widthSpaceSize = MeasureSpec.getSize(widthMeasureSpec);
+        int widthSpecMode = MeasureSpec.getMode(widthMeasureSpec);
+        int heightSpaceSize = MeasureSpec.getSize(heightMeasureSpec);
+        int heightSpecMode = MeasureSpec.getMode(heightMeasureSpec);
+        if (childCount == 0) {
+            setMeasuredDimension(0, 0);
+        } else if (heightSpecMode == MeasureSpec.AT_MOST) {
+            final View childView = getChildAt(0);
+            measuredHeight = childView.getMeasuredHeight();
+            setMeasuredDimension(widthSpaceSize, childView.getMeasuredHeight());
+        } else if (widthSpecMode == MeasureSpec.AT_MOST) {
+            final View childView = getChildAt(0);
+            measuredWidth = childView.getMeasuredWidth() * childCount;
+            setMeasuredDimension(measuredWidth, heightSpaceSize);
+        } else {
+            final View childView = getChildAt(0);
+            measuredWidth = childView.getMeasuredWidth() * childCount;
+            measuredHeight = childView.getMeasuredHeight();
+            setMeasuredDimension(measuredWidth, measuredHeight);
+        }
+    }
+    private void smoothScrollBy(int dx, int i) {
+        mScroller.startScroll(getScrollX(), 0, dx, 0, 500);
+        invalidate();
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        mVelpcityTracker.addMovement(event);
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                if (!mScroller.isFinished()) {
+                    //动画没有结束强制结束动画
+                    mScroller.abortAnimation();
+                }
+                break;
+            case MotionEvent.ACTION_MOVE:
+
+                int deltaX = x - mLastX;
+                int deltaY = x - mLastY;
+                scrollBy(-deltaX, 0);
+
+                break;
+            case MotionEvent.ACTION_UP:
+                int scrollX = getScrollX();
+                int scrollToChildIndex = scrollX / mCHildWidth;
+                mVelpcityTracker.computeCurrentVelocity(1000);
+                float xVelocity = mVelpcityTracker.getXVelocity();
+                if (Math.abs(xVelocity) >= 50) {
+                    mChildIndex = xVelocity > 0 ? mChildIndex - 1 : mChildIndex + 1;
+
+                } else {
+                    mChildIndex = (scrollX + mCHildWidth / 2) / mCHildWidth;
+                }
+                mChildIndex = Math.max(0, Math.min(mChildIndex, mChildrenSize - 1));
+                int dx = mChildIndex * mCHildWidth - scrollX;
+                smoothScrollBy(dx, 0);
+                mVelpcityTracker.clear();
+                break;
+        }
+
+
+        mLastY = y;
+        mLastX = x;
+        return super.onTouchEvent(event);
+    }
+
+    @Override
+    public void computeScroll() {
+        if (mScroller.computeScrollOffset()) {
+            scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
+            postInvalidate();
+        }
+
+
+        super.computeScroll();
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent event) {
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                mLastX = x;
+                mLastY = y;
+
+                if (!mScroller.isFinished()) {
+                    //动画没有结束强制结束动画
+                    mScroller.abortAnimation();
+                    return true;
+                }
+                return false;
+        }
+        return true;
+    }
+
+
+}
+
+```
+
+```
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        initView();
+    }
+
+    private void initView() {
+
+        LayoutInflater inflater = getLayoutInflater();
+        HorizontalScrollViewEx2 horizontalScrollView = findViewById(R.id.hsv);
+        int screenWidth = 1440;
+        int screenHeight = 1800;
+        for (int i = 0; i < 3; i++) {
+            ViewGroup layout = (ViewGroup) inflater.inflate(R.layout.test, horizontalScrollView, false);
+            layout.getLayoutParams().width = screenWidth;
+            layout.getLayoutParams().height = screenHeight;
+            layout.setBackgroundColor(Color.rgb(255 / (i + 1), 255 / (i + 1), 0));
+            createList(layout);
+            horizontalScrollView.addView(layout);
+            Log.i("test11221", horizontalScrollView.getMeasuredWidth() + "---");
+            layout.getWidth();
+            Log.i("test", layout.getMeasuredWidth() + "");
+
+        }
+    }
+
+    private void createList(ViewGroup layout) {
+        ListViewEx listView = layout.findViewById(R.id.list);
+        ArrayList<String> datas = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            datas.add("name" + i);
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, R.layout.content_list_item, R.id.name, datas);
+        listView.setAdapter(adapter);
+    }
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+
+    }
+
+
+}
+
+```
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.smart.kaifa.MainActivity">
+
+<com.smart.kaifa.HorizontalScrollViewEx2
+    android:id="@+id/hsv"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+
+
+</com.smart.kaifa.HorizontalScrollViewEx2>
+
+
+</FrameLayout>
+
+```
+text.xml
+```
+<?xml version="1.0" encoding="utf-8"?>
+    <com.smart.kaifa.ListViewEx
+        android:id="@+id/list"
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"></com.smart.kaifa.ListViewEx>
+
+```
+
+注意一下，viewgroup很多时候要自己measure
 
 
 # 第四章 View的工作原理
