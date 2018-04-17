@@ -7150,8 +7150,29 @@ text.xml
 
 注意一下，viewgroup很多时候要自己measure
 
+这里提供一个场景来分析一下场景2
+
+这里提供一个可以上下滑动父容器：StickyLayout，然后在他的内部分别放置一个Header和ListView这样内外两层就可以同时上下滑动。于是形成了场景2的冲突。当然这里的滑动规则是：当Header显示时或者ListView滑动到顶部的时候，由StickyLayout拦截事件，当header隐藏的时候，这里要分情况，如果是向下滑动，还是由StickyLayout拦截事件，如果向上滑动，就交给子控件。
+
+这个在下一章View的工作原理里面介绍
+
+
 
 # 第四章 View的工作原理
+这一章主要介绍两个方面的内容，一个是View的工作原理，接着介绍自定义View的实现方式。
+## 初识ViewRoot和DecorView
+ 在介绍View之前，这里介绍一下基本概念，这样才能了解View的measure，layout，draw过程。
+ ViewRoot对应于ViewRootImpl类，它是连接WindowManager和DecorView的纽带，View的三大流程都是通过ViewRoot来完成的。在ActivityThread中，当Activity对象呗创建完成后，会将DecorView添加到window中，同时创建ViewRootImpl对象。并将ViewRootImpl对象和DecorView建立关联，这个过程可以看如下源码。
+ ```
+ root=new ViewRootImpl(view.getContext,display);
+ root.setView(view,wparams,panelParentView)
+ ```
+View的绘制流程从ViewRoot的performTraversals方法开始的，他经过measure，layout，draw三个过程才能最终将一个View绘制出来，其中measure用拉力测量View的宽和高，layout用来确定View在父容器当中的位置，而draw负责将View绘制到屏幕上面去。针对performTraversals的大致流程如下
+
+![Alt text](图像1523889820.png "流程图")
+
+
+
 # 第五章 理解RemoteViews
 # 第六章 Android的Drawable
 # 第七章 Android 动画深入分析
