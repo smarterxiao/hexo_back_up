@@ -7171,6 +7171,296 @@ View的绘制流程从ViewRoot的performTraversals方法开始的，他经过mea
 
 ![Alt text](图像1523889820.png "流程图")
 
+如图所示，performTraversals会一次调用performMeasure，performLayout和performDraw三个方法，这三个方法分别完成顶级View的measure，layout，draw这三大流程。其中performMeasure会调用measure方法，在measure方法中会调用onMeasure方法，在onMeasure方法会对所有子元素进行measure过程，这个时候measure流程就从父容器传递到子容器当中了。这样就完成了一次measure过程。接着子元素会重复父容器的measure过程，如此反复就完成了整个View树的遍历，同理performLayout和performDraw的传递流程和performMeasure是类似的，唯一不同的是performDraw的传递过程是在draw方法加载dispatchDraw来实现的，不过本质并没有什么区别。
+measure过程决定了View的宽和高，Measure完成后，可以通过getMeasuredWidth和getMeasureHeight方法来获取到View测量后的宽和高。在几乎所有的情况下他都等于View最终的宽和高，但是特殊情况除外，这点在本章后面会进行说明。Layout过程决定了View的四个顶点和View的实际宽和高，完成以后可以通过`getTop`和`getBottom`和`getRight`和`getLeft`并且通过`getWidth`和`getHeight`获取最终的宽和高，draw过程决定了View的显示。只有draw之后才能在屏幕上面显示。
+
+![Alt text](图像1523974134.png "顶级VIew：DecorView的结构")
+如图：DecorView作为最顶级的View，一般情况下他的内部包含一个Linearlayout,分为两个部分：上方标题栏和下方内容栏。在Actvity中通过`setContentView`的内容是被加入到内容栏中间的，而内容栏的id是content，所以这个方法就叫做`setContentView`。如何得到这个内容栏呢? 可以通过`findViewById(R.id.content)`找到内容栏。如何得到我们设置的View呢?可以通过`content.getChildAt(0)`来获取
+
+## 理解MeasureSpec
+为了更好的理解View的测量流程，我们还需要理解MeasureSpec。从名字上来看 MeasureSpec像是测量规格。 MeasureSpec是干什么的呢？它在很大程度上决定了一个View的尺寸规格，之所以很大程度上是因为这个会受到父控件的影响，因为父控件影响View的MeasureSpec的创建过程。在测量过程中，系统会将View的LayoutParems根据父控件所施加的规则转换成对应的MeasureSpec，然后在更具这个measureSpec来测量VIew的宽高,上面提到过，这里测量的宽和高并不一定是View的最终宽高。MeasureSpec看起来有点复杂。其实他的实现很简单。
+
+
+### MeasureSpec
+这个是一个32位的int值，高两位代表测量模式：specMode，低两位代表某一种模式的测量大小：SpecSize。
+```
+public static class MeasureSpec {
+       private static final int MODE_SHIFT = 30;
+       private static final int MODE_MASK  = 0x3 << MODE_SHIFT;
+
+       /** @hide */
+       @IntDef({UNSPECIFIED, EXACTLY, AT_MOST})
+       @Retention(RetentionPolicy.SOURCE)
+       public @interface MeasureSpecMode {}
+
+       /**
+        * Measure specification mode: The parent has not imposed any constraint
+        * on the child. It can be whatever size it wants.
+        */
+       public static final int UNSPECIFIED = 0 << MODE_SHIFT;
+
+       /**
+        * Measure specification mode: The parent has determined an exact size
+        * for the child. The child is going to be given those bounds regardless
+        * of how big it wants to be.
+        */
+       public static final int EXACTLY     = 1 << MODE_SHIFT;
+
+       /**
+        * Measure specification mode: The child can be as large as it wants up
+        * to the specified size.
+        */
+       public static final int AT_MOST     = 2 << MODE_SHIFT;
+
+       /**
+        * Creates a measure specification based on the supplied size and mode.
+        *
+        * The mode must always be one of the following:
+        * <ul>
+        *  <li>{@link android.view.View.MeasureSpec#UNSPECIFIED}</li>
+        *  <li>{@link android.view.View.MeasureSpec#EXACTLY}</li>
+        *  <li>{@link android.view.View.MeasureSpec#AT_MOST}</li>
+        * </ul>
+        *
+        * <p><strong>Note:</strong> On API level 17 and lower, makeMeasureSpec's
+        * implementation was such that the order of arguments did not matter
+        * and overflow in either value could impact the resulting MeasureSpec.
+        * {@link android.widget.RelativeLayout} was affected by this bug.
+        * Apps targeting API levels greater than 17 will get the fixed, more strict
+        * behavior.</p>
+        *
+        * @param size the size of the measure specification
+        * @param mode the mode of the measure specification
+        * @return the measure specification based on size and mode
+        */
+       public static int makeMeasureSpec(@IntRange(from = 0, to = (1 << MeasureSpec.MODE_SHIFT) - 1) int size,
+                                         @MeasureSpecMode int mode) {
+           if (sUseBrokenMakeMeasureSpec) {
+               return size + mode;
+           } else {
+               return (size & ~MODE_MASK) | (mode & MODE_MASK);
+           }
+       }
+
+       /**
+        * Like {@link #makeMeasureSpec(int, int)}, but any spec with a mode of UNSPECIFIED
+        * will automatically get a size of 0. Older apps expect this.
+        *
+        * @hide internal use only for compatibility with system widgets and older apps
+        */
+       public static int makeSafeMeasureSpec(int size, int mode) {
+           if (sUseZeroUnspecifiedMeasureSpec && mode == UNSPECIFIED) {
+               return 0;
+           }
+           return makeMeasureSpec(size, mode);
+       }
+
+       /**
+        * Extracts the mode from the supplied measure specification.
+        *
+        * @param measureSpec the measure specification to extract the mode from
+        * @return {@link android.view.View.MeasureSpec#UNSPECIFIED},
+        *         {@link android.view.View.MeasureSpec#AT_MOST} or
+        *         {@link android.view.View.MeasureSpec#EXACTLY}
+        */
+       @MeasureSpecMode
+       public static int getMode(int measureSpec) {
+           //noinspection ResourceType
+           return (measureSpec & MODE_MASK);
+       }
+
+       /**
+        * Extracts the size from the supplied measure specification.
+        *
+        * @param measureSpec the measure specification to extract the size from
+        * @return the size in pixels defined in the supplied measure specification
+        */
+       public static int getSize(int measureSpec) {
+           return (measureSpec & ~MODE_MASK);
+       }
+
+       static int adjust(int measureSpec, int delta) {
+           final int mode = getMode(measureSpec);
+           int size = getSize(measureSpec);
+           if (mode == UNSPECIFIED) {
+               // No need to adjust size for UNSPECIFIED mode.
+               return makeMeasureSpec(size, UNSPECIFIED);
+           }
+           size += delta;
+           if (size < 0) {
+               Log.e(VIEW_LOG_TAG, "MeasureSpec.adjust: new size would be negative! (" + size +
+                       ") spec: " + toString(measureSpec) + " delta: " + delta);
+               size = 0;
+           }
+           return makeMeasureSpec(size, mode);
+       }
+
+   }
+```
+
+MeasureSpec通过将SpecMode和SpecSize打包成为一个int值来避免过多的对象内存分配，为了方便操作。提供了打包和解包的方法。specMode和SpecSIze也是一个int值，一组SpecMode和SpecSize可以打包为一个MeasureSpec。而一个MeasureSpec可以通过解包的形式获取SpecMode和SpecSize，需要注意这里的MeasureSpec所代表的是一个int值，不是对象本身。
+
+SpecMode有三类，每一类都代表特殊的含义，如下所示
+* UNSPECIFIED
+父容器不对VIew有限制，要多他给多大，一般情况用于系统内部，表示测量状态
+* EXACTLY
+父容器已经检测出View所遇到的精确大小，这个时候View的最终大小就是SpecSize指定的值。他对应于LayoutParems中的match_parent和具体数值这两种模式
+* AT__MOST
+父容器指定了一个可用大小即SpecSize，View的大小不能大于这个值，具体是什么要看不同View的具体实现，他对于LayoutParams中的wrap_content
+### MeasureSpec和LayoutParams的对应关系
+
+上面提到，系统内部是通过MeasureSpec来进行测量，但是正常情况下我们使用View指定MeasureSpec，尽管如此，但是我们可以给View设置LayoutParems。在View测量的时候，系统会将LayoutParams在父容器约束下转换成对应的MeasureSpec，然后在更具这个MeasureSpec来确定测量后的宽和高。需要注意的是，MeasureSpec不是唯一由LayoutParams决定的，LayoutParams需要和父容器一起才能决定View的MeasureSpec，从而进一步决定View的宽和高。另外，对于顶级View（DecorView）和普通View来说，MeasureSpec的转换过程略有不同，对于DecorView，其MeasureSpec有窗口尺寸和其自身的LayoutParams来共同决定；对于普通View，其MeasureSpec由父容器的MeasureSpec和自身的LayoutParams来共同决定，MeasureSpec一旦确定后，onMeasure中就可以测量View的宽和高了
+对于DecorView来说，在ViewRootImpl中的MeasureHierarchy方法中有如下一段代码，他展示了DecorView的MeasureSpec的创建过程，其中desiredWindowWidth和desiredWindowHeight是屏幕的尺寸
+```
+childWidthMeasureSpec=getRootMeasureSpec(desireWindowWidth,lp.width);
+childHeightMeasureSpec=getRootMeasureSpec(desiredwindowHeight,lp.height);
+performMeasure(childWidthMeasureSpec,childHeightMeasureSpec);
+```
+
+
+接着在看一下`getRootMeasureSpec`的方法实现
+```
+private static int getRootMeasureSpec(int windowSize,int rootDimension){
+  int measureSpec;
+  switch(rootDimension){
+      // MATCH_PARENT 和MeasureSpec.AT_MOST有关联 ViewGroup.LayoutParams.MATCH_PARENT是-1
+    case ViewGroup.LayoutParams.MATCH_PARENT：
+    measureSpec=MeasureSpec.makeMeasureSpec(windowSize,MeasureSpec.EXACELY);
+    break;
+    // WRAP_CONTENT 和MeasureSpec.AT_MOST有关联   public static final int WRAP_CONTENT = -2;
+    case ViewGroup.LayoutParams.WRAP_CONTENT：
+    measureSpec=MeasureSpec.makeMeasureSpec(windowSize,MeasureSpec.AT_MOST);
+    break;
+    // 固定大小
+    default:
+    measureSpec=MeasureSpec.makeMeasureSpec(rootDimension,MeasureSpec.EXACTLY)
+    break;
+
+  }
+  return measureSpec;
+}
+```
+通过上述代码，DecorView的MeasureSpec的产生过程就很明确了，终于清楚了
+* LayoutParams.MATCH_PARENT：精确模式，大小就是窗口的大小
+* LayoutParams.WRAP_CONTENT:最大模式，大小不确定，但是不能超过窗口大小
+* 固定大小（比如100dp）：精确模式，大小为LayoutParams中指定的大小
+
+对于普通View来说，这里是指我们布局中的View，VIew的measure过程由ViewGroup传递而来，先看一下ViewGroup的measureChildWithMargins方法
+
+```
+protected void measureChildWithMargins(View child,
+         int parentWidthMeasureSpec, int widthUsed,
+         int parentHeightMeasureSpec, int heightUsed) {
+           //获取子控件的布局参数
+     final MarginLayoutParams lp = (MarginLayoutParams) child.getLayoutParams();
+            //获取子控件的MeasureSpec 这里需要传入父元素的MeasureSpec和子元素的LayoutParams ，所以和这两个都有关系
+     final int childWidthMeasureSpec = getChildMeasureSpec(parentWidthMeasureSpec,
+             mPaddingLeft + mPaddingRight + lp.leftMargin + lp.rightMargin
+                     + widthUsed, lp.width);
+     final int childHeightMeasureSpec = getChildMeasureSpec(parentHeightMeasureSpec,
+             mPaddingTop + mPaddingBottom + lp.topMargin + lp.bottomMargin
+                     + heightUsed, lp.height);
+
+     child.measure(childWidthMeasureSpec, childHeightMeasureSpec);
+ }
+
+
+```
+上面的方法会对子元素进行measure，在调用子元素的measure方法之前会同时getChildMeasureSpec方法来得到子元素的MeasureSpec。从代码来看，很显然，子元素MeasureSpec的创建与父容器的MeasureSpec和子元素本身的LayoutParams有关，此外还和View的marigin和padding有关，可以看一下`getChildMeasureSpec`
+
+
+```
+public static int getChildMeasureSpec(int spec, int padding, int childDimension) {
+    // 解析父元素的MeasureSpec
+     int specMode = MeasureSpec.getMode(spec);
+     int specSize = MeasureSpec.getSize(spec);
+     // 获取大小最大值
+     int size = Math.max(0, specSize - padding);
+
+     int resultSize = 0;
+     int resultMode = 0;
+     // 依据父元素的测量模式进行处理
+     switch (specMode) {
+     // Parent has imposed an exact size on us
+     case MeasureSpec.EXACTLY:// 父元素是精确模式
+         if (childDimension >= 0) {// 子控件的LayoutParams大小,如果大于0 就是固定模式，知道大小
+             resultSize = childDimension;
+             resultMode = MeasureSpec.EXACTLY;
+         } else if (childDimension == LayoutParams.MATCH_PARENT) {// 子控件的LayoutParams大小,如果小于0 就是固定模式，不知道大小，设置了 LayoutParams.MATCH_PARENT
+             // Child wants to be our size. So be it.
+             resultSize = size;
+             resultMode = MeasureSpec.EXACTLY;
+         } else if (childDimension == LayoutParams.WRAP_CONTENT) {
+             // Child wants to determine its own size. It can't be
+             // bigger than us.
+             resultSize = size;
+             resultMode = MeasureSpec.AT_MOST;
+         }
+         break;
+
+     // Parent has imposed a maximum size on us
+     case MeasureSpec.AT_MOST:
+         if (childDimension >= 0) {
+             // Child wants a specific size... so be it
+             resultSize = childDimension;
+             resultMode = MeasureSpec.EXACTLY;
+         } else if (childDimension == LayoutParams.MATCH_PARENT) {
+             // Child wants to be our size, but our size is not fixed.
+             // Constrain child to not be bigger than us.
+             resultSize = size;
+             resultMode = MeasureSpec.AT_MOST;
+         } else if (childDimension == LayoutParams.WRAP_CONTENT) {
+             // Child wants to determine its own size. It can't be
+             // bigger than us.
+             resultSize = size;
+             resultMode = MeasureSpec.AT_MOST;
+         }
+         break;
+
+     // Parent asked to see how big we want to be
+     case MeasureSpec.UNSPECIFIED:
+         if (childDimension >= 0) {
+             // Child wants a specific size... let him have it
+             resultSize = childDimension;
+             resultMode = MeasureSpec.EXACTLY;
+         } else if (childDimension == LayoutParams.MATCH_PARENT) {
+             // Child wants to be our size... find out how big it should
+             // be
+             resultSize = View.sUseZeroUnspecifiedMeasureSpec ? 0 : size;
+             resultMode = MeasureSpec.UNSPECIFIED;
+         } else if (childDimension == LayoutParams.WRAP_CONTENT) {
+             // Child wants to determine its own size.... find out how
+             // big it should be
+             resultSize = View.sUseZeroUnspecifiedMeasureSpec ? 0 : size;
+             resultMode = MeasureSpec.UNSPECIFIED;
+         }
+         break;
+     }
+     //noinspection ResourceType
+    // 将specMode和SpecSize组合
+     return MeasureSpec.makeMeasureSpec(resultSize, resultMode);
+ }
+
+```
+
+
+可以看出来主要是依据父容器的MeasureSpec同时结合View本身的LayoutParams来确定子元素的MeasureSpec。参数中的padding指的是父容器已经占用的大小，所以子元素可用大小为父容器的尺寸减去padding
+```
+int specSize = MeasureSpec.getSize(spec);
+// 获取大小最大值
+int size = Math.max(0, specSize - padding);
+```
+`getChildMeasureSpec`清楚的展示了普通View的MeasureSpec的创建规则，为了更加清晰的理解`getChildMeasureSpec`这里提供一个表针对`getChildMeasureSpec`的原理尽心梳理
+
+||parentSpecMode|EXACTLY|AT_MOST|UNSPECIFIED|
+|:---:|:---:|:---:|:----:|:----:|
+|childLayoutParams|dp/px|EXACTLY/childSize|AT_MOST/childSize|UNSPECIFIED/childSize|
+|childLayoutParams|MATCH_PARENT|EXACTLY/parentSize|AT_MOST/parentSize|UNSPECIFIED/0|
+|childLayoutParams|WRAP_CONTENT|AT_MOST/parentSiz|AT_MOST/parentSiz|UNSPECIFIED/0|
+
+针对表这里在做一下说明，前面已经提到，对于普通的View，其MeasureSpec由父控件的MeasureSpec和自身的LayoutParams来共同决定，那么针对不同的父容器和View本身不同的LayoutParams，View就可以有多重MeasureSpec。这里说一下当View采用固定狂傲的时候，不管父容器是什么模式，都是精确模式，并且大小遵循子控件的LayoutParams，当View的宽度/高度是match_parent时，如果父控件的模式是精确模式，那么View也是精确模式并且其大小不会超过其父容器的大小，如果父容器是最大模式，那么View也是最大模式，并且其大小不会超过父容器的剩余空间，当VIew的宽/高是wrap_content时，不管父容器的模式是精确还是最大化，View的模式总是最大化并且不能超过父容器的剩余空间。分析的时候溜掉了UNSPECIFIED模式，这个模式主要用于系统内部多次Measure的情景，一般不用
+
+## View的绘制流程
 
 
 # 第五章 理解RemoteViews
