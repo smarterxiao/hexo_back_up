@@ -7461,11 +7461,157 @@ int size = Math.max(0, specSize - padding);
 针对表这里在做一下说明，前面已经提到，对于普通的View，其MeasureSpec由父控件的MeasureSpec和自身的LayoutParams来共同决定，那么针对不同的父容器和View本身不同的LayoutParams，View就可以有多重MeasureSpec。这里说一下当View采用固定狂傲的时候，不管父容器是什么模式，都是精确模式，并且大小遵循子控件的LayoutParams，当View的宽度/高度是match_parent时，如果父控件的模式是精确模式，那么View也是精确模式并且其大小不会超过其父容器的大小，如果父容器是最大模式，那么View也是最大模式，并且其大小不会超过父容器的剩余空间，当VIew的宽/高是wrap_content时，不管父容器的模式是精确还是最大化，View的模式总是最大化并且不能超过父容器的剩余空间。分析的时候溜掉了UNSPECIFIED模式，这个模式主要用于系统内部多次Measure的情景，一般不用
 
 ## View的绘制流程
+View的工作流程主要是指measure、layout和draw这三个过程，即测量，布局和绘制，其中measure确定View的测量宽和高，layout确定View的四个顶点位置，而draw则将VIew绘制到屏幕上
+### measure过程
+measure过程要分情况来看，如果只是一个原始的View，那么通过measure方法就完成了其测量过程，如果是一个ViewGroup，除了完成自己的测量过程外，还会遍历调用所有的子元素的measure方法。各个子元素在递归去执行这个流程。下面针对这两种情况分别讨论。
+1. View的measure过程
+view的measure过程由其measure方法来完成，measure是一个final类型方法，这意味着不能重写此方法，在View的measure方法中会调用View的onMeasure方法，因此，只要看onMeasure方法实现即可，VIew的onMeasure方法如下所示。
+```
+protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    setMeasuredDimension(getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec),
+            getDefaultSize(getSuggestedMinimumHeight(), heightMeasureSpec));
+}
+
+```
+
+上面的代码很简单，但是简洁并不代表简单，setMeasuredDimension方法会设置View的宽和高的测量值，因此我们只需要看getDefaultSize这个方法即可。
+
+```
+// 传入最大值：size
+// 如果是UNSPECIFIED 自定义的模式，就使用传入的最大值
+// 否则就根据MeasureSpec获取大小
+public static int getDefaultSize(int size, int measureSpec) {
+       int result = size;
+       int specMode = MeasureSpec.getMode(measureSpec);
+       int specSize = MeasureSpec.getSize(measureSpec);
+
+       switch (specMode) {
+       case MeasureSpec.UNSPECIFIED:
+           result = size;
+           break;
+       case MeasureSpec.AT_MOST:
+       case MeasureSpec.EXACTLY:
+           result = specSize;
+           break;
+       }
+       return result;
+   }
+
+```
+UNSPECIFIED这种情况是系统内部后者自定义的时候使用，或得到size 这个size是通过下面的方法` getSuggestedMinimumWidth()`获取的
+
+```
+// 如果控件没有背景 取minwidth 否则 取最小值和背景的最大值
+protected int getSuggestedMinimumWidth() {
+    return (mBackground == null) ? mMinWidth : max(mMinWidth, mBackground.getMinimumWidth());
+}
+
+protected int getSuggestedMinimumHeight() {
+    return (mBackground == null) ? mMinHeight : max(mMinHeight, mBackground.getMinimumHeight());
+
+}
+
+```
+
+分析`getSuggestedMinimumWidth`和`getSuggestedMinimumHeight`的原理是一样的，如果没有设置背景，那么View的宽度为mMinWidth，而mMinWidth对应控件的android:minWidth这个属性所指的值，因此View的宽度就是android:minWidth属性所指定的值，这个属性如果不指定，那么默认值就是0，如果View指定了背景，则View的宽度为`max(mMinWidth, mBackground.getMinimumWidth())`的最大值，mMinWidth这个我们已经知道含义了，那么`mBackground.getMinimumWidth()`是什么意思呢？
+```
+public int getMinimumHeight() {
+    final int intrinsicHeight = getIntrinsicHeight();
+    return intrinsicHeight > 0 ? intrinsicHeight : 0;
+}
+
+public int getIntrinsicWidth() {
+      return -1;
+  }
+
+drawable的子类重写了这个方法 这个是NinePatchDrawable
+@Override
+public int getIntrinsicWidth() {
+    return mBitmapWidth;
+}
+
+```
+
+可以看到getMinimumHeight返回的是drawable原始的高度。这里举个例子说明一下ShapeDrawable无原始宽和高，而BitmapDrawable有原始宽和高，详细内容会在后面介绍的
+这里在总结一下`getMinimumHeight`的逻辑，如果View没有设置背景，那么返回android：minWidth这个属性所属的值。这个值可以为0，如果View设置了背景，则返回android：minWidth和背景最小宽度这两个钟的最大值，这样他的返回值就是View在UNSPECIFIED下的测量宽和高
+从getDefaultSize方法的实现来看，View的狂傲由specSize决定，我们得出结论：直接继承View的自定义控件需要重写onMeasure方法并设置wrap_content是的自身大小，否则在布局中使用wrap_content就相当于使用match_parent。为什么呢？这个原因需要结合上述代码和之前的表来理解。从上述代码我们知道，如果View在布局中使用wrap_content,那么他的specMode的模式就是AT_MOST，在这种模式下，他的宽和高就是specSize；并且根据上面的表，可以看到这种情况下的specSize是parentSIze，而parentSize就是容器目前可以使用的大小，就是父容器当前剩余的空间大小。很显然，VIew的宽和高就相当于父控件当前剩余的空间大小，这种效果和在布局中使用match_parent完全一样。如何解决这个问题呢？
+```
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        int widthSpecMode=MeasureSpec.getMode(widthMeasureSpec);
+        int heightSpecMode=MeasureSpec.getMode(heightMeasureSpec);
+        int widthSpecSize=MeasureSpec.getSize(widthMeasureSpec);
+        int heightSpecSize=MeasureSpec.getSize(heightMeasureSpec);
+
+        if(widthSpecMode==MeasureSpec.AT_MOST&&heightSpecMode==MeasureSpec.AT_MOST){
+            setMeasuredDimension(mWidth.mHeight);
+        }else   if(widthSpecMode==MeasureSpec.AT_MOST){
+            setMeasuredDimension(mWidth.heightSpecSize);
+        }else   if(heightSpecMode==MeasureSpec.AT_MOST){
+            setMeasuredDimension(widthSpecSize.mHeight);
+        }
+    }
+```
+在上面的代码中，我们只需要给VIew指定一个默认的内部宽和高(mWidth和mHeight)并且在wrap_content的时候设置宽和高就可以了。针对非wrap_content情景，我们沿用西永的测量值就可以了。至于这个默认内部宽和高的大小如何指定，这个没有固定依据，更具需要灵活指定即可。查看TextView和ImageView等源码就可以知道，针对wrap_content情形。他们的onMeasure方法都做了特殊处理，读者可以自行查看他们的源码
+
+```
+这个是imageView的onMeasure方法
+@Override
+  protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+      resolveUri();
+      int w;
+      int h;
+
+      // Desired aspect ratio of the view's contents (not including padding)
+      float desiredAspect = 0.0f;
+
+      // We are allowed to change the view's width
+      boolean resizeWidth = false;
+
+      // We are allowed to change the view's height
+      boolean resizeHeight = false;
+
+      final int widthSpecMode = MeasureSpec.getMode(widthMeasureSpec);
+      final int heightSpecMode = MeasureSpec.getMode(heightMeasureSpec);
+
+      if (mDrawable == null) {
+          // If no drawable, its intrinsic size is 0.
+          mDrawableWidth = -1;
+          mDrawableHeight = -1;
+          w = h = 0;
+      } else {
+          w = mDrawableWidth;
+          h = mDrawableHeight;
+          if (w <= 0) w = 1;
+          if (h <= 0) h = 1;
+          //判断是否开启值测量宽和高
+          // We are supposed to adjust view bounds to match the aspect
+          // ratio of our drawable. See if that is possible.
+          if (mAdjustViewBounds) {
+              resizeWidth = widthSpecMode != MeasureSpec.EXACTLY;
+              resizeHeight = heightSpecMode != MeasureSpec.EXACTLY;
+
+              desiredAspect = (float) w / (float) h;
+          }
+      }
+
+```
+
+textView的onMeasure方法重写后特别长，这里就不列出来了
+
+2. ViewGroup的measure处理过程
+对于ViewGroup，除了完成自己的measure过程意外，还会遍历调用所有子控件的measure方法，和View不同的是，ViewGroup是一个抽象类，因此他没有重写View的onMeasure方法，但是他提供了一个叫measureChildren的方法，如下所示。
+```
+
+```
+
 
 
 # 第五章 理解RemoteViews
 # 第六章 Android的Drawable
-# 第七章 Android 动画深入分析
+# 第七章 Android 动画深入分析  
 # 第八章 理解Windows和WindowsManager
 # 第九章 四大组件的工作流程
 # 第十章 Android的消息机制
