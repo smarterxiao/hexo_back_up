@@ -21,3 +21,12 @@ tags:
 ## 主要的书籍
 1. Android群英传
 2. Android开发艺术检索
+
+
+# 2018年目标
+## 书籍方面
+1. Android开发艺术探索未完成部分
+2. kotlin
+3. linux 鸟哥笔记复习
+4. jni部分
+5. java 虚拟机和android虚拟机
