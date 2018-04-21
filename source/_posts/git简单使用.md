@@ -539,3 +539,378 @@ Deleted branch dev (was e9ca890).
 
 
 ## 冲突解决
+这个是git在使用过程中常见的场景
+这里我们创建两个分支 dev1 和dev2
+在dev1和dev2上面修改，并add和commit，之后切换到master，这个时候要合并分支，由于dev1和dev2对同一个地方做了修改，git不知道要使用哪个，这个时候就产生了冲突，需要手动解决
+
+dev1
+```
+test
+哈哈哈，今天天气不错
+今天路上看到的妹子好漂亮
+我要到那个妹子的微信了 O(∩_∩)O哈哈~
+sjfjsdlfjlsd
+
+sfdkjsdksklfj份sdkjf
+
+dev1上面的修改
+```
+
+dev2
+```
+test
+哈哈哈，今天天气不错
+今天路上看到的妹子好漂亮
+我要到那个妹子的微信了 O(∩_∩)O哈哈~
+sjfjsdlfjlsd
+
+sfdkjsdksklfj份sdkjf
+
+dev2 分支修改
+```
+
+```
+➜  测试内容，可以删除 git:(master) git merge dev1
+Updating e9ca890..d9e202b
+Fast-forward
+ test | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+➜  测试内容，可以删除 git:(master) git merge dev2  //在这里可以看到会有冲突的提示，这个时候要手动处理冲突
+Auto-merging test
+CONFLICT (content): Merge conflict in test
+Automatic merge failed; fix conflicts and then commit the result.
+```
+
+
+```
+test
+哈哈哈，今天天气不错
+今天路上看到的妹子好漂亮
+我要到那个妹子的微信了 O(∩_∩)O哈哈~
+sjfjsdlfjlsd
+
+sfdkjsdksklfj份sdkjf
+
+<<<<<<< HEAD
+dev1上面的修改
+=======
+dev2 分支修改
+>>>>>>> dev2
+
+```
+
+Git用<<<<<<<，=======，>>>>>>>标记出不同分支的内容，我们修改如下后保存：
+
+
+```
+test
+哈哈哈，今天天气不错
+今天路上看到的妹子好漂亮
+我要到那个妹子的微信了 O(∩_∩)O哈哈~
+sjfjsdlfjlsd
+
+sfdkjsdksklfj份sdkjf
+
+dev1上面的修改
+dev2 分支修改
+
+```
+
+之后将处理好的冲突合并之后再提交
+
+```
+➜  测试内容，可以删除 git:(master) ✗ git add test
+➜  测试内容，可以删除 git:(master) ✗ git commit -m "dev1和dev2分支合并"
+```
+
+执行`git status `可以查看状态
+
+```
+commit 5bc564e39d7ed6e8a1857334822240d35070330c
+Merge: d9e202b c588f19
+Author: xiaolei <xiaolei@qeeniao.com>
+Date:   Sat Apr 21 11:22:43 2018 +0800
+
+    dev1和dev2分支合并
+
+commit c588f194903d74a55b8e2d5615a62776b9d70ad1
+Author: xiaolei <xiaolei@qeeniao.com>
+Date:   Sat Apr 21 11:19:05 2018 +0800
+
+    dev2分支修改
+
+commit d9e202b8862e03bfadce7dd873af6163426ec647
+Author: xiaolei <xiaolei@qeeniao.com>
+Date:   Sat Apr 21 11:18:12 2018 +0800
+
+```
+
+可以使用这个命令
+```
+git log --graph --pretty=oneline --abbrev-commit
+```
+查看分支情况合并情况
+
+```
+*   5bc564e dev1和dev2分支合并
+|\
+| * c588f19 dev2分支修改
+* | d9e202b git dev1分支修改
+|/
+* e9ca890 测试
+* d0410fb xxxx提交
+* ab99189 妹子家好友了
+* 59e3cc9 美眉
+* ffba6ca 加入今天天气
+* 8de8547 初始化测试仓库
+```
+
+## 分支管理策略
+
+通常，合并分支时，如果可能，Git会用Fast forward模式，但这种模式下，删除分支后，会丢掉分支信息。
+这里来测试一下
+首先创建一个test分支
+```
+git checkout -b test
+```
+然后修改test分支的内容
+
+```
+test
+哈哈哈，今天天气不错
+今天路上看到的妹子好漂亮
+我要到那个妹子的微信了 O(∩_∩)O哈哈~
+sjfjsdlfjlsd
+
+sfdkjsdksklfj份sdkjf
+
+dev1上面的修改
+dev2 分支修改
+test 分支修改
+```
+之后
+```
+git add test
+git commit -m "test分支修改"
+```
+
+
+现在切换到master 分支，并且准备
+准备合并test分支，请注意--no-ff参数，表示禁用Fast forward：
+
+
+```
+git merge --no-ff -m "merge with no-ff" test
+```
+
+查看git log
+```
+git log --graph --pretty=oneline --abbrev-commit
+```
+结果
+```
+*   3cba559 merge with no-ff   // 这个是作为一个commit来提交的
+|\
+| * 3dcd292 test分支修改
+|/
+*   5bc564e dev1和dev2分支合并
+|\
+| * c588f19 dev2分支修改
+* | d9e202b git dev1分支修改
+|/
+* e9ca890 测试
+* d0410fb xxxx提交
+* ab99189 妹子家好友了
+* 59e3cc9 美眉
+* ffba6ca 加入今天天气
+* 8de8547 初始化测试仓库
+```
+
+这里遇到了这个问题
+```
+error: There was a problem with the editor 'vi'.
+Not committing merge; use 'git commit' to complete the merge.
+```
+
+解决方案
+```
+在vim中添加内容
+```
+
+## bug 分支管理
+场景
+软件开发中，bug就像家常便饭一样。有了bug就需要修复，在Git中，由于分支是如此的强大，所以，每个bug都可以通过一个新的临时分支来修复，修复后，合并分支，然后将临时分支删除。
+当你接到一个修复一个代号101的bug的任务时，很自然地，你想创建一个分支issue-101来修复它，但是，等等，当前正在dev上进行的工作还没有提交：
+
+并不是你不想提交，而是工作只进行到一半，还没法提交，预计完成还需1天时间。但是，必须在两个小时内修复该bug，怎么办？
+幸好，Git还提供了一个stash功能，可以把当前工作现场“储藏”起来，等以后恢复现场后继续工作：
+```
+git stash
+```
+在保存了之后就可以切换达到test分支干活了
+10分钟之后弄完了，这个时候切换到master分支
+工作区是干净的，刚才的工作现场存到哪去了？用git stash list命令看看：
+```
+git stash list
+stash@{0}: WIP on master: 22c576a Merge branch 'test'
+(END)
+```
+工作现场还在，Git把stash内容存在某个地方了，但是需要恢复一下，有两个办法：
+一是用git stash apply恢复，但是恢复后，stash内容并不删除，你需要用git stash drop来删除；
+另一种方式是用git stash pop，恢复的同时把stash内容也删了：
+```
+git stash apply
+On branch master
+Changes not staged for commit:
+ (use "git add <file>..." to update what will be committed)
+ (use "git checkout -- <file>..." to discard changes in working directory)
+
+ modified:   test
+
+no changes added to commit (use "git add" and/or "git commit -a")
+```
+
+```
+git stash pop
+On branch master
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	modified:   test
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (09b29d2a32237dcecd7df3f81390a2aa8f63efc3)
+```
+
+
+你可以多次stash，恢复的时候，先用git stash list查看，然后恢复指定的stash，用命令：
+
+
+```
+stash@{0}: WIP on master: 50fd45b test
+stash@{1}: WIP on master: 22c576a Merge branch 'test'
+```
+```
+git stash apply stash@{0}
+```
+## 多人协作
+
+当你从远程仓库克隆时，实际上Git自动把本地的master分支和远程的master分支对应起来了，并且，远程仓库的默认名称是origin。
+
+要查看远程库的信息，用git remote：
+```
+git remote
+origin
+```
+或者，用git remote -v显示更详细的信息：
+```
+git remote -v
+origin	git@github.com:smarterxiao/test.git (fetch)
+origin	git@github.com:smarterxiao/test.git (push)
+```
+
+推送分支
+
+推送分支，就是把该分支上的所有本地提交推送到远程库。推送时，要指定本地分支，这样，Git就会把该分支推送到远程库对应的远程分支上：
+```
+git push origin master
+```
+如果要推送其他分支，比如dev，就改成：
+```
+git push origin dev
+```
+但是，并不是一定要把本地分支往远程推送，那么，哪些分支需要推送，哪些不需要呢？
+master分支是主分支，因此要时刻与远程同步；
+dev分支是开发分支，团队所有成员都需要在上面工作，所以也需要与远程同步；
+bug分支只用于在本地修复bug，就没必要推到远程了，除非老板要看看你每周到底修复了几个bug；
+feature分支是否推到远程，取决于你是否和你的小伙伴合作在上面开发。
+
+
+抓取分支
+
+这个时候不同的人在不同的分支上面开发，
+现在，模拟一个你的小伙伴，可以在另一台电脑（注意要把SSH Key添加到GitHub）或者同一台电脑的另一个目录下克隆：
+当你的小伙伴从远程库clone时，默认情况下，你的小伙伴只能看到本地的master分支。不信可以用git branch命令看看：
+```
+git clone git@github.com:smarterxiao/test.git
+Cloning into 'test'...
+remote: Counting objects: 52, done.
+remote: Compressing objects: 100% (18/18), done.
+remote: Total 52 (delta 15), reused 52 (delta 15), pack-reused 0
+Receiving objects: 100% (52/52), done.
+Resolving deltas: 100% (15/15), done.
+```
+
+```
+git branch
+* master
+```
+发现之后master分支
+这个时候怎么处理呢？
+
+
+```
+ git checkout -b dev origin/dev
+```
+
+这样就拉去了服务器的dev分支
+同理拉去test分支
+
+修改test分支的test内容，add并commit，之后再推送的时候要先pull 在push
+```
+git push
+Counting objects: 3, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (2/2), done.
+Writing objects: 100% (3/3), 263 bytes | 0 bytes/s, done.
+Total 3 (delta 1), reused 0 (delta 0)
+remote: Resolving deltas: 100% (1/1), completed with 1 local object.
+To github.com:smarterxiao/test.git
+   abe8963..ddcf3e6  test -> test
+```
+
+如果pull失败
+原因是没有指定本地dev分支与远程origin/dev分支的链接，根据提示，设置dev和origin/dev的链接
+
+```
+git branch --set-upstream dev origin/dev
+Branch dev set up to track remote branch dev from origin.
+```
+
+
+## git 标签
+
+切换到想要打的分支
+```
+git tag "1.0"//这是标签
+➜  test git:(test) git tag// 查看标签
+1.0
+```
+
+默认标签是打在最新提交的commit上的。有时候，如果忘了打标签，比如，现在已经是周五了，但应该在周一打的标签没有打，怎么办？
+
+方法是找到历史提交的commit id，然后打上就可以了：
+
+$ git log --pretty=oneline --abbrev-commit
+6a5819e merged bug fix 101
+cc17032 fix bug 101
+7825a50 merge with no-ff
+6224937 add merge
+59bc1cb conflict fixed
+400b400 & simple
+75a857c AND simple
+fec145a branch test
+d17efd8 remove test.txt
+...
+比方说要对add merge这次提交打标签，它对应的commit id是6224937，敲入命令：
+```
+$ git tag v0.9 6224937
+``
+再用命令git tag查看标签：
+
+$ git tag
+v0.9
+v1.0
+
+基本上git常用的东西就整理好了
