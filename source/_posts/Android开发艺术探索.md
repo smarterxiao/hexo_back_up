@@ -7602,11 +7602,460 @@ public int getIntrinsicWidth() {
 textView的onMeasure方法重写后特别长，这里就不列出来了
 
 2. ViewGroup的measure处理过程
-对于ViewGroup，除了完成自己的measure过程意外，还会遍历调用所有子控件的measure方法，和View不同的是，ViewGroup是一个抽象类，因此他没有重写View的onMeasure方法，但是他提供了一个叫measureChildren的方法，如下所示。
+对于ViewGroup，除了完成自己的measure过程以外，还会遍历调用所有子控件的measure方法，和View不同的是，ViewGroup是一个抽象类，因此他没有重写View的onMeasure方法，但是他提供了一个叫measureChildren的方法，如下所示。
 ```
+protected void measureChildren(int widthMeasureSpec, int heightMeasureSpec) {
+    final int size = mChildrenCount;
+    final View[] children = mChildren;
+    for (int i = 0; i < size; ++i) {
+        final View child = children[i];
+        if ((child.mViewFlags & VISIBILITY_MASK) != GONE) {
+            measureChild(child, widthMeasureSpec, heightMeasureSpec);
+        }
+    }
+}
+
+```
+从源码来看，ViewGroup在measure是会对每一个子元素进行measure,measureChild的方法也很好理解
+
+```
+protected void measureChild(View child, int parentWidthMeasureSpec,
+        int parentHeightMeasureSpec) {
+    final LayoutParams lp = child.getLayoutParams();
+
+    final int childWidthMeasureSpec = getChildMeasureSpec(parentWidthMeasureSpec,
+            mPaddingLeft + mPaddingRight, lp.width);
+    final int childHeightMeasureSpec = getChildMeasureSpec(parentHeightMeasureSpec,
+            mPaddingTop + mPaddingBottom, lp.height);
+
+    child.measure(childWidthMeasureSpec, childHeightMeasureSpec);
+}
 
 ```
 
+很显然，`measureChild`的意思其实就是取出子元素的layoutParams，然后通过getChildMeasureSpec获取MeasureSpec，然后将得到的MeasureSpec传递给子控件的measure方法
+我们知道ViewGroup没有定义测量过程，这个是因为ViewGroup是一个抽象类，其测量过程的OnMeasure需要在每一个子类中实现，比如LinearLayout，RelativeLayout等。为什么不像VIew一样对其OnMeasure进行统一处理呢，这个是因为每一个ViewGroup子类的布局特性不同，导致细节不同，所以不能统一实现。这里使用LinearLayout的onMeasure进行分析
+
+
+
+```
+@Override
+protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    if (mOrientation == VERTICAL) {
+        measureVertical(widthMeasureSpec, heightMeasureSpec);
+    } else {
+        measureHorizontal(widthMeasureSpec, heightMeasureSpec);
+    }
+}
+
+```
+
+这个代码很简单，这里就先分析一下`measureVertical`
+
+```
+void measureVertical(int widthMeasureSpec, int heightMeasureSpec) {
+       mTotalLength = 0;
+       int maxWidth = 0;
+       int childState = 0;
+       int alternativeMaxWidth = 0;
+       int weightedMaxWidth = 0;
+       boolean allFillParent = true;
+       float totalWeight = 0;
+
+       final int count = getVirtualChildCount();
+
+       final int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+       final int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+
+       boolean matchWidth = false;
+       boolean skippedMeasure = false;
+
+       final int baselineChildIndex = mBaselineAlignedChildIndex;
+       final boolean useLargestChild = mUseLargestChild;
+
+       int largestChildHeight = Integer.MIN_VALUE;
+       int consumedExcessSpace = 0;
+
+       int nonSkippedChildCount = 0;
+
+       // See how tall everyone is. Also remember max width.
+       //这里对子控件进行遍历
+       for (int i = 0; i < count; ++i) {
+           final View child = getVirtualChildAt(i);
+           if (child == null) {
+               mTotalLength += measureNullChild(i);
+               continue;
+           }
+
+           if (child.getVisibility() == View.GONE) {
+              i += getChildrenSkipCount(child, i);
+              continue;
+           }
+
+           nonSkippedChildCount++;
+           if (hasDividerBeforeChildAt(i)) {
+               mTotalLength += mDividerHeight;
+           }
+
+           final LayoutParams lp = (LayoutParams) child.getLayoutParams();
+
+           totalWeight += lp.weight;
+
+           final boolean useExcessSpace = lp.height == 0 && lp.weight > 0;
+           if (heightMode == MeasureSpec.EXACTLY && useExcessSpace) {
+               final int totalLength = mTotalLength;
+               mTotalLength = Math.max(totalLength, totalLength + lp.topMargin + lp.bottomMargin);
+               skippedMeasure = true;
+           } else {
+               if (useExcessSpace) {
+
+                   lp.height = LayoutParams.WRAP_CONTENT;
+               }
+
+               final int usedHeight = totalWeight == 0 ? mTotalLength : 0;
+               // 对子控件执行measureChildBeforeLayout
+               measureChildBeforeLayout(child, i, widthMeasureSpec, 0,
+                       heightMeasureSpec, usedHeight);
+
+               final int childHeight = child.getMeasuredHeight();
+               if (useExcessSpace) {
+                   lp.height = 0;
+                   consumedExcessSpace += childHeight;
+               }
+
+               final int totalLength = mTotalLength;
+               mTotalLength = Math.max(totalLength, totalLength + childHeight + lp.topMargin +
+                      lp.bottomMargin + getNextLocationOffset(child));
+
+               if (useLargestChild) {
+                   largestChildHeight = Math.max(childHeight, largestChildHeight);
+               }
+           }
+
+           /**
+            * If applicable, compute the additional offset to the child's baseline
+            * we'll need later when asked {@link #getBaseline}.
+            */
+           if ((baselineChildIndex >= 0) && (baselineChildIndex == i + 1)) {
+              mBaselineChildTop = mTotalLength;
+           }
+
+           // if we are trying to use a child index for our baseline, the above
+           // book keeping only works if there are no children above it with
+           // weight.  fail fast to aid the developer.
+           if (i < baselineChildIndex && lp.weight > 0) {
+               throw new RuntimeException("A child of LinearLayout with index "
+                       + "less than mBaselineAlignedChildIndex has weight > 0, which "
+                       + "won't work.  Either remove the weight, or don't set "
+                       + "mBaselineAlignedChildIndex.");
+           }
+
+           boolean matchWidthLocally = false;
+           if (widthMode != MeasureSpec.EXACTLY && lp.width == LayoutParams.MATCH_PARENT) {
+               // The width of the linear layout will scale, and at least one
+               // child said it wanted to match our width. Set a flag
+               // indicating that we need to remeasure at least that view when
+               // we know our width.
+               matchWidth = true;
+               matchWidthLocally = true;
+           }
+
+           final int margin = lp.leftMargin + lp.rightMargin;
+           final int measuredWidth = child.getMeasuredWidth() + margin;
+           maxWidth = Math.max(maxWidth, measuredWidth);
+           childState = combineMeasuredStates(childState, child.getMeasuredState());
+
+           allFillParent = allFillParent && lp.width == LayoutParams.MATCH_PARENT;
+           if (lp.weight > 0) {
+               /*
+                * Widths of weighted Views are bogus if we end up
+                * remeasuring, so keep them separate.
+                */
+               weightedMaxWidth = Math.max(weightedMaxWidth,
+                       matchWidthLocally ? margin : measuredWidth);
+           } else {
+               alternativeMaxWidth = Math.max(alternativeMaxWidth,
+                       matchWidthLocally ? margin : measuredWidth);
+           }
+
+           i += getChildrenSkipCount(child, i);
+       }
+
+       if (nonSkippedChildCount > 0 && hasDividerBeforeChildAt(count)) {
+           mTotalLength += mDividerHeight;
+       }
+
+       if (useLargestChild &&
+               (heightMode == MeasureSpec.AT_MOST || heightMode == MeasureSpec.UNSPECIFIED)) {
+           mTotalLength = 0;
+
+           for (int i = 0; i < count; ++i) {
+               final View child = getVirtualChildAt(i);
+               if (child == null) {
+                   mTotalLength += measureNullChild(i);
+                   continue;
+               }
+
+               if (child.getVisibility() == GONE) {
+                   i += getChildrenSkipCount(child, i);
+                   continue;
+               }
+
+               final LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams)
+                       child.getLayoutParams();
+               // Account for negative margins
+               final int totalLength = mTotalLength;
+               mTotalLength = Math.max(totalLength, totalLength + largestChildHeight +
+                       lp.topMargin + lp.bottomMargin + getNextLocationOffset(child));
+           }
+       }
+
+       // Add in our padding
+       mTotalLength += mPaddingTop + mPaddingBottom;
+
+       int heightSize = mTotalLength;
+
+       // Check against our minimum height
+       heightSize = Math.max(heightSize, getSuggestedMinimumHeight());
+
+       // Reconcile our calculated size with the heightMeasureSpec
+       int heightSizeAndState = resolveSizeAndState(heightSize, heightMeasureSpec, 0);
+       heightSize = heightSizeAndState & MEASURED_SIZE_MASK;
+       // Either expand children with weight to take up available space or
+       // shrink them if they extend beyond our current bounds. If we skipped
+       // measurement on any children, we need to measure them now.
+       int remainingExcess = heightSize - mTotalLength
+               + (mAllowInconsistentMeasurement ? 0 : consumedExcessSpace);
+       if (skippedMeasure || remainingExcess != 0 && totalWeight > 0.0f) {
+           float remainingWeightSum = mWeightSum > 0.0f ? mWeightSum : totalWeight;
+
+           mTotalLength = 0;
+
+           for (int i = 0; i < count; ++i) {
+               final View child = getVirtualChildAt(i);
+               if (child == null || child.getVisibility() == View.GONE) {
+                   continue;
+               }
+
+               final LayoutParams lp = (LayoutParams) child.getLayoutParams();
+               final float childWeight = lp.weight;
+               if (childWeight > 0) {
+                   final int share = (int) (childWeight * remainingExcess / remainingWeightSum);
+                   remainingExcess -= share;
+                   remainingWeightSum -= childWeight;
+
+                   final int childHeight;
+                   if (mUseLargestChild && heightMode != MeasureSpec.EXACTLY) {
+                       childHeight = largestChildHeight;
+                   } else if (lp.height == 0 && (!mAllowInconsistentMeasurement
+                           || heightMode == MeasureSpec.EXACTLY)) {
+                       // This child needs to be laid out from scratch using
+                       // only its share of excess space.
+                       childHeight = share;
+                   } else {
+                       // This child had some intrinsic height to which we
+                       // need to add its share of excess space.
+                       childHeight = child.getMeasuredHeight() + share;
+                   }
+
+                   final int childHeightMeasureSpec = MeasureSpec.makeMeasureSpec(
+                           Math.max(0, childHeight), MeasureSpec.EXACTLY);
+                   final int childWidthMeasureSpec = getChildMeasureSpec(widthMeasureSpec,
+                           mPaddingLeft + mPaddingRight + lp.leftMargin + lp.rightMargin,
+                           lp.width);
+                   child.measure(childWidthMeasureSpec, childHeightMeasureSpec);
+
+                   // Child may now not fit in vertical dimension.
+                   childState = combineMeasuredStates(childState, child.getMeasuredState()
+                           & (MEASURED_STATE_MASK>>MEASURED_HEIGHT_STATE_SHIFT));
+               }
+
+               final int margin =  lp.leftMargin + lp.rightMargin;
+               final int measuredWidth = child.getMeasuredWidth() + margin;
+               maxWidth = Math.max(maxWidth, measuredWidth);
+
+               boolean matchWidthLocally = widthMode != MeasureSpec.EXACTLY &&
+                       lp.width == LayoutParams.MATCH_PARENT;
+
+               alternativeMaxWidth = Math.max(alternativeMaxWidth,
+                       matchWidthLocally ? margin : measuredWidth);
+
+               allFillParent = allFillParent && lp.width == LayoutParams.MATCH_PARENT;
+
+               final int totalLength = mTotalLength;
+               mTotalLength = Math.max(totalLength, totalLength + child.getMeasuredHeight() +
+                       lp.topMargin + lp.bottomMargin + getNextLocationOffset(child));
+           }
+
+           // Add in our padding
+           mTotalLength += mPaddingTop + mPaddingBottom;
+           // TODO: Should we recompute the heightSpec based on the new total length?
+       } else {
+           alternativeMaxWidth = Math.max(alternativeMaxWidth,
+                                          weightedMaxWidth);
+
+
+           // We have no limit, so make all weighted views as tall as the largest child.
+           // Children will have already been measured once.
+           if (useLargestChild && heightMode != MeasureSpec.EXACTLY) {
+               for (int i = 0; i < count; i++) {
+                   final View child = getVirtualChildAt(i);
+                   if (child == null || child.getVisibility() == View.GONE) {
+                       continue;
+                   }
+
+                   final LinearLayout.LayoutParams lp =
+                           (LinearLayout.LayoutParams) child.getLayoutParams();
+
+                   float childExtra = lp.weight;
+                   if (childExtra > 0) {
+                       child.measure(
+                               MeasureSpec.makeMeasureSpec(child.getMeasuredWidth(),
+                                       MeasureSpec.EXACTLY),
+                               MeasureSpec.makeMeasureSpec(largestChildHeight,
+                                       MeasureSpec.EXACTLY));
+                   }
+               }
+           }
+       }
+
+       if (!allFillParent && widthMode != MeasureSpec.EXACTLY) {
+           maxWidth = alternativeMaxWidth;
+       }
+
+       maxWidth += mPaddingLeft + mPaddingRight;
+
+       // Check against our minimum width
+       maxWidth = Math.max(maxWidth, getSuggestedMinimumWidth());
+
+       setMeasuredDimension(resolveSizeAndState(maxWidth, widthMeasureSpec, childState),
+               heightSizeAndState);
+
+       if (matchWidth) {
+           forceUniformWidth(count, heightMeasureSpec);
+       }
+   }
+
+
+
+
+```
+
+从上面的代码可以看到会遍历子控件 在遍历子控件的时候会调用`measureChildBeforeLayout`方法,具体代码参照下面。
+在调用`measureChildWithMargins`方法，这样就可以调用子控件的measure方法，在调用子控件的measure的时候，会调用`onMeasure`方法，这样遍历调用，也看出遍历子控件是深度优先的遍历
+使用`mTotalLength`来存储竖直方向的高度，包括竖直方向上面的margin和子元素的高度等
+
+
+
+当子元素测量完毕之后会测量自己的大小
+```
+void measureChildBeforeLayout(View child, int childIndex,
+     int widthMeasureSpec, int totalWidth, int heightMeasureSpec,
+     int totalHeight) {
+ measureChildWithMargins(child, widthMeasureSpec, totalWidth,
+         heightMeasureSpec, totalHeight);
+}
+
+```
+
+```
+
+protected void measureChildWithMargins(View child,
+         int parentWidthMeasureSpec, int widthUsed,
+         int parentHeightMeasureSpec, int heightUsed) {
+     final MarginLayoutParams lp = (MarginLayoutParams) child.getLayoutParams();
+
+     final int childWidthMeasureSpec = getChildMeasureSpec(parentWidthMeasureSpec,
+             mPaddingLeft + mPaddingRight + lp.leftMargin + lp.rightMargin
+                     + widthUsed, lp.width);
+     final int childHeightMeasureSpec = getChildMeasureSpec(parentHeightMeasureSpec,
+             mPaddingTop + mPaddingBottom + lp.topMargin + lp.bottomMargin
+                     + heightUsed, lp.height);
+
+     child.measure(childWidthMeasureSpec, childHeightMeasureSpec);
+ }
+```
+
+View的Measure是三大流程中最复杂的一个，measure完成之后，通过getMeasureWidth/Height方法就可以正确的获取到View的测量宽和高了，需要注意，在某种极端情况下，需要多次measure才能测量出最终的宽和高，在onMeasure中的宽和高是不稳定的，最好的方式是在onLayout中获取宽和高
+上面已经对View的measure进行了详细的分析，现在需要考虑到一种情况，如果在Activity已经启动的时候做一个任务，但是这个任务需要获取某一个View的高度，这个时候在onCreate，onResume和onStart中都是无法正确获取宽和高的。因为View的measure方法和Activity的生命周期方法不是同步执行的。所以需要在
+1. Activity/View# `OnWindowFocusChanged`
+这个方法的含义是View已经初始化完毕了，宽和高已经测量完毕了，需要注意当Activity的窗口得到焦点和失去焦点是均会被调用一次`OnWindowFocusChanged`，如果频繁的onResume和onPause，那么这个方法也会被调用
+2. View.post(runnable)
+通过post可以将一个runnableto投递到消息队列的尾部，然后等待looper调用此runnable的时候，View已经初始化完毕了
+```
+protected void onStart(){
+super.OnStart();
+View.post(new Runnable((){
+  public void run(){
+    int height=view.getMeasureHeight();
+    int width=view.getMeasureWidth(();)
+  }
+  }));
+
+}
+```
+
+3. ViewTreeObserver
+使用ViewTreeObserver的众多回调可以完成这个功能，比如使用onGloablLayoutListener这个接口，当View的树结构发生变化或者View树内部可见性发生变化时候，`onGlobalLayout`方法将会被回调，因此这是获取View的宽和高的一次好机会，需要注意随着View树结构状态的变化，`onGlobalLayout`会被调用多次。
+```
+@Override
+protected void onStart() {
+    super.onStart();
+
+    ViewTreeObserver viewTreeObserver=view.getViewTreeObserver();
+    viewTreeObserver.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+        @Override
+        public void onGlobalLayout() {
+            int measuredHeight = view.getMeasuredHeight();
+            int measuredWidth = view.getMeasuredWidth();
+        }
+    });
+}
+
+```
+
+4. view.measure(xxx,xxx)
+通过手动对VIew进行measure得到。这个情况适合复杂情况的处理
+
+这种情况需要依据LayoutParams来区分
+MATCH_PARENT
+直接放弃，无法measure出具体的宽和高，原因很简单，依据之前的表和measure过程，构造这种MeasureSpec需要知道parentSize，即父控件的剩余空间，但是这个时候无法获取parentSize大小，所以理论上不可能测量出View的大小
+
+具体数值
+比如宽和高都是100dp,如下
+
+```
+int  widthMeasureSpec =measureSpec.makeMeasureSpec(100,MeasureSpec.EXACTLY)
+int  heightMeasureSpec =measureSpec.makeMeasureSpec(100,MeasureSpec.EXACTLY)
+view.measure(widthMeasureSpec,heightMeasureSpec)
+
+```
+
+WRAP_CONTENT
+```
+int  widthMeasureSpec =measureSpec.makeMeasureSpec((1<<30)-1,MeasureSpec.AT_MOST)
+int  heightMeasureSpec =measureSpec.makeMeasureSpec((1<<30)-1,MeasureSpec.AT_MOST)
+view.measure(widthMeasureSpec,heightMeasureSpec)
+
+```
+注意到(1<<30)-1 通过分析MeasureSpec可以知道View的尺寸使用30位二进制表示。也就是最大是30个1 理论上使用最大值构造是合理的
+这里有两种错误的做法，为什么错误是因为违背了系统内部的实现规范
+
+第一种：
+```
+int widthMeasureSpec=measureSpec.makeMeasureSpec(-1,NeasureSpec.UNSPECIFIED);
+int heightMeasureSpec=measureSpec.makeMeasureSpec(-1,NeasureSpec.UNSPECIFIED);
+view.measure(widthMeasureSpec,heightMeasureSpec)
+
+
+```
+第二种：
+
+```
+view.measure(LayoutParams.wrap_content,LayoutParams.Wrap_content)
+```
+
+### layout过程
 
 
 # 第五章 理解RemoteViews
