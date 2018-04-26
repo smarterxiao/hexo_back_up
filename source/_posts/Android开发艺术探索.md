@@ -8057,7 +8057,256 @@ view.measure(LayoutParams.wrap_content,LayoutParams.Wrap_content)
 
 ### layout过程
 
+layoutde 作用是用来确定子元素的位置，当ViewGroup的位置被确定之后，他在onLayout中会遍历子元素并调用他的layout方法。在layout中onLayout方法又会被调用，layout比measure过程要简单很多，layout方法确定了VIew本身的位置，而onLayout方法会确定所有子元素的位置。先看View的layout方法
 
+
+```
+public void layout(int l, int t, int r, int b) {
+      if ((mPrivateFlags3 & PFLAG3_MEASURE_NEEDED_BEFORE_LAYOUT) != 0) {
+          onMeasure(mOldWidthMeasureSpec, mOldHeightMeasureSpec);
+          mPrivateFlags3 &= ~PFLAG3_MEASURE_NEEDED_BEFORE_LAYOUT;
+      }
+
+      int oldL = mLeft;
+      int oldT = mTop;
+      int oldB = mBottom;
+      int oldR = mRight;
+
+      boolean changed = isLayoutModeOptical(mParent) ?
+              setOpticalFrame(l, t, r, b) : setFrame(l, t, r, b);
+
+      if (changed || (mPrivateFlags & PFLAG_LAYOUT_REQUIRED) == PFLAG_LAYOUT_REQUIRED) {
+          onLayout(changed, l, t, r, b);
+
+          if (shouldDrawRoundScrollbar()) {
+              if(mRoundScrollbarRenderer == null) {
+                  mRoundScrollbarRenderer = new RoundScrollbarRenderer(this);
+              }
+          } else {
+              mRoundScrollbarRenderer = null;
+          }
+
+          mPrivateFlags &= ~PFLAG_LAYOUT_REQUIRED;
+
+          ListenerInfo li = mListenerInfo;
+          if (li != null && li.mOnLayoutChangeListeners != null) {
+              ArrayList<OnLayoutChangeListener> listenersCopy =
+                      (ArrayList<OnLayoutChangeListener>)li.mOnLayoutChangeListeners.clone();
+              int numListeners = listenersCopy.size();
+              for (int i = 0; i < numListeners; ++i) {
+                  listenersCopy.get(i).onLayoutChange(this, l, t, r, b, oldL, oldT, oldR, oldB);
+              }
+          }
+      }
+
+      mPrivateFlags &= ~PFLAG_FORCE_LAYOUT;
+      mPrivateFlags3 |= PFLAG3_IS_LAID_OUT;
+
+      if ((mPrivateFlags3 & PFLAG3_NOTIFY_AUTOFILL_ENTER_ON_LAYOUT) != 0) {
+          mPrivateFlags3 &= ~PFLAG3_NOTIFY_AUTOFILL_ENTER_ON_LAYOUT;
+          notifyEnterOrExitForAutoFillIfNeeded(true);
+      }
+  }
+
+
+  protected boolean setFrame(int left, int top, int right, int bottom) {
+        boolean changed = false;
+
+        if (DBG) {
+            Log.d("View", this + " View.setFrame(" + left + "," + top + ","
+                    + right + "," + bottom + ")");
+        }
+
+        if (mLeft != left || mRight != right || mTop != top || mBottom != bottom) {
+            changed = true;
+
+            // Remember our drawn bit
+            int drawn = mPrivateFlags & PFLAG_DRAWN;
+
+            int oldWidth = mRight - mLeft;
+            int oldHeight = mBottom - mTop;
+            int newWidth = right - left;
+            int newHeight = bottom - top;
+            boolean sizeChanged = (newWidth != oldWidth) || (newHeight != oldHeight);
+
+            // Invalidate our old position
+            invalidate(sizeChanged);
+
+            mLeft = left;
+            mTop = top;
+            mRight = right;
+            mBottom = bottom;
+            mRenderNode.setLeftTopRightBottom(mLeft, mTop, mRight, mBottom);
+
+            mPrivateFlags |= PFLAG_HAS_BOUNDS;
+
+
+            if (sizeChanged) {
+                sizeChange(newWidth, newHeight, oldWidth, oldHeight);
+            }
+
+            if ((mViewFlags & VISIBILITY_MASK) == VISIBLE || mGhostView != null) {
+                // If we are visible, force the DRAWN bit to on so that
+                // this invalidate will go through (at least to our parent).
+                // This is because someone may have invalidated this view
+                // before this call to setFrame came in, thereby clearing
+                // the DRAWN bit.
+                mPrivateFlags |= PFLAG_DRAWN;
+                invalidate(sizeChanged);
+                // parent display list may need to be recreated based on a change in the bounds
+                // of any child
+                invalidateParentCaches();
+            }
+
+            // Reset drawn bit to original value (invalidate turns it off)
+            mPrivateFlags |= drawn;
+
+            mBackgroundSizeChanged = true;
+            mDefaultFocusHighlightSizeChanged = true;
+            if (mForegroundInfo != null) {
+                mForegroundInfo.mBoundsChanged = true;
+            }
+
+            notifySubtreeAccessibilityStateChangedIfNeeded();
+        }
+        return changed;
+    }
+
+```
+
+layout方法的大致流程如下，首先会通过setFrame方法来设定View的四个顶点的位置，即初始化mLeft，mRight，mTop，mBottom这四个值，View的四个顶点一旦确定，View在父容器中的位置也就确定了；接着会调用onLayout方法，这个用于确定子元素的位置，和onMeasure方法一样，具体的实现和实现类有关，所以View和ViewGroup都没有真正实现onLayout方法。接下来我们可以看一下LinearLayout的onLayout方法。
+
+```
+protected void onLayout(boolean changed, int l, int t, int r, int b) {
+     if (mOrientation == VERTICAL) {
+         layoutVertical(l, t, r, b);
+     } else {
+         layoutHorizontal(l, t, r, b);
+     }
+ }
+
+```
+
+和onMeasure一样。他分为数值方向和水平方向，这里分析一下layoutVertical的代码逻辑
+
+```
+void layoutVertical(int left, int top, int right, int bottom) {
+     final int paddingLeft = mPaddingLeft;
+
+     int childTop;
+     int childLeft;
+
+     // Where right end of child should go
+     final int width = right - left;
+     int childRight = width - mPaddingRight;
+
+     // Space available for child
+     int childSpace = width - paddingLeft - mPaddingRight;
+
+     final int count = getVirtualChildCount();
+
+     final int majorGravity = mGravity & Gravity.VERTICAL_GRAVITY_MASK;
+     final int minorGravity = mGravity & Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK;
+
+     switch (majorGravity) {
+        case Gravity.BOTTOM:
+            // mTotalLength contains the padding already
+            childTop = mPaddingTop + bottom - top - mTotalLength;
+            break;
+
+            // mTotalLength contains the padding already
+        case Gravity.CENTER_VERTICAL:
+            childTop = mPaddingTop + (bottom - top - mTotalLength) / 2;
+            break;
+
+        case Gravity.TOP:
+        default:
+            childTop = mPaddingTop;
+            break;
+     }
+
+     for (int i = 0; i < count; i++) {
+         final View child = getVirtualChildAt(i);
+         if (child == null) {
+             childTop += measureNullChild(i);
+         } else if (child.getVisibility() != GONE) {
+             final int childWidth = child.getMeasuredWidth();
+             final int childHeight = child.getMeasuredHeight();
+
+             final LinearLayout.LayoutParams lp =
+                     (LinearLayout.LayoutParams) child.getLayoutParams();
+
+             int gravity = lp.gravity;
+             if (gravity < 0) {
+                 gravity = minorGravity;
+             }
+             final int layoutDirection = getLayoutDirection();
+             final int absoluteGravity = Gravity.getAbsoluteGravity(gravity, layoutDirection);
+             switch (absoluteGravity & Gravity.HORIZONTAL_GRAVITY_MASK) {
+                 case Gravity.CENTER_HORIZONTAL:
+                     childLeft = paddingLeft + ((childSpace - childWidth) / 2)
+                             + lp.leftMargin - lp.rightMargin;
+                     break;
+
+                 case Gravity.RIGHT:
+                     childLeft = childRight - childWidth - lp.rightMargin;
+                     break;
+
+                 case Gravity.LEFT:
+                 default:
+                     childLeft = paddingLeft + lp.leftMargin;
+                     break;
+             }
+
+             if (hasDividerBeforeChildAt(i)) {
+                 childTop += mDividerHeight;
+             }
+
+             childTop += lp.topMargin;
+             // 在这里
+             setChildFrame(child, childLeft, childTop + getLocationOffset(child),
+                     childWidth, childHeight);
+             childTop += childHeight + lp.bottomMargin + getNextLocationOffset(child);
+
+             i += getChildrenSkipCount(child, i);
+         }
+     }
+ }
+
+```
+
+看一下上方的代码。可以看到会遍历所有的子元素并调用getChildFram方法来为子元素指定位置。其中childTop会逐渐增大，这就意味着后面的子元素会被放置在靠下的位置，这刚好符合竖直方向的特性，至于getChildFram，他有调用子元素的layout方法，这样父元素在layout方法中完成了堆自己的定位后，就通过onLayout方法去调用子元素的layout方法，子元素优惠通过layout来确定自己的位置，这样一层一层传递下去，就完成了对View树的遍历过程。setChildFram方法如下
+
+```
+private void setChildFrame(View child, int left, int top, int width, int height) {
+     child.layout(left, top, left + width, top + height);
+ }
+
+```
+
+setChildFrame的值是child的width和height。
+这里来回答一个之前的问题，VIew的测量宽高和最终宽高的区别：这个问题可以翻译为View的getMeasureWidth和getWidth这两个方法有什么区别
+看一下getWidth的方法实现
+
+```
+public final int getWidth(){
+  return mRight-mLeft;
+}
+```
+
+从getWidth的源码和结合mLeft、mRight、mTop、mBottom这四个变量的负值过程来看，getWIdth方法返回的就是VIew的测量宽度。经过上述分析，可以回答这个问题。在View的默认实现中，View的测量宽和高和最终宽和高是相等的，只不过测量宽和高形成在View的measure过程，而最终宽和高形成与View的layout过程，即两者的赋值时机不同，测量宽和高的赋值时机稍微早一些。但是在一些情况下确实会不一样
+比如
+
+```
+重写了View的layout方法
+
+public void layout(int l,int t,int r,int b){
+  suber.layout(l,t,r+100,b+100);
+
+}
+```
+
+这样会导致View的最终宽和高总是比测量宽和高大100px，这样会导致View显示不正常。还有一种是要多次测量的情况，前几次测量的宽和高可能和最终宽和高不一致
 # 第五章 理解RemoteViews
 # 第六章 Android的Drawable
 # 第七章 Android 动画深入分析  
