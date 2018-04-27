@@ -8307,6 +8307,257 @@ public void layout(int l,int t,int r,int b){
 ```
 
 这样会导致View的最终宽和高总是比测量宽和高大100px，这样会导致View显示不正常。还有一种是要多次测量的情况，前几次测量的宽和高可能和最终宽和高不一致
+
+### draw过程
+
+draw过程就比较简单了，他的作用是将VIew绘制到屏幕上面，View的绘制过程遵循下面几步：
+1. 绘制背景
+2. 绘制自己
+3. 绘制children
+4. 绘制装饰
+
+这个可以从的draw源码可以很明显的看出
+
+
+```
+public void draw(Canvas canvas) {
+       final int privateFlags = mPrivateFlags;
+       final boolean dirtyOpaque = (privateFlags & PFLAG_DIRTY_MASK) == PFLAG_DIRTY_OPAQUE &&
+               (mAttachInfo == null || !mAttachInfo.mIgnoreDirtyState);
+       mPrivateFlags = (privateFlags & ~PFLAG_DIRTY_MASK) | PFLAG_DRAWN;
+
+       /*
+        * Draw traversal performs several drawing steps which must be executed
+        * in the appropriate order:
+        *
+        *      1. Draw the background
+        *      2. If necessary, save the canvas' layers to prepare for fading
+        *      3. Draw view's content
+        *      4. Draw children
+        *      5. If necessary, draw the fading edges and restore layers
+        *      6. Draw decorations (scrollbars for instance)
+        */
+
+       // Step 1, draw the background, if needed
+       int saveCount;
+
+       if (!dirtyOpaque) {
+           drawBackground(canvas);
+       }
+
+       // skip step 2 & 5 if possible (common case)
+       final int viewFlags = mViewFlags;
+       boolean horizontalEdges = (viewFlags & FADING_EDGE_HORIZONTAL) != 0;
+       boolean verticalEdges = (viewFlags & FADING_EDGE_VERTICAL) != 0;
+       if (!verticalEdges && !horizontalEdges) {
+           // Step 3, draw the content
+           if (!dirtyOpaque) onDraw(canvas);
+
+           // Step 4, draw the children
+           dispatchDraw(canvas);
+
+           drawAutofilledHighlight(canvas);
+
+           // Overlay is part of the content and draws beneath Foreground
+           if (mOverlay != null && !mOverlay.isEmpty()) {
+               mOverlay.getOverlayView().dispatchDraw(canvas);
+           }
+
+           // Step 6, draw decorations (foreground, scrollbars)
+           onDrawForeground(canvas);
+
+           // Step 7, draw the default focus highlight
+           drawDefaultFocusHighlight(canvas);
+
+           if (debugDraw()) {
+               debugDrawFocus(canvas);
+           }
+
+           // we're done...
+           return;
+       }
+
+       /*
+        * Here we do the full fledged routine...
+        * (this is an uncommon case where speed matters less,
+        * this is why we repeat some of the tests that have been
+        * done above)
+        */
+
+       boolean drawTop = false;
+       boolean drawBottom = false;
+       boolean drawLeft = false;
+       boolean drawRight = false;
+
+       float topFadeStrength = 0.0f;
+       float bottomFadeStrength = 0.0f;
+       float leftFadeStrength = 0.0f;
+       float rightFadeStrength = 0.0f;
+
+       // Step 2, save the canvas' layers
+       int paddingLeft = mPaddingLeft;
+
+       final boolean offsetRequired = isPaddingOffsetRequired();
+       if (offsetRequired) {
+           paddingLeft += getLeftPaddingOffset();
+       }
+
+       int left = mScrollX + paddingLeft;
+       int right = left + mRight - mLeft - mPaddingRight - paddingLeft;
+       int top = mScrollY + getFadeTop(offsetRequired);
+       int bottom = top + getFadeHeight(offsetRequired);
+
+       if (offsetRequired) {
+           right += getRightPaddingOffset();
+           bottom += getBottomPaddingOffset();
+       }
+
+       final ScrollabilityCache scrollabilityCache = mScrollCache;
+       final float fadeHeight = scrollabilityCache.fadingEdgeLength;
+       int length = (int) fadeHeight;
+
+       // clip the fade length if top and bottom fades overlap
+       // overlapping fades produce odd-looking artifacts
+       if (verticalEdges && (top + length > bottom - length)) {
+           length = (bottom - top) / 2;
+       }
+
+       // also clip horizontal fades if necessary
+       if (horizontalEdges && (left + length > right - length)) {
+           length = (right - left) / 2;
+       }
+
+       if (verticalEdges) {
+           topFadeStrength = Math.max(0.0f, Math.min(1.0f, getTopFadingEdgeStrength()));
+           drawTop = topFadeStrength * fadeHeight > 1.0f;
+           bottomFadeStrength = Math.max(0.0f, Math.min(1.0f, getBottomFadingEdgeStrength()));
+           drawBottom = bottomFadeStrength * fadeHeight > 1.0f;
+       }
+
+       if (horizontalEdges) {
+           leftFadeStrength = Math.max(0.0f, Math.min(1.0f, getLeftFadingEdgeStrength()));
+           drawLeft = leftFadeStrength * fadeHeight > 1.0f;
+           rightFadeStrength = Math.max(0.0f, Math.min(1.0f, getRightFadingEdgeStrength()));
+           drawRight = rightFadeStrength * fadeHeight > 1.0f;
+       }
+
+       saveCount = canvas.getSaveCount();
+
+       int solidColor = getSolidColor();
+       if (solidColor == 0) {
+           final int flags = Canvas.HAS_ALPHA_LAYER_SAVE_FLAG;
+
+           if (drawTop) {
+               canvas.saveLayer(left, top, right, top + length, null, flags);
+           }
+
+           if (drawBottom) {
+               canvas.saveLayer(left, bottom - length, right, bottom, null, flags);
+           }
+
+           if (drawLeft) {
+               canvas.saveLayer(left, top, left + length, bottom, null, flags);
+           }
+
+           if (drawRight) {
+               canvas.saveLayer(right - length, top, right, bottom, null, flags);
+           }
+       } else {
+           scrollabilityCache.setFadeColor(solidColor);
+       }
+
+       // Step 3, draw the content
+       if (!dirtyOpaque) onDraw(canvas);
+
+       // Step 4, draw the children
+       dispatchDraw(canvas);
+
+       // Step 5, draw the fade effect and restore layers
+       final Paint p = scrollabilityCache.paint;
+       final Matrix matrix = scrollabilityCache.matrix;
+       final Shader fade = scrollabilityCache.shader;
+
+       if (drawTop) {
+           matrix.setScale(1, fadeHeight * topFadeStrength);
+           matrix.postTranslate(left, top);
+           fade.setLocalMatrix(matrix);
+           p.setShader(fade);
+           canvas.drawRect(left, top, right, top + length, p);
+       }
+
+       if (drawBottom) {
+           matrix.setScale(1, fadeHeight * bottomFadeStrength);
+           matrix.postRotate(180);
+           matrix.postTranslate(left, bottom);
+           fade.setLocalMatrix(matrix);
+           p.setShader(fade);
+           canvas.drawRect(left, bottom - length, right, bottom, p);
+       }
+
+       if (drawLeft) {
+           matrix.setScale(1, fadeHeight * leftFadeStrength);
+           matrix.postRotate(-90);
+           matrix.postTranslate(left, top);
+           fade.setLocalMatrix(matrix);
+           p.setShader(fade);
+           canvas.drawRect(left, top, left + length, bottom, p);
+       }
+
+       if (drawRight) {
+           matrix.setScale(1, fadeHeight * rightFadeStrength);
+           matrix.postRotate(90);
+           matrix.postTranslate(right, top);
+           fade.setLocalMatrix(matrix);
+           p.setShader(fade);
+           canvas.drawRect(right - length, top, right, bottom, p);
+       }
+
+       canvas.restoreToCount(saveCount);
+
+       drawAutofilledHighlight(canvas);
+
+       // Overlay is part of the content and draws beneath Foreground
+       if (mOverlay != null && !mOverlay.isEmpty()) {
+           mOverlay.getOverlayView().dispatchDraw(canvas);
+       }
+
+       // Step 6, draw decorations (foreground, scrollbars)
+       onDrawForeground(canvas);
+
+       if (debugDraw()) {
+           debugDrawFocus(canvas);
+       }
+   }
+```
+
+
+首先调用`drawBackground`方法，其次调用`dispatchDraw(canvas);`来传递绘制过程，看一下ViewGroup的的`dispatchDraw(canvas)`过程，可以看到会调用`drawChild`方法，这个时候就会调用child的`draw`方法，这样就一层层传递下去了，View有一个特殊的方法，serWillNotDraw，先看一下他的源码
+```
+/**
+ * If this view doesn't do any drawing on its own, set this flag to
+ * allow further optimizations. By default, this flag is not set on
+ * View, but could be set on some View subclasses such as ViewGroup.
+ *
+ * Typically, if you override {@link #onDraw(android.graphics.Canvas)}
+ * you should clear this flag.
+ *
+ * @param willNotDraw whether or not this View draw on its own
+ */
+public void setWillNotDraw(boolean willNotDraw) {
+    setFlags(willNotDraw ? WILL_NOT_DRAW : 0, DRAW_MASK);
+}
+
+```
+
+从这个方法的注释可以看出，如果一个View不需要绘制任何内容，那么设置这个标记位为true之后，系统会进行优化。默认情况下，View没有启动这个标记位，但是Viewgroup模式启动这个优化标记位，这个标记位对于实际看法的意义是：当我们自定义控件ViewGroup并且本身不具备绘制功能时，就可以开启这个标记位以便系统进行优化。当然明确知道一个ViewGroup需要onDraw来绘制内容是，需要显示关闭这个WILL_NOT_DRAW这个标记位。
+
+
+## 自定义View
+这一节讲解一下自定义View
+
+
+### 自定义View的分类
+
 # 第五章 理解RemoteViews
 # 第六章 Android的Drawable
 # 第七章 Android 动画深入分析  
