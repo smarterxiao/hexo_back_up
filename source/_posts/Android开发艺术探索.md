@@ -8963,11 +8963,439 @@ public class CircleView extends View {
 这里给出HorizontalScrollViewEx的源码如下
 
 
+```
+public class HorizontalScrollViewEx extends FrameLayout {
+    private static final String TAG = "HorizontalScrollViewEx";
+    private int mChildrenSize=3;
+    private int mCHildWidth=1440;
+    private int mChildIndex;
+    private int mLastX = 0;
+    private int mLastY = 0;
+    private int mLastXIntercept = 0;
+    private int mLastYIntercept = 0;
+
+    private Scroller mScroller;
+    private VelocityTracker mVelpcityTracker;
+
+
+    private void init() {
+        mScroller = new Scroller(getContext());
+        mVelpcityTracker = VelocityTracker.obtain();
+    }
+
+    public HorizontalScrollViewEx(Context context) {
+        super(context);
+        init();
+    }
+
+    public HorizontalScrollViewEx(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public HorizontalScrollViewEx(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent event) {
+        boolean intercepted = false;
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                intercepted = false;
+                if (!mScroller.isFinished()) {
+                    //动画没有结束强制结束动画
+                    mScroller.abortAnimation();
+                    intercepted = true;
+                }
+                break;
+            case MotionEvent.ACTION_MOVE:
+
+                int deltaX = x - mLastXIntercept;
+                int deltaY = x - mLastYIntercept;
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                    intercepted = true;
+                } else {
+                    intercepted = false;
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+                intercepted = false;
+                break;
+        }
+        Log.i("哇哈哈", "intercepted :" + intercepted);
+        mLastX = x;
+        mLastY = y;
+        mLastXIntercept = x;
+        mLastYIntercept = y;
+        return intercepted;
+    }
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        int childLeft = 0;
+        final int childCount = getChildCount();
+        mChildrenSize = childCount;
+
+        for (int i = 0; i < childCount; i++) {
+            final View childView = getChildAt(i);
+            if (childView.getVisibility() != View.GONE) {
+                final int childWidth = childView.getMeasuredWidth();
+                childView.layout(childLeft, 0, childLeft + childWidth,
+                        childView.getMeasuredHeight());
+                childLeft += childWidth;
+            }
+        }
+    }
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        mVelpcityTracker.addMovement(event);
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                if (!mScroller.isFinished()) {
+                    //动画没有结束强制结束动画
+                    mScroller.abortAnimation();
+                }
+                break;
+            case MotionEvent.ACTION_MOVE:
+
+                int deltaX = x - mLastX;
+                int deltaY = x - mLastY;
+                scrollBy(-deltaX, 0);
+
+                break;
+            case MotionEvent.ACTION_UP:
+                int scrollX = getScrollX();
+                int scrollToChildIndex = scrollX / mCHildWidth;
+                mVelpcityTracker.computeCurrentVelocity(1000);
+                float xVelocity = mVelpcityTracker.getXVelocity();
+                if (Math.abs(xVelocity) >= 50) {
+                    mChildIndex = xVelocity > 0 ? mChildIndex - 1 : mChildIndex + 1;
+
+                } else {
+                    mChildIndex = (scrollX + mCHildWidth / 2) / mCHildWidth;
+                }
+                mChildIndex = Math.max(0, Math.min(mChildIndex, mChildrenSize - 1));
+                int dx = mChildIndex * mCHildWidth - scrollX;
+                smoothScrollBy(dx, 0);
+                mVelpcityTracker.clear();
+                break;
+        }
+        mLastY = y;
+        mLastX = x;
+        return super.onTouchEvent(event);
+    }
+
+    private void smoothScrollBy(int dx, int i) {
+        mScroller.startScroll(getScrollX(), 0, dx, 0, 500);
+        invalidate();
+    }
+    @Override
+    public void computeScroll() {
+        if (mScroller.computeScrollOffset()) {
+            scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
+            postInvalidate();
+        }
+        super.computeScroll();
+    }
+}
+```
+
+
+继承特定的View比如TextView和继承特定ViewGroup这个比较简单，这里就不说了，可以参考android群英传
+
+这里在写一下StickyLayout的源码 https://github.com/singwhatiwanna/PinnedHeaderExpandableListView/tree/master/PinnedHeaderExpandableListView 这个是作者的地址
+```
+public class StickyLayout extends LinearLayout {
+    private static final String TAG = "StickyLayout";
+    private static final boolean DEBUG = true;
+
+    public interface OnGiveUpTouchEventListener {
+        public boolean giveUpTouchEvent(MotionEvent event);
+    }
+
+    private View mHeader;
+    private View mContent;
+    private OnGiveUpTouchEventListener mGiveUpTouchEventListener;
+
+    // header的高度  单位：px
+    private int mOriginalHeaderHeight;
+    private int mHeaderHeight;
+
+    private int mStatus = STATUS_EXPANDED;
+    public static final int STATUS_EXPANDED = 1;
+    public static final int STATUS_COLLAPSED = 2;
+
+    private int mTouchSlop;
+
+    // 分别记录上次滑动的坐标
+    private int mLastX = 0;
+    private int mLastY = 0;
+
+    // 分别记录上次滑动的坐标(onInterceptTouchEvent)
+    private int mLastXIntercept = 0;
+    private int mLastYIntercept = 0;
+
+    // 用来控制滑动角度，仅当角度a满足如下条件才进行滑动：tan a = deltaX / deltaY > 2
+    private static final int TAN = 2;
+
+    private boolean mIsSticky = true;
+    private boolean mInitDataSucceed = false;
+    private boolean mDisallowInterceptTouchEventOnHeader = true;
+
+    public StickyLayout(Context context) {
+        super(context);
+    }
+
+    public StickyLayout(Context context, AttributeSet attrs) {
+        super(context, attrs);
+    }
+
+    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
+    public StickyLayout(Context context, AttributeSet attrs, int defStyle) {
+        super(context, attrs, defStyle);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        if (hasWindowFocus && (mHeader == null || mContent == null)) {
+            initData();
+        }
+    }
+
+    private void initData() {
+        int headerId= getResources().getIdentifier("sticky_header", "id", getContext().getPackageName());
+        int contentId = getResources().getIdentifier("sticky_content", "id", getContext().getPackageName());
+        if (headerId != 0 && contentId != 0) {
+            mHeader = findViewById(headerId);
+            mContent = findViewById(contentId);
+            mOriginalHeaderHeight = mHeader.getMeasuredHeight();
+            mHeaderHeight = mOriginalHeaderHeight;
+            mTouchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+            if (mHeaderHeight > 0) {
+                mInitDataSucceed = true;
+            }
+            if (DEBUG) {
+                Log.d(TAG, "mTouchSlop = " + mTouchSlop + "mHeaderHeight = " + mHeaderHeight);
+            }
+        } else {
+            throw new NoSuchElementException("Did your view with id \"sticky_header\" or \"sticky_content\" exists?");
+        }
+    }
+
+    public void setOnGiveUpTouchEventListener(OnGiveUpTouchEventListener l) {
+        mGiveUpTouchEventListener = l;
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent event) {
+        int intercepted = 0;
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+
+        switch (event.getAction()) {
+        case MotionEvent.ACTION_DOWN: {
+            mLastXIntercept = x;
+            mLastYIntercept = y;
+            mLastX = x;
+            mLastY = y;
+            intercepted = 0;
+            break;
+        }
+        case MotionEvent.ACTION_MOVE: {
+            int deltaX = x - mLastXIntercept;
+            int deltaY = y - mLastYIntercept;
+            if (mDisallowInterceptTouchEventOnHeader && y <= getHeaderHeight()) {
+                intercepted = 0;
+            } else if (Math.abs(deltaY) <= Math.abs(deltaX)) {
+                intercepted = 0;
+            } else if (mStatus == STATUS_EXPANDED && deltaY <= -mTouchSlop) {
+                intercepted = 1;
+            } else if (mGiveUpTouchEventListener != null) {
+                if (mGiveUpTouchEventListener.giveUpTouchEvent(event) && deltaY >= mTouchSlop) {
+                    intercepted = 1;
+                }
+            }
+            break;
+        }
+        case MotionEvent.ACTION_UP: {
+            intercepted = 0;
+            mLastXIntercept = mLastYIntercept = 0;
+            break;
+        }
+        default:
+            break;
+        }
+
+        if (DEBUG) {
+            Log.d(TAG, "intercepted=" + intercepted);
+        }
+        return intercepted != 0 && mIsSticky;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (!mIsSticky) {
+            return true;
+        }
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+        switch (event.getAction()) {
+        case MotionEvent.ACTION_DOWN: {
+            break;
+        }
+        case MotionEvent.ACTION_MOVE: {
+            int deltaX = x - mLastX;
+            int deltaY = y - mLastY;
+            if (DEBUG) {
+                Log.d(TAG, "mHeaderHeight=" + mHeaderHeight + "  deltaY=" + deltaY + "  mlastY=" + mLastY);
+            }
+            mHeaderHeight += deltaY;
+            setHeaderHeight(mHeaderHeight);
+            break;
+        }
+        case MotionEvent.ACTION_UP: {
+            // 这里做了下判断，当松开手的时候，会自动向两边滑动，具体向哪边滑，要看当前所处的位置
+            int destHeight = 0;
+            if (mHeaderHeight <= mOriginalHeaderHeight * 0.5) {
+                destHeight = 0;
+                mStatus = STATUS_COLLAPSED;
+            } else {
+                destHeight = mOriginalHeaderHeight;
+                mStatus = STATUS_EXPANDED;
+            }
+            // 慢慢滑向终点
+            this.smoothSetHeaderHeight(mHeaderHeight, destHeight, 500);
+            break;
+        }
+        default:
+            break;
+        }
+        mLastX = x;
+        mLastY = y;
+        return true;
+    }
+
+    public void smoothSetHeaderHeight(final int from, final int to, long duration) {
+        smoothSetHeaderHeight(from, to, duration, false);
+    }
+
+    public void smoothSetHeaderHeight(final int from, final int to, long duration, final boolean modifyOriginalHeaderHeight) {
+        final int frameCount = (int) (duration / 1000f * 30) + 1;
+        final float partation = (to - from) / (float) frameCount;
+        new Thread("Thread#smoothSetHeaderHeight") {
+
+            @Override
+            public void run() {
+                for (int i = 0; i < frameCount; i++) {
+                    final int height;
+                    if (i == frameCount - 1) {
+                        height = to;
+                    } else {
+                        height = (int) (from + partation * i);
+                    }
+                    post(new Runnable() {
+                        public void run() {
+                            setHeaderHeight(height);
+                        }
+                    });
+                    try {
+                        sleep(10);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                if (modifyOriginalHeaderHeight) {
+                    setOriginalHeaderHeight(to);
+                }
+            };
+
+        }.start();
+    }
+
+    public void setOriginalHeaderHeight(int originalHeaderHeight) {
+        mOriginalHeaderHeight = originalHeaderHeight;
+    }
+
+    public void setHeaderHeight(int height, boolean modifyOriginalHeaderHeight) {
+        if (modifyOriginalHeaderHeight) {
+            setOriginalHeaderHeight(height);
+        }
+        setHeaderHeight(height);
+    }
+
+    public void setHeaderHeight(int height) {
+        if (!mInitDataSucceed) {
+            initData();
+        }
+
+        if (DEBUG) {
+            Log.d(TAG, "setHeaderHeight height=" + height);
+        }
+        if (height <= 0) {
+            height = 0;
+        } else if (height > mOriginalHeaderHeight) {
+            height = mOriginalHeaderHeight;
+        }
+
+        if (height == 0) {
+            mStatus = STATUS_COLLAPSED;
+        } else {
+            mStatus = STATUS_EXPANDED;
+        }
+
+        if (mHeader != null && mHeader.getLayoutParams() != null) {
+            mHeader.getLayoutParams().height = height;
+            mHeader.requestLayout();
+            mHeaderHeight = height;
+        } else {
+            if (DEBUG) {
+                Log.e(TAG, "null LayoutParams when setHeaderHeight");
+            }
+        }
+    }
+
+    public int getHeaderHeight() {
+        return mHeaderHeight;
+    }
+
+    public void setSticky(boolean isSticky) {
+        mIsSticky = isSticky;
+    }
+
+    public void requestDisallowInterceptTouchEventOnHeader(boolean disallowIntercept) {
+        mDisallowInterceptTouchEventOnHeader = disallowIntercept;
+    }
+
+}
+```
 
 
 
+![Alt text](滑动分析.gif "具体效果")
 
 # 第五章 理解RemoteViews
+本章讲述的主题是remoteView。可以从名字可以看出是一种远程View。那么什么是远程View呢?主要有两种一个是通知栏，一个是桌面小插件
+
+## RemoteViews的应用
+RemoteView在实际开发过程中主要用于通知栏和桌面小组件的开发。通知栏大家都不陌生，主要是通过使用NotificationManager来实现。除了默认布局，还可以自定义布局。桌面小部件则通过AppWidgetProvide来实现。AppWidgetProvide本质上是一个广播。在开发RemoteView的过程中会用到RemoteViews。他们更新界面不能像在Activity中那样更新。所以这里会简单介绍一下用法，重点是讲解一下RemoteView的内在机制
+
+### RemoteView在通知栏的应用
+
+首先看一下RemoteView在通知栏的使用
+
+
+
+
 # 第六章 Android的Drawable
 # 第七章 Android 动画深入分析  
 # 第八章 理解Windows和WindowsManager
