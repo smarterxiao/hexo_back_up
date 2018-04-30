@@ -9387,12 +9387,107 @@ public class StickyLayout extends LinearLayout {
 本章讲述的主题是remoteView。可以从名字可以看出是一种远程View。那么什么是远程View呢?主要有两种一个是通知栏，一个是桌面小插件
 
 ## RemoteViews的应用
-RemoteView在实际开发过程中主要用于通知栏和桌面小组件的开发。通知栏大家都不陌生，主要是通过使用NotificationManager来实现。除了默认布局，还可以自定义布局。桌面小部件则通过AppWidgetProvide来实现。AppWidgetProvide本质上是一个广播。在开发RemoteView的过程中会用到RemoteViews。他们更新界面不能像在Activity中那样更新。所以这里会简单介绍一下用法，重点是讲解一下RemoteView的内在机制
+RemoteView在实际开发过程中主要用于通知栏和桌面小组件的开发。通知栏大家都不陌生，主要是通过使用NotificationManager来实现。除了默认布局，还可以自定义布局。桌面小部件则通过AppWidgetProvide来实现。AppWidgetProvide本质上是一个广播。在开发RemoteView的过程中会用到RemoteViews。他们更新界面不能像在Activity中那样更新，因为二者的界面都运行在其他进程中，准确的说是SystemServer中，为了更新UI，这里提供了一系列更新的方法。所以这里会简单介绍一下用法，重点是讲解一下RemoteView的内在机制
 
 ### RemoteView在通知栏的应用
 
-首先看一下RemoteView在通知栏的使用
+首先看一下RemoteView在通知栏的使用。我们知道，通知栏除了默认效果以外，还可以支持自定义布局。下面分别说一下这两种情况。使用系统默认的样式弹出一个通知是很简单的，代码如下：
+```
+E/NotificationService: No Channel found for pkg=com.smart.kaifa, channelId=100, id=1000000, tag=null, opPkg=com.smart.kaifa, callingUid=10190, userId=0, incomingUserId=0, notificationUid=10190, notification=Notification(channel=100 pri=0 contentView=null vibrate=null sound=null defaults=0x0 flags=0x0 color=0x00000000 vis=PRIVATE)
+```
 
+在使用的时候遇到了这个问题
+```
+//获取NotificationManager实例
+   NotificationManager notifyManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+   Intent intent = new Intent(this, SecondActivity.class);
+
+   PendingIntent pendingIntent = PendingIntent.getActivity(this, 9, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+   //实例化NotificationCompat.Builde并设置相关属性
+   NotificationCompat.Builder builder = new NotificationCompat.Builder(this, 100 + "")
+           //设置小图标
+           .setSmallIcon(R.mipmap.ic_launcher)
+           //设置通知标题
+           .setContentTitle("最简单的Notification")
+           .setOngoing(true)
+           //设置通知内容
+           .setContentText("只有小图标、标题、内容").setContentIntent(pendingIntent)
+           //设置通知时间，默认为系统发出通知的时间，通常不用设置
+           .setWhen(System.currentTimeMillis());
+   //通过builder.build()方法生成Notification对象,并发送通知,id=1
+   notifyManager.notify(1000000, builder.build());
+```
+这个是因为在android 8.0及以上改变了通知，要设置channelId。
+https://stackoverflow.com/questions/46990995/on-android-8-1-api-27-notification-does-not-display
+```
+private NotificationManager notifManager;
+
+    public void createNotification(String aMessage) {
+        final int NOTIFY_ID = 1002;
+
+        // There are hardcoding only for show it's just strings
+        String name = "my_package_channel";
+        String id = "my_package_channel_1"; // The user-visible name of the channel.
+        String description = "my_package_first_channel"; // The user-visible description of the channel.
+
+        Intent intent;
+        PendingIntent pendingIntent;
+        NotificationCompat.Builder builder;
+
+        if (notifManager == null) {
+            notifManager =
+                    (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            int importance = NotificationManager.IMPORTANCE_HIGH;
+            NotificationChannel mChannel = notifManager.getNotificationChannel(id);
+            if (mChannel == null) {
+                mChannel = new NotificationChannel(id, name, importance);
+                mChannel.setDescription(description);
+                mChannel.enableVibration(true);
+                mChannel.setVibrationPattern(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400});
+                notifManager.createNotificationChannel(mChannel);
+            }
+            builder = new NotificationCompat.Builder(this, id);
+
+            intent = new Intent(this, MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+
+            builder.setContentTitle(aMessage)  // required
+                    .setSmallIcon(android.R.drawable.ic_popup_reminder) // required
+                    .setContentText(this.getString(R.string.app_name))  // required
+                    .setDefaults(Notification.DEFAULT_ALL)
+                    .setAutoCancel(true)
+                    .setContentIntent(pendingIntent)
+                    .setTicker(aMessage)
+                    .setVibrate(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400});
+        } else {
+
+            builder = new NotificationCompat.Builder(this);
+
+            intent = new Intent(this, MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+
+            builder.setContentTitle(aMessage)                           // required
+                    .setSmallIcon(android.R.drawable.ic_popup_reminder) // required
+                    .setContentText(this.getString(R.string.app_name))  // required
+                    .setDefaults(Notification.DEFAULT_ALL)
+                    .setAutoCancel(true)
+                    .setContentIntent(pendingIntent)
+                    .setTicker(aMessage)
+                    .setVibrate(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400})
+                    .setPriority(Notification.PRIORITY_HIGH);
+        } // else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+        Notification notification = builder.build();
+        notifManager.notify(NOTIFY_ID, notification);
+    }
+
+```
+这样就可以使用penddingIntent打开SecondActivity了。
 
 
 
