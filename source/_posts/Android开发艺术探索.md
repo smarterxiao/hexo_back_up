@@ -8705,8 +8705,7 @@ public class CircleView extends View {
 
 ```
 ![Alt text](device-2018-04-30-121943.png "设置wrap_content的情况")
-可以看到并没有任何变化，不能满足我们的需求
-
+可以看到并没有任何变化，不能满足我们的需求，这里的wrap_content和match_parent没有任何区别
 # 第五章 理解RemoteViews
 # 第六章 Android的Drawable
 # 第七章 Android 动画深入分析  
