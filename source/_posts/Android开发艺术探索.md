@@ -4495,7 +4495,7 @@ public class TestTouchView extends FrameLayout {
 这里View的滑动可以归纳为三种方式：
 * 第一种是通过View本身提供的scrollTo和scrollBy方法来实现滑动。
 * 第二种是通过动画给View施加平移效果来实现滑动。
-* 第三种是通过改变VIew的LayoutParams是的View重新布局从而实现滑动
+* 第三种是通过改变View的LayoutParams是的View重新布局从而实现滑动
 
 ### 第一种：使用View本身提供的scrollTo和scrollBy实现滑动
 
@@ -5474,9 +5474,9 @@ public boolean dispatchTouchEvent(MotionEvent ev){
 }
 ```
 上面的伪代码已经将三者的关系表现的很清楚了。通过上面的伪代码，我们可以大致了解点击事件传递规则：对于一个根ViewGroup来说，点击事件产生后，首先会传递给它，这个时候会调用他的`dispatchTouchEvent`方法，如果他的`onInterceptTouchEvent`返回true，表示要拦截这个事件，这个时候事件就会交给这个控件`onTouchEvent`，如果这个ViewGroup的`onInterceptTouchEvent`方法返回false，表示不拦截，这个时候当前的事件就会传递给子控件，接着子控件的`dispatchTouchEvent`就会被调用。如此反复
-当一个VIew需要处理事件的时候，如果他设置了`OnTouchListener`，那么`OnTouchListener`中的`OnTouch`方法就会被调用。这个时候事件的处理要看`OnTouch`的返回值，如果返回false,则当前的`OnTouch`方法就会被调用。如果返回true,则当前的`OnTouch`方法就不会被调用。因此，给View设置OnTouchListener，其优先级比OnTouchRvent要搞。在Ontouch方法中如果设置有OnClickListener,那么他的OnClick方法就会被调用，OnClickListener是优先级最低的。
+当一个View需要处理事件的时候，如果他设置了`OnTouchListener`，那么`OnTouchListener`中的`OnTouch`方法就会被调用。这个时候事件的处理要看`OnTouch`的返回值，如果返回false,则当前的`OnTouch`方法就会被调用。如果返回true,则当前的`OnTouch`方法就不会被调用。因此，给View设置OnTouchListener，其优先级比OnTouchRvent要搞。在Ontouch方法中如果设置有OnClickListener,那么他的OnClick方法就会被调用，OnClickListener是优先级最低的。
 
-当一个点击事件产生之后，他的传递过程遵循如下顺序：Activity->Window->View，即事件总是先传递给Activity，Activity传递给Window，最后Window在传递给顶级的View，然后在按照事件分发的及机制分发事件。考虑到一种情况，如果一个VIew的OnTouchEvent返回false，那么他的父容器的OnTouchEvent就会被调用，以此类推，如果所有的元素都不处理这个事件，那么这个事件将会最终传递给Activity处理。即Activity的OnTouchEvent 会被调用
+当一个点击事件产生之后，他的传递过程遵循如下顺序：Activity->Window->View，即事件总是先传递给Activity，Activity传递给Window，最后Window在传递给顶级的View，然后在按照事件分发的及机制分发事件。考虑到一种情况，如果一个View的OnTouchEvent返回false，那么他的父容器的OnTouchEvent就会被调用，以此类推，如果所有的元素都不处理这个事件，那么这个事件将会最终传递给Activity处理。即Activity的OnTouchEvent 会被调用
 
 一个事件传递的demo
 布局
@@ -7174,11 +7174,11 @@ View的绘制流程从ViewRoot的performTraversals方法开始的，他经过mea
 如图所示，performTraversals会一次调用performMeasure，performLayout和performDraw三个方法，这三个方法分别完成顶级View的measure，layout，draw这三大流程。其中performMeasure会调用measure方法，在measure方法中会调用onMeasure方法，在onMeasure方法会对所有子元素进行measure过程，这个时候measure流程就从父容器传递到子容器当中了。这样就完成了一次measure过程。接着子元素会重复父容器的measure过程，如此反复就完成了整个View树的遍历，同理performLayout和performDraw的传递流程和performMeasure是类似的，唯一不同的是performDraw的传递过程是在draw方法加载dispatchDraw来实现的，不过本质并没有什么区别。
 measure过程决定了View的宽和高，Measure完成后，可以通过getMeasuredWidth和getMeasureHeight方法来获取到View测量后的宽和高。在几乎所有的情况下他都等于View最终的宽和高，但是特殊情况除外，这点在本章后面会进行说明。Layout过程决定了View的四个顶点和View的实际宽和高，完成以后可以通过`getTop`和`getBottom`和`getRight`和`getLeft`并且通过`getWidth`和`getHeight`获取最终的宽和高，draw过程决定了View的显示。只有draw之后才能在屏幕上面显示。
 
-![Alt text](图像1523974134.png "顶级VIew：DecorView的结构")
+![Alt text](图像1523974134.png "顶级View：DecorView的结构")
 如图：DecorView作为最顶级的View，一般情况下他的内部包含一个Linearlayout,分为两个部分：上方标题栏和下方内容栏。在Actvity中通过`setContentView`的内容是被加入到内容栏中间的，而内容栏的id是content，所以这个方法就叫做`setContentView`。如何得到这个内容栏呢? 可以通过`findViewById(R.id.content)`找到内容栏。如何得到我们设置的View呢?可以通过`content.getChildAt(0)`来获取
 
 ## 理解MeasureSpec
-为了更好的理解View的测量流程，我们还需要理解MeasureSpec。从名字上来看 MeasureSpec像是测量规格。 MeasureSpec是干什么的呢？它在很大程度上决定了一个View的尺寸规格，之所以很大程度上是因为这个会受到父控件的影响，因为父控件影响View的MeasureSpec的创建过程。在测量过程中，系统会将View的LayoutParems根据父控件所施加的规则转换成对应的MeasureSpec，然后在更具这个measureSpec来测量VIew的宽高,上面提到过，这里测量的宽和高并不一定是View的最终宽高。MeasureSpec看起来有点复杂。其实他的实现很简单。
+为了更好的理解View的测量流程，我们还需要理解MeasureSpec。从名字上来看 MeasureSpec像是测量规格。 MeasureSpec是干什么的呢？它在很大程度上决定了一个View的尺寸规格，之所以很大程度上是因为这个会受到父控件的影响，因为父控件影响View的MeasureSpec的创建过程。在测量过程中，系统会将View的LayoutParems根据父控件所施加的规则转换成对应的MeasureSpec，然后在更具这个measureSpec来测量View的宽高,上面提到过，这里测量的宽和高并不一定是View的最终宽高。MeasureSpec看起来有点复杂。其实他的实现很简单。
 
 
 ### MeasureSpec
@@ -7302,7 +7302,7 @@ MeasureSpec通过将SpecMode和SpecSize打包成为一个int值来避免过多�
 
 SpecMode有三类，每一类都代表特殊的含义，如下所示
 * UNSPECIFIED
-父容器不对VIew有限制，要多他给多大，一般情况用于系统内部，表示测量状态
+父容器不对View有限制，要多他给多大，一般情况用于系统内部，表示测量状态
 * EXACTLY
 父容器已经检测出View所遇到的精确大小，这个时候View的最终大小就是SpecSize指定的值。他对应于LayoutParems中的match_parent和具体数值这两种模式
 * AT__MOST
@@ -7345,7 +7345,7 @@ private static int getRootMeasureSpec(int windowSize,int rootDimension){
 * LayoutParams.WRAP_CONTENT:最大模式，大小不确定，但是不能超过窗口大小
 * 固定大小（比如100dp）：精确模式，大小为LayoutParams中指定的大小
 
-对于普通View来说，这里是指我们布局中的View，VIew的measure过程由ViewGroup传递而来，先看一下ViewGroup的measureChildWithMargins方法
+对于普通View来说，这里是指我们布局中的View，View的measure过程由ViewGroup传递而来，先看一下ViewGroup的measureChildWithMargins方法
 
 ```
 protected void measureChildWithMargins(View child,
@@ -7450,7 +7450,7 @@ int specSize = MeasureSpec.getSize(spec);
 // 获取大小最大值
 int size = Math.max(0, specSize - padding);
 ```
-`getChildMeasureSpec`清楚的展示了普通View的MeasureSpec的创建规则，为了更加清晰的理解`getChildMeasureSpec`这里提供一个表针对`getChildMeasureSpec`的原理尽心梳理
+`getChildMeasureSpec`清楚的展示了普通View的MeasureSpec的创建规则，为了更加清晰的理解`getChildMeasureSpec`这里提供一个表针对`getChildMeasureSpec`的原理进行梳理
 
 ||parentSpecMode|EXACTLY|AT_MOST|UNSPECIFIED|
 |:---:|:---:|:---:|:----:|:----:|
@@ -7458,14 +7458,14 @@ int size = Math.max(0, specSize - padding);
 |childLayoutParams|MATCH_PARENT|EXACTLY/parentSize|AT_MOST/parentSize|UNSPECIFIED/0|
 |childLayoutParams|WRAP_CONTENT|AT_MOST/parentSiz|AT_MOST/parentSiz|UNSPECIFIED/0|
 
-针对表这里在做一下说明，前面已经提到，对于普通的View，其MeasureSpec由父控件的MeasureSpec和自身的LayoutParams来共同决定，那么针对不同的父容器和View本身不同的LayoutParams，View就可以有多重MeasureSpec。这里说一下当View采用固定狂傲的时候，不管父容器是什么模式，都是精确模式，并且大小遵循子控件的LayoutParams，当View的宽度/高度是match_parent时，如果父控件的模式是精确模式，那么View也是精确模式并且其大小不会超过其父容器的大小，如果父容器是最大模式，那么View也是最大模式，并且其大小不会超过父容器的剩余空间，当VIew的宽/高是wrap_content时，不管父容器的模式是精确还是最大化，View的模式总是最大化并且不能超过父容器的剩余空间。分析的时候溜掉了UNSPECIFIED模式，这个模式主要用于系统内部多次Measure的情景，一般不用
+针对表这里在做一下说明，前面已经提到，对于普通的View，其MeasureSpec由父控件的MeasureSpec和自身的LayoutParams来共同决定，那么针对不同的父容器和View本身不同的LayoutParams，View就可以有多重MeasureSpec。这里说一下当View采用固定狂傲的时候，不管父容器是什么模式，都是精确模式，并且大小遵循子控件的LayoutParams，当View的宽度/高度是match_parent时，如果父控件的模式是精确模式，那么View也是精确模式并且其大小不会超过其父容器的大小，如果父容器是最大模式，那么View也是最大模式，并且其大小不会超过父容器的剩余空间，当View的宽/高是wrap_content时，不管父容器的模式是精确还是最大化，View的模式总是最大化并且不能超过父容器的剩余空间。分析的时候溜掉了UNSPECIFIED模式，这个模式主要用于系统内部多次Measure的情景，一般不用
 
 ## View的绘制流程
-View的工作流程主要是指measure、layout和draw这三个过程，即测量，布局和绘制，其中measure确定View的测量宽和高，layout确定View的四个顶点位置，而draw则将VIew绘制到屏幕上
+View的工作流程主要是指measure、layout和draw这三个过程，即测量，布局和绘制，其中measure确定View的测量宽和高，layout确定View的四个顶点位置，而draw则将View绘制到屏幕上
 ### measure过程
 measure过程要分情况来看，如果只是一个原始的View，那么通过measure方法就完成了其测量过程，如果是一个ViewGroup，除了完成自己的测量过程外，还会遍历调用所有的子元素的measure方法。各个子元素在递归去执行这个流程。下面针对这两种情况分别讨论。
 1. View的measure过程
-view的measure过程由其measure方法来完成，measure是一个final类型方法，这意味着不能重写此方法，在View的measure方法中会调用View的onMeasure方法，因此，只要看onMeasure方法实现即可，VIew的onMeasure方法如下所示。
+view的measure过程由其measure方法来完成，measure是一个final类型方法，这意味着不能重写此方法，在View的measure方法中会调用View的onMeasure方法，因此，只要看onMeasure方法实现即可，View的onMeasure方法如下所示。
 ```
 protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
     setMeasuredDimension(getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec),
@@ -7534,7 +7534,7 @@ public int getIntrinsicWidth() {
 
 可以看到getMinimumHeight返回的是drawable原始的高度。这里举个例子说明一下ShapeDrawable无原始宽和高，而BitmapDrawable有原始宽和高，详细内容会在后面介绍的
 这里在总结一下`getMinimumHeight`的逻辑，如果View没有设置背景，那么返回android：minWidth这个属性所属的值。这个值可以为0，如果View设置了背景，则返回android：minWidth和背景最小宽度这两个钟的最大值，这样他的返回值就是View在UNSPECIFIED下的测量宽和高
-从getDefaultSize方法的实现来看，View的狂傲由specSize决定，我们得出结论：直接继承View的自定义控件需要重写onMeasure方法并设置wrap_content是的自身大小，否则在布局中使用wrap_content就相当于使用match_parent。为什么呢？这个原因需要结合上述代码和之前的表来理解。从上述代码我们知道，如果View在布局中使用wrap_content,那么他的specMode的模式就是AT_MOST，在这种模式下，他的宽和高就是specSize；并且根据上面的表，可以看到这种情况下的specSize是parentSIze，而parentSize就是容器目前可以使用的大小，就是父容器当前剩余的空间大小。很显然，VIew的宽和高就相当于父控件当前剩余的空间大小，这种效果和在布局中使用match_parent完全一样。如何解决这个问题呢？
+从getDefaultSize方法的实现来看，View的狂傲由specSize决定，我们得出结论：直接继承View的自定义控件需要重写onMeasure方法并设置wrap_content是的自身大小，否则在布局中使用wrap_content就相当于使用match_parent。为什么呢？这个原因需要结合上述代码和之前的表来理解。从上述代码我们知道，如果View在布局中使用wrap_content,那么他的specMode的模式就是AT_MOST，在这种模式下，他的宽和高就是specSize；并且根据上面的表，可以看到这种情况下的specSize是parentSIze，而parentSize就是容器目前可以使用的大小，就是父容器当前剩余的空间大小。很显然，View的宽和高就相当于父控件当前剩余的空间大小，这种效果和在布局中使用match_parent完全一样。如何解决这个问题呢？
 ```
 
     @Override
@@ -7554,7 +7554,7 @@ public int getIntrinsicWidth() {
         }
     }
 ```
-在上面的代码中，我们只需要给VIew指定一个默认的内部宽和高(mWidth和mHeight)并且在wrap_content的时候设置宽和高就可以了。针对非wrap_content情景，我们沿用西永的测量值就可以了。至于这个默认内部宽和高的大小如何指定，这个没有固定依据，更具需要灵活指定即可。查看TextView和ImageView等源码就可以知道，针对wrap_content情形。他们的onMeasure方法都做了特殊处理，读者可以自行查看他们的源码
+在上面的代码中，我们只需要给View指定一个默认的内部宽和高(mWidth和mHeight)并且在wrap_content的时候设置宽和高就可以了。针对非wrap_content情景，我们沿用西永的测量值就可以了。至于这个默认内部宽和高的大小如何指定，这个没有固定依据，更具需要灵活指定即可。查看TextView和ImageView等源码就可以知道，针对wrap_content情形。他们的onMeasure方法都做了特殊处理，读者可以自行查看他们的源码
 
 ```
 这个是imageView的onMeasure方法
@@ -7634,7 +7634,7 @@ protected void measureChild(View child, int parentWidthMeasureSpec,
 ```
 
 很显然，`measureChild`的意思其实就是取出子元素的layoutParams，然后通过getChildMeasureSpec获取MeasureSpec，然后将得到的MeasureSpec传递给子控件的measure方法
-我们知道ViewGroup没有定义测量过程，这个是因为ViewGroup是一个抽象类，其测量过程的OnMeasure需要在每一个子类中实现，比如LinearLayout，RelativeLayout等。为什么不像VIew一样对其OnMeasure进行统一处理呢，这个是因为每一个ViewGroup子类的布局特性不同，导致细节不同，所以不能统一实现。这里使用LinearLayout的onMeasure进行分析
+我们知道ViewGroup没有定义测量过程，这个是因为ViewGroup是一个抽象类，其测量过程的OnMeasure需要在每一个子类中实现，比如LinearLayout，RelativeLayout等。为什么不像View一样对其OnMeasure进行统一处理呢，这个是因为每一个ViewGroup子类的布局特性不同，导致细节不同，所以不能统一实现。这里使用LinearLayout的onMeasure进行分析
 
 
 
@@ -8015,7 +8015,7 @@ protected void onStart() {
 ```
 
 4. view.measure(xxx,xxx)
-通过手动对VIew进行measure得到。这个情况适合复杂情况的处理
+通过手动对View进行measure得到。这个情况适合复杂情况的处理
 
 这种情况需要依据LayoutParams来区分
 MATCH_PARENT
@@ -8057,7 +8057,7 @@ view.measure(LayoutParams.wrap_content,LayoutParams.Wrap_content)
 
 ### layout过程
 
-layoutde 作用是用来确定子元素的位置，当ViewGroup的位置被确定之后，他在onLayout中会遍历子元素并调用他的layout方法。在layout中onLayout方法又会被调用，layout比measure过程要简单很多，layout方法确定了VIew本身的位置，而onLayout方法会确定所有子元素的位置。先看View的layout方法
+layoutde 作用是用来确定子元素的位置，当ViewGroup的位置被确定之后，他在onLayout中会遍历子元素并调用他的layout方法。在layout中onLayout方法又会被调用，layout比measure过程要简单很多，layout方法确定了View本身的位置，而onLayout方法会确定所有子元素的位置。先看View的layout方法
 
 
 ```
@@ -8285,7 +8285,7 @@ private void setChildFrame(View child, int left, int top, int width, int height)
 ```
 
 setChildFrame的值是child的width和height。
-这里来回答一个之前的问题，VIew的测量宽高和最终宽高的区别：这个问题可以翻译为View的getMeasureWidth和getWidth这两个方法有什么区别
+这里来回答一个之前的问题，View的测量宽高和最终宽高的区别：这个问题可以翻译为View的getMeasureWidth和getWidth这两个方法有什么区别
 看一下getWidth的方法实现
 
 ```
@@ -8310,7 +8310,7 @@ public void layout(int l,int t,int r,int b){
 
 ### draw过程
 
-draw过程就比较简单了，他的作用是将VIew绘制到屏幕上面，View的绘制过程遵循下面几步：
+draw过程就比较简单了，他的作用是将View绘制到屏幕上面，View的绘制过程遵循下面几步：
 1. 绘制背景
 2. 绘制自己
 3. 绘制children
@@ -8705,7 +8705,268 @@ public class CircleView extends View {
 
 ```
 ![Alt text](device-2018-04-30-121943.png "设置wrap_content的情况")
-可以看到并没有任何变化，不能满足我们的需求，这里的wrap_content和match_parent没有任何区别
+可以看到并没有任何变化，不能满足我们的需求，这里的wrap_content和match_parent没有任何区别，可以看一下上面对ViewGroup的`getChildMeasureSpec`这个方法的分析就明白了
+
+
+* 首先针对第一种情况wrap_content
+```
+@Override
+protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    int widthSpecMode=MeasureSpec.getMode(widthMeasureSpec);
+    int heightSpecMode=MeasureSpec.getMode(heightMeasureSpec);
+    int widthSpecSize=MeasureSpec.getSize(widthMeasureSpec);
+    int heightSpecSize=MeasureSpec.getSize(heightMeasureSpec);
+    if(widthSpecMode==MeasureSpec.AT_MOST&&heightSpecMode==MeasureSpec.AT_MOST){
+        setMeasuredDimension(mWidth.mHeight);
+    }else   if(widthSpecMode==MeasureSpec.AT_MOST){
+        setMeasuredDimension(mWidth.heightSpecSize);
+    }else   if(heightSpecMode==MeasureSpec.AT_MOST){
+        setMeasuredDimension(widthSpecSize.mHeight);
+    }
+}
+```
+可以参考之前的处理方式在4.3.1那一段已经做了介绍，这里就不再次说明了。
+* 其次，针对padding的问题，只需要在绘制的时候考虑一下padding就可以
+
+
+```
+public class CircleView extends View {
+    private int mColor= Color.RED;
+    private Paint mPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+    public CircleView(Context context) {
+        super(context);
+        init();
+    }
+    public CircleView(Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public CircleView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        int widthSpecMode=MeasureSpec.getMode(widthMeasureSpec);
+        int heightSpecMode=MeasureSpec.getMode(heightMeasureSpec);
+        int widthSpecSize=MeasureSpec.getSize(widthMeasureSpec);
+        int heightSpecSize=MeasureSpec.getSize(heightMeasureSpec);
+        if(widthSpecMode==MeasureSpec.AT_MOST&&heightSpecMode==MeasureSpec.AT_MOST){
+            setMeasuredDimension(200,200);
+        }else   if(widthSpecMode==MeasureSpec.AT_MOST){
+            setMeasuredDimension(200,heightSpecSize);
+        }else   if(heightSpecMode==MeasureSpec.AT_MOST){
+            setMeasuredDimension(widthSpecSize,200);
+        }
+    }
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        int paddingBottom = getPaddingBottom();
+        int paddingLeft = getPaddingLeft();
+        int paddingRight = getPaddingRight();
+        int paddingTop = getPaddingTop();
+        int width=getWidth()-paddingLeft-paddingRight;
+        int height=getHeight()-paddingTop-paddingBottom;
+        int radius=Math.min(width,height)/2;
+        canvas.drawCircle(paddingLeft+width/2,paddingTop+height/2,radius,mPaint);
+    }
+    private void init() {
+        mPaint.setColor(mColor);
+    }
+}
+
+```
+
+看一下修改之后2.0版本的代码
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#ffffff"
+    tools:context="com.smart.kaifa.MainActivity">
+    <com.smart.kaifa.CircleView
+        android:layout_width="wrap_content"
+        android:layout_height="100dp"
+        android:layout_margin="20dp"
+        android:padding="20dp"
+        android:background="#000000" />
+</FrameLayout>
+
+```
+现在看一下效果
+![Alt text](device-2018-04-30-134320.png "2.0版本效果")
+
+最后为了让这个控件更加容易使用，我们使用自定义属性来强化他
+如何添加自定义属性呢？
+第一步是在attrs.xml中或者新建attrs_circle_view.xml这类以attrs开头的文件。在value文件夹中新建一个attres.xml或者attrs_circle_view.xml文件
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="CircleView">
+        <attr name="circle_color" format="color"/>
+    </declare-styleable>
+</resources>
+```
+使用自定义属性
+```
+public class CircleView extends View {
+    private int mColor= Color.RED;
+    private Paint mPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+    public CircleView(Context context) {
+        super(context);
+        init();
+    }
+    public CircleView(Context context, @Nullable AttributeSet attrs) {
+        this(context, attrs,0);
+        init();
+    }
+
+    public CircleView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        TypedArray a=context.obtainStyledAttributes(attrs,R.styleable.CircleView);
+        mColor=a.getColor(R.styleable.CircleView_circle_color,Color.RED);
+        a.recycle();
+        init();
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        int widthSpecMode=MeasureSpec.getMode(widthMeasureSpec);
+        int heightSpecMode=MeasureSpec.getMode(heightMeasureSpec);
+        int widthSpecSize=MeasureSpec.getSize(widthMeasureSpec);
+        int heightSpecSize=MeasureSpec.getSize(heightMeasureSpec);
+        if(widthSpecMode==MeasureSpec.AT_MOST&&heightSpecMode==MeasureSpec.AT_MOST){
+            setMeasuredDimension(200,200);
+        }else   if(widthSpecMode==MeasureSpec.AT_MOST){
+            setMeasuredDimension(200,heightSpecSize);
+        }else   if(heightSpecMode==MeasureSpec.AT_MOST){
+            setMeasuredDimension(widthSpecSize,200);
+        }
+    }
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        int paddingBottom = getPaddingBottom();
+        int paddingLeft = getPaddingLeft();
+        int paddingRight = getPaddingRight();
+        int paddingTop = getPaddingTop();
+        int width=getWidth()-paddingLeft-paddingRight;
+        int height=getHeight()-paddingTop-paddingBottom;
+        int radius=Math.min(width,height)/2;
+        canvas.drawCircle(paddingLeft+width/2,paddingTop+height/2,radius,mPaint);
+    }
+    private void init() {
+        mPaint.setColor(mColor);
+    }
+}
+
+```
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#ffffff"
+    tools:context="com.smart.kaifa.MainActivity">
+    <com.smart.kaifa.CircleView
+        android:layout_width="wrap_content"
+        android:layout_height="100dp"
+        android:layout_margin="20dp"
+        android:padding="20dp"
+        app:circle_color="#00ffff"
+        android:background="#000000" />
+</FrameLayout>
+
+```
+
+![Alt text](device-2018-04-30-153738.png "添加入自定义属性之后的效果")
+
+
+2. 继承ViewGroup派生特殊的Layout
+这种方式主要用于实现自定义的布局，采用这种方式稍微复杂一些，需要处理ViewGroup的测量和布局这两个过程，并同时处理子元素的测量和布局过程。
+在第三章中我们分析了滑动冲突的两种情况，并实现两个自定义View：HorizontalScrollViewEx和StickyLayout，其中HorizontalScrollViewEx就是通过继承ViewGroup来实现的自定义View，这里会再次分析一下他的measure和layout过程。
+需要说明的是，如果要采用这种方式实现一个很规范的自定义View，是有一定代价的，这里通过点击LinearLayout等的源码就可以知道，他们的实现都很复杂，对于这一个控件来说，这里不打算实现他的方方面面，仅仅完成主要的功能，但是会对需要优化的地方做出说明。
+这里在回顾一下HorizontalScrollViewEx的功能，他主要是一个类似ViewPager的控件，也可以说是一个类似水平方向LinearLayout的控件，他的内部子元素可以进行水平滑动，并且子元素内部可以进行竖直滑动。这显然是存在冲突的，但是HorizontalScrollView内部解决了水平和竖直滑动冲突的问题，如何解决冲突，可以参照一下之前的方法，在父布局处理或者在子布局处理。
+这里有一个假设：就是所有子元素的宽和高都是一样的。先看一下`onMeasure`方法和`onLayout`方法的具体实现。
+
+```
+@Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+
+        int measureWidth=0;
+        int measureHeight=0;
+        final int childCount=getChildCount();
+        //测量子控件
+        measureChildren(widthMeasureSpec,heightMeasureSpec);
+        int widthSpaceSize=MeasureSpec.getSize(widthMeasureSpec);
+        int widthSpeceMode=MeasureSpec.getMode(widthMeasureSpec);
+        int heightSpaceSize=MeasureSpec.getSize(heightMeasureSpec);
+        int heightSpaceMode=MeasureSpec.getMode(heightMeasureSpec);
+        if(childCount==0){
+            //设置宽和高
+            setMeasuredDimension(0,0);
+        }else if(widthSpeceMode==MeasureSpec.AT_MOST&&heightSpaceMode==MeasureSpec.AT_MOST){
+            final View childView=getChildAt(0);
+            measureWidth=childView.getMeasuredWidth()*childCount;
+            measureHeight=childView.getMeasuredHeight();
+            setMeasuredDimension(measureWidth,measureHeight);
+        }else if(widthSpeceMode==MeasureSpec.AT_MOST){
+            final View childView=getChildAt(0);
+            measureHeight=childView.getMeasuredHeight();
+            setMeasuredDimension(widthSpaceSize,measureHeight);
+        }else if(heightSpaceMode==MeasureSpec.AT_MOST){
+            final View childView=getChildAt(0);
+            measureWidth=childView.getMeasuredWidth()*childCount;
+            setMeasuredDimension(measureWidth,heightSpaceSize);
+        }
+    }
+```
+这里说明一下下上述代码的逻辑，首先会判断是否有子元素，如果没有子元素，就通过`setMeasuredDimension`设置自身的宽和高为0，然后就是判断宽和高是不是采用了wrap_content，如果宽采用了wrap_content，那么就是所有子元素宽度之和，高度也一样
+这里不规范的地方相比大家也可以看出来：第一个是没有子元素的时候不应该把宽和高直接设置成0，而是应当根据LayoutParams中的宽和高来做相对应的处理；第二个是在测量HorizontalScrollViewEx的宽和高时，没有考虑到他的padding以及子元素的margin，这样会影响HorizontalScrollViewEx的宽和高。这个很好理解，因为不管是子元素的margin还是自己的padding,都会影响HorizontalScrollViewEx所占用的空间。
+在看一下onLayout方法
+
+```
+@Override
+ protected void onLayout(boolean changed, int l, int t, int r, int b) {
+     int childLeft=0;
+     final int childCound=getChildCount();
+     mChildSize=childCound;
+     for (int i = 0; i < childCound; i++) {
+         final View childView=getChildAt(i);
+         if(childView.getVisibility()!=View.GONE){
+             final int childWidth=childView.getMeasuredWidth();
+             mChildWidth=childWidth;
+             //不断向右边移动，x不断加大
+             childView.layout(childLeft,0,childLeft+childWidth,childView.getMeasuredHeight());
+             childLeft+=childWidth;
+         }
+     }
+ }
+
+```
+上面的代码逻辑并不是非常复杂，作用是完成对子View的定位。首先会遍历所有的子元素，如果这个子元素不是处于Gone状态，就通过layout方法将其放在合适的位置。从上面代码来看是从左向右的，这个和水平方向的LinearLayout比较相似，然而代码依旧不完善。没有考虑到自身的padding以及子元素的margin，而从一个规范的控件的角度来讲，这些都应该是要考虑的。
+
+这里给出HorizontalScrollViewEx的源码如下
+
+
+
+
+
+
 # 第五章 理解RemoteViews
 # 第六章 Android的Drawable
 # 第七章 Android 动画深入分析  
