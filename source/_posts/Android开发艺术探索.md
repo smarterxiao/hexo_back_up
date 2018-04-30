@@ -8294,7 +8294,7 @@ public final int getWidth(){
 }
 ```
 
-从getWidth的源码和结合mLeft、mRight、mTop、mBottom这四个变量的负值过程来看，getWIdth方法返回的就是VIew的测量宽度。经过上述分析，可以回答这个问题。在View的默认实现中，View的测量宽和高和最终宽和高是相等的，只不过测量宽和高形成在View的measure过程，而最终宽和高形成与View的layout过程，即两者的赋值时机不同，测量宽和高的赋值时机稍微早一些。但是在一些情况下确实会不一样
+从getWidth的源码和结合mLeft、mRight、mTop、mBottom这四个变量的负值过程来看，getWIdth方法返回的就是View的测量宽度。经过上述分析，可以回答这个问题。在View的默认实现中，View的测量宽和高和最终宽和高是相等的，只不过测量宽和高形成在View的measure过程，而最终宽和高形成与View的layout过程，即两者的赋值时机不同，测量宽和高的赋值时机稍微早一些。但是在一些情况下确实会不一样
 比如
 
 ```
@@ -8553,10 +8553,159 @@ public void setWillNotDraw(boolean willNotDraw) {
 
 
 ## 自定义View
-这一节讲解一下自定义View
-
+这一节讲解一下自定义View相关知识，自定义View的作用就不用多说了，下面进入正题。
 
 ### 自定义View的分类
+自定义View这里，书的作者分为四类
+1. 重写View的onDraw方法
+这种方法主要用来实现一些不规则的效果，即这种显示效果不方便使用布局直接叠加或者组合得到，往往需要静态或者动态显示一些不规则图形，比如股票的折线图，圆饼图等等。这个就要求重写onDraw方法，采用这种方式需要自己支持wrap_content，并且padding也需要自己处理
+2. 继承ViewGroup派生特殊的Layout
+这种方式主要实现了自定义布局，即除了LinearLayout、RelativeLayout、FrameLayout这几种系统布局之外，重新定义了一种新布局。当某种效果看起来很像几种View组合在一起的时候，可以采用这种方法，一般要处理ViewGroup的测量和布局这两个过程，并同时处理子元素的测量和布局过程
+3. 继承特定的View(比如：TextView)
+这种方式比较常见，一般是用于拓展某种已有的View的功能，比如TextView，这个方式比较容易，不用自己处理wrap_content和padding
+4. 继承特定的ViewGroup(比如：LinearLayout)
+这种方式也是比较常见的，当某种效果看起来像是几个View组合在一起的时候，可以使用这种方式。采用这种方式不需要自己处理测量和布局这两个过程。
+
+### 自定义View须知
+介绍一下自定义View过程中的一些注意事项，这些问题如果处理不好，会影响View的正常使用，而有些则会导致内存泄漏等。
+1. 让View支持wrap_content
+这个是因为直接继承View或者ViewGroup的控件，如果不在onMeasure中对wrap_content做特殊处理，那么当外界在不居中使用wrap_content的时候就无法达到预期的效果，具体原因在之前已经介绍过了
+2. 如果有必要，让你的View支持padding
+这个是因为直接继承View的控件，如果不在draw方法中处理padding，那么padding属性是无法起作用的，另外，直接继承自ViewGroup的控件需要在onMeasure和onLayout中考虑padding和子元素的margin对其造成的影响
+3. 尽量不要在View中使用Handler，没必要
+这个是因为View本身提供了post系列方法，完全可以替代Handler的作用，当然除非你很明确的要使用handler来发送消息
+4. View中如果有动画或者线程，需要及时停止，参考View#OnDetachedFromWindow
+这一条也很好理解，如果有线程或者动画需要停止，那么OnDetachedFromWindow是一个很好的时机，当包含View的Activity退出当前View或者当前View被remove时，View的onDetachedFromWindow方法会被调用，和此方法对应的是onAttachedToWindow。当包含此View的Activity启动时，这个方法就会被调用。当View不可见或者我们需要停止线程或者动画的时候，如果不及时处理，可能导致内存泄漏
+5. View带有滑动嵌套的情景时，需要处理好滑动冲突
+如果有滑动冲突的话，那么要合适的处理滑动冲突。否则将严重影响View的效果，如何处理之前介绍过
+
+
+### 自定义View的示例
+这里按照自定义View的分类来进行
+1. 继承View重写onDraw方法
+这里看主要用于实现一些特殊的图形，一般需要重写onDraw方法采用这用方式需要自己支持wrap_content，并且padding也需要自己来处理。这里就来一个demo练习一下。
+为了更好的展示一些平时不容易注意的问题，这里选择实现一个很简单的自定义控件，绘制一个园。为了实现一个规范的自定义控件，需要考虑到wrap_content模式以及padding，同时为了提高便捷性，还要对外提供自定义属性。这里来看一下
+第一个粗糙版本
+```
+public class CircleView extends View {
+    private int mColor= Color.RED;
+    private Paint mPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+
+
+    public CircleView(Context context) {
+        super(context);
+        init();
+    }
+    public CircleView(Context context, @Nullable AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public CircleView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        int width=getWidth();
+        int height=getHeight();
+        int radius=Math.min(width,height)/2;
+        canvas.drawCircle(width/2,height/2,radius,mPaint);
+    }
+    private void init() {
+        mPaint.setColor(mColor);
+    }
+}
+
+```
+
+来看一下在不同布局情况下的显示
+第一种情况：
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#ffffff"
+    tools:context="com.smart.kaifa.MainActivity">
+
+    <com.smart.kaifa.CircleView
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:background="#000000" />
+</FrameLayout>
+
+```
+
+![Alt text](device-2018-04-30-121159.png "没有设置margin的情况")
+
+第二种情况： 设置margin的情况
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#ffffff"
+    tools:context="com.smart.kaifa.MainActivity">
+    <com.smart.kaifa.CircleView
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:layout_margin="20dp"
+        android:background="#000000" />
+</FrameLayout>
+
+```
+
+![Alt text](device-2018-04-30-121943.png "设置margin的情况")
+
+第三种情况： 设置margin的情况
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#ffffff"
+    tools:context="com.smart.kaifa.MainActivity">
+    <com.smart.kaifa.CircleView
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:layout_margin="20dp"
+        android:padding="20dp"
+        android:background="#000000" />
+</FrameLayout>
+```
+![Alt text](device-2018-04-30-121943.png "设置margin和padding的情况")
+可以看到和之前一样，这个就说明padding需要我们自己来处理
+第四种情况： 设置wrap_content的情况
+```
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#ffffff"
+    tools:context="com.smart.kaifa.MainActivity">
+    <com.smart.kaifa.CircleView
+        android:layout_width="wrap_content"
+        android:layout_height="100dp"
+        android:layout_margin="20dp"
+        android:padding="20dp"
+        android:background="#000000" />
+</FrameLayout>
+
+```
+![Alt text](device-2018-04-30-121943.png "设置wrap_content的情况")
+可以看到并没有任何变化，不能满足我们的需求
 
 # 第五章 理解RemoteViews
 # 第六章 Android的Drawable
