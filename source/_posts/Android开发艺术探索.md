@@ -9490,6 +9490,453 @@ private NotificationManager notifManager;
 这样就可以使用penddingIntent打开SecondActivity了。
 
 
+![Alt text](device-2018-05-01-093823.png "Android 原生8.0弹出的默认样式的通知")
+
+
+
+
+```
+
+    private NotificationManager notifManager;
+
+    public void createNotification(String aMessage) {
+        final int NOTIFY_ID = 1002;
+
+        // There are hardcoding only for show it's just strings
+        String name = "my_package_channel";
+        String id = "my_package_channel_1"; // The user-visible name of the channel.
+        String description = "my_package_first_channel"; // The user-visible description of the channel.
+
+        Intent intent;
+        PendingIntent pendingIntent;
+        NotificationCompat.Builder builder;
+
+        if (notifManager == null) {
+            notifManager =
+                    (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            int importance = NotificationManager.IMPORTANCE_HIGH;
+            NotificationChannel mChannel = notifManager.getNotificationChannel(id);
+            if (mChannel == null) {
+                mChannel = new NotificationChannel(id, name, importance);
+                mChannel.setDescription(description);
+                mChannel.enableVibration(true);
+                mChannel.setVibrationPattern(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400});
+                notifManager.createNotificationChannel(mChannel);
+            }
+            builder = new NotificationCompat.Builder(this, id);
+
+            intent = new Intent(this, MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+            RemoteViews remoteViews=new RemoteViews(getPackageName(),R.layout.notification_compat_remote);
+
+            remoteViews.setTextViewText(R.id.tv_first,"帅气");
+            remoteViews.setTextViewText(R.id.tv_second,"英俊");
+            remoteViews.setOnClickPendingIntent(R.id.tv_second,pendingIntent);
+            builder.setContentTitle(aMessage)  // required
+                    .setSmallIcon(android.R.drawable.ic_popup_reminder) // required
+                    .setContentText(this.getString(R.string.app_name))  // required
+                    .setDefaults(Notification.DEFAULT_ALL)
+                    .setAutoCancel(true)
+                    .setContentIntent(pendingIntent)
+                    .setTicker(aMessage).setContent(remoteViews)
+                    .setVibrate(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400});
+        } else {
+
+            builder = new NotificationCompat.Builder(this);
+
+            intent = new Intent(this, MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+
+            builder.setContentTitle(aMessage)                           // required
+                    .setSmallIcon(android.R.drawable.ic_popup_reminder) // required
+                    .setContentText(this.getString(R.string.app_name))  // required
+                    .setDefaults(Notification.DEFAULT_ALL)
+                    .setAutoCancel(true)
+                    .setContentIntent(pendingIntent)
+                    .setTicker(aMessage)
+                    .setVibrate(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400})
+                    .setPriority(Notification.PRIORITY_HIGH);
+        } // else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+        Notification notification = builder.build();
+        notifManager.notify(NOTIFY_ID, notification);
+    }
+
+```
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <TextView
+        android:id="@+id/tv_first"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:background="#00ff00" />
+    <TextView
+        android:id="@+id/tv_second"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:background="#ff00ff" />
+</LinearLayout>
+```
+![Alt text](device-2018-05-01-095037.png "一个自定义的通知")
+虽然不好看，但是效果有了就可以
+RemoteViews使用起来是很简单的，只要提供当前应用的包名和布局文件资源的id就可以创建一个RemoteViews对象了。这里由于RemoteViews是显示在其他进程中的，所以只能使用它提供的set方法修改布局的内容。来看一下上面的`setTextViewText`这个方法。设置imageView也是类似的。
+
+### RemoteViews在桌面小部件的应用
+AppWidgetProvide是Android提供的用于实现桌面小部件的类。其本质是一个广播：broadcaskReceiver。可以看一下他的继承关系：在AndroidStudio中双击Shift ->AppWidgetProvider ->然后 ctrl+h 就可以看到他的继承关系了.
+```
+public class AppWidgetProvider extends BroadcastReceiver {}
+```
+下面来写一个小Demo来测试一下
+
+
+1. 定义小部件界面
+
+在res/layout 下新建一个XML文件，命名为widget.xml，名称和内容可以自定义。看这个小部件的样子
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    android:orientation="vertical"
+    xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/imageView1"
+        android:layout_width="wrap_content"
+        android:src="@mipmap/ic_launcher"
+        android:layout_height="wrap_content"
+        />
+</LinearLayout>
+```
+
+然后在res/xml下面新建一个XML文件`appwidget_provide_info`
+```
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:initialKeyguardLayout="@layout/widget"
+    android:minHeight="84dp"
+    android:minWidth="84dp"
+    android:orientation="vertical"
+    //这个是自动更新周期
+    android:updatePeriodMillis="864000000">
+
+</appwidget-provider>
+```
+
+这里发现一个问题在android8.0上由于取消了隐式广播，所以如果要使用隐式广播会报错
+```
+BroadcastQueue: Background execution not allowed: receiving Intent
+```
+解决方案使用明确的广播
+
+这里还有一个问题就是` bitmap = BitmapFactory.decodeResource(context.getResources(), vectorDrawableId);`会在5.0以上返回null,这里可以看一下如何处理
+
+```
+private static Bitmap getBitmap(Context context,int vectorDrawableId) {
+    Bitmap bitmap=null;
+    if (Build.VERSION.SDK_INT> Build.VERSION_CODES.LOLLIPOP){
+        Drawable vectorDrawable = context.getDrawable(vectorDrawableId);
+        bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(),
+                vectorDrawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        vectorDrawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        vectorDrawable.draw(canvas);
+    }else {
+        bitmap = BitmapFactory.decodeResource(context.getResources(), vectorDrawableId);
+    }
+    return bitmap;
+}
+```
+```
+public class AppEidgetProvider extends AppWidgetProvider {
+
+    public static final String TAG = "AppEidgetProvider";
+    public static final String CLICK_ACTION = "com.smart.kaifa111";
+
+    /**
+     * 这个是广播的内置方法，具体操作交给其他的东西
+     *
+     * @param context
+     * @param intent
+     */
+    @Override
+    public void onReceive(final Context context, Intent intent) {
+        super.onReceive(context, intent);
+        Log.i("输出", "action: " + CLICK_ACTION);
+        Log.i("输出", "action: ---------------------" );
+        Log.i("输出", "action: " + intent.getAction());
+
+        if (intent.getAction().equals(CLICK_ACTION)) {
+            Toast.makeText(context, "click it", Toast.LENGTH_SHORT).show();
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+
+
+                    AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
+                    for (int i = 0; i < 37; i++) {
+                        float degree = (i * 10) % 360;
+                        RemoteViews remoteViews = new RemoteViews(context.getPackageName(), R.layout.widget);
+                        remoteViews.setImageViewBitmap(R.id.imageView1, remoteBitmap(context, getBitmap(context,R.mipmap.ic_launcher), degree));
+                        // 声明明确的广播  vs     Intent intentClick = new Intent();
+                        Intent intentClick = new Intent(context,AppEidgetProvider.class);
+                        intentClick.setAction(CLICK_ACTION);
+                        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intentClick, 0);
+                        remoteViews.setOnClickPendingIntent(R.id.imageView1, pendingIntent);
+                        appWidgetManager.updateAppWidget(new ComponentName(context, AppEidgetProvider.class), remoteViews);
+                        SystemClock.sleep(30);
+
+                    }
+                }
+            }).start();
+        }
+    }
+
+
+
+    private static Bitmap getBitmap(Context context,int vectorDrawableId) {
+        Bitmap bitmap=null;
+        if (Build.VERSION.SDK_INT> Build.VERSION_CODES.LOLLIPOP){
+            Drawable vectorDrawable = context.getDrawable(vectorDrawableId);
+            bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(),
+                    vectorDrawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bitmap);
+            vectorDrawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+            vectorDrawable.draw(canvas);
+        }else {
+            bitmap = BitmapFactory.decodeResource(context.getResources(), vectorDrawableId);
+        }
+        return bitmap;
+    }
+    /**
+     * 每删除一次窗口小部件，就调用一次
+     *
+     * @param context
+     * @param appWidgetIds
+     */
+    @Override
+    public void onDeleted(Context context, int[] appWidgetIds) {
+        super.onDeleted(context, appWidgetIds);
+        Log.i("onDeleted", "action: " + CLICK_ACTION);
+    }
+
+    /**
+     * 小部件第一次创建时调用
+     *
+     * @param context
+     */
+    @Override
+    public void onEnabled(Context context) {
+        super.onEnabled(context);
+        Log.i("onEnabled", "action: " + CLICK_ACTION);
+    }
+
+    /**
+     * 当最后一个窗口小部件被删除时，调用此方法
+     *
+     * @param context
+     */
+    @Override
+    public void onDisabled(Context context) {
+        super.onDisabled(context);
+        Log.i("onDeleted", "action: " + CLICK_ACTION);
+
+        Log.i("onDeleted", "action: " + CLICK_ACTION);
+    }
+
+    /**
+     * 每次桌面小部件更新时都调用一次该方法
+     *
+     * @param context
+     * @param appWidgetManager
+     * @param appWidgetIds
+     */
+    @Override
+    public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
+        super.onUpdate(context, appWidgetManager, appWidgetIds);
+        Log.i("更新", "action: " + CLICK_ACTION);
+        final int counter = appWidgetIds.length;
+        for (int i = 0; i < counter; i++) {
+            int appWidgetId = appWidgetIds[i];
+            onWidgetUpdate(context, appWidgetManager, appWidgetId);
+        }
+    }
+
+
+    private void onWidgetUpdate(Context context, AppWidgetManager manager, int appWidgetId) {
+
+        Log.i(TAG, "appWidgetId =" + appWidgetId);
+        RemoteViews remoteViews = new RemoteViews(context.getPackageName(), R.layout.widget);
+        Intent intentClick = new Intent(context,AppEidgetProvider.class);
+        intentClick.setAction(CLICK_ACTION);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intentClick, 0);
+        remoteViews.setOnClickPendingIntent(R.id.imageView1, pendingIntent);
+        manager.updateAppWidget(appWidgetId, remoteViews);
+    }
+
+    private Bitmap remoteBitmap(Context context, Bitmap srcbBitmap, float degree) {
+
+        Matrix matrix = new Matrix();
+        matrix.reset();
+        matrix.setRotate(degree);
+        Bitmap tempBitmap = Bitmap.createBitmap(srcbBitmap, 0, 0, srcbBitmap.getWidth(), srcbBitmap.getHeight(), matrix, true);
+        return tempBitmap;
+
+    }
+}
+
+```
+
+清单文件配置
+```
+<receiver android:name=".AppEidgetProvider">
+           <intent-filter>
+               <action android:name="com.smart.kaifa111" />
+               <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+               <action android:name="android.appwidget.action.APPWIDGET_UPDATE_OPTIONS"/>
+               <action android:name="android.appwidget.action.APPWIDGET_RESTORED"/>
+               <action android:name="android.appwidget.action.APPWIDGET_DELETED"/>
+           </intent-filter>
+
+           <meta-data
+               android:name="android.appwidget.provider"
+               android:resource="@xml/appwidget_provide_info" />
+       </receiver>
+```
+
+appwidget_provide_info.xml 在res/xml 下面
+```
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:initialKeyguardLayout="@layout/widget"
+    android:minHeight="84dp"
+    android:minWidth="84dp"
+    android:orientation="vertical"
+    android:updatePeriodMillis="864000000">
+
+</appwidget-provider>
+```
+widget.xml  在res/layout下面
+```
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    android:orientation="vertical"
+    xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/imageView1"
+        android:background="#ff0000"
+        android:layout_width="match_parent"
+        android:src="@mipmap/ic_launcher"
+        android:layout_height="match_parent"
+        />
+</LinearLayout>
+```
+
+这里来看一下AppWidgetProvider的`onReceive`的源码和具体的分发过程
+
+```
+public void onReceive(Context context, Intent intent) {
+     // Protect against rogue update broadcasts (not really a security issue,
+     // just filter bad broacasts out so subclasses are less likely to crash).
+     String action = intent.getAction();
+     //判断不同的action，进行条件删选，并且调用方法
+     if (AppWidgetManager.ACTION_APPWIDGET_UPDATE.equals(action)) {
+         Bundle extras = intent.getExtras();
+         if (extras != null) {
+             int[] appWidgetIds = extras.getIntArray(AppWidgetManager.EXTRA_APPWIDGET_IDS);
+             if (appWidgetIds != null && appWidgetIds.length > 0) {
+                 this.onUpdate(context, AppWidgetManager.getInstance(context), appWidgetIds);
+             }
+         }
+     } else if (AppWidgetManager.ACTION_APPWIDGET_DELETED.equals(action)) {
+         Bundle extras = intent.getExtras();
+         if (extras != null && extras.containsKey(AppWidgetManager.EXTRA_APPWIDGET_ID)) {
+             final int appWidgetId = extras.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID);
+             this.onDeleted(context, new int[] { appWidgetId });
+         }
+     } else if (AppWidgetManager.ACTION_APPWIDGET_OPTIONS_CHANGED.equals(action)) {
+         Bundle extras = intent.getExtras();
+         if (extras != null && extras.containsKey(AppWidgetManager.EXTRA_APPWIDGET_ID)
+                 && extras.containsKey(AppWidgetManager.EXTRA_APPWIDGET_OPTIONS)) {
+             int appWidgetId = extras.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID);
+             Bundle widgetExtras = extras.getBundle(AppWidgetManager.EXTRA_APPWIDGET_OPTIONS);
+             this.onAppWidgetOptionsChanged(context, AppWidgetManager.getInstance(context),
+                     appWidgetId, widgetExtras);
+         }
+     } else if (AppWidgetManager.ACTION_APPWIDGET_ENABLED.equals(action)) {
+         this.onEnabled(context);
+     } else if (AppWidgetManager.ACTION_APPWIDGET_DISABLED.equals(action)) {
+         this.onDisabled(context);
+     } else if (AppWidgetManager.ACTION_APPWIDGET_RESTORED.equals(action)) {
+         Bundle extras = intent.getExtras();
+         if (extras != null) {
+             int[] oldIds = extras.getIntArray(AppWidgetManager.EXTRA_APPWIDGET_OLD_IDS);
+             int[] newIds = extras.getIntArray(AppWidgetManager.EXTRA_APPWIDGET_IDS);
+             if (oldIds != null && oldIds.length > 0) {
+                 this.onRestored(context, oldIds, newIds);
+                 this.onUpdate(context, AppWidgetManager.getInstance(context), newIds);
+             }
+         }
+     }
+ }
+```
+还是很简单的。
+### PendingIntent的概述
+前面多次提及pendingIntent，那么他是一个什么东西呢？他和Intent的区别是什么呢？
+1. 先看一下他们的继承关系
+
+```
+public final class PendingIntent implements Parcelable {}
+public class Intent implements Parcelable, Cloneable {}
+```
+可以看到都是继承自Parcelable这个类。而这个类我们很熟悉，是android用于信息传递的或者说信息序列化的,Parcelable的中文意思是打包... 还是要学好英语啊
+2. PendingIntent 顾名思义，他是一种处于pending状态的intent，就是将要发生的意图。可以拆开有道一下。从这里可以看到PendingIntent是一种在将来某一个时刻发生的Intent，而Intent是立即发生
+3. PendingIntent典型的使用场景是给RemoteViews添加点击事件，因为RemoteViews是运行在远程进程中的，所以无法通过setOnClickListener来设置点击事件。要设置RemoteViews中的点击事件，就必须使用PendingIntent，PendingIntent通过send和cancel方法来发送和取消特定的待定的Intent。
+PendingIntent支持三种特定意图：启动Activity、启动Service和发送广播
+
+
+|方法|作用|
+|:--:|:--:|
+|getActivity(Context context,int requestCode,int flags)|获取一个PendingIntent，该特定意图发生时相当于startActivity|
+|getService(Context context,int requestCode,int flags)|获取一个PendingIntent，该特定意图发生时相当于startService|
+|getBroadCast(Context context,int requestCode,int flags)|获取一个PendingIntent，该特定意图发生时相当于sendBroadCask|
+
+上面第一个参数比较好理解，主要说一下第二个参数和第三个参数。
+requestCode表示PendingIntent的请求码，多数情况下设定为0就可以了，另外requestCode会影响到flags的效果。flags常见的类型有FLAG_ONE_SHOT,FLAG_NO_CREATE,FLAG_CANCEL_CURRENT和FLAG_UPDATE_CURRENT。这里需要明白一个概念，这个就是Pending的匹配规则。即在什么情况下两个pendingIntent是相同的。
+PendingIntent的匹配规则是：如果两个PendingIntent他们内部的Intent相同，并且requestCode也相同，那么这两个PendingIntent就相同。resultCode这个比较好理解，那么如何确定两个Intent是相同的呢。Intent的匹配规则就是ComponentName和intent-filter都相同。只要ComponentName和intent-filter是相同的，即时他的Extras不同，那么这两个Intent也是相同的。
+不同flags的含义
+* FLAG_ONE_SHOT
+当前描述的PendingIntent只能被使用一次，然后他就会被自动cancel。如果后续还有相同的PendingIntent，那么他们的send方法就会调用失败。对于通知栏消息来说，如果采用此标记位。那么同类的通知只能使用一次，后续的通知单击后将无法打开。
+* FLAG_NO_CREATE
+当前描述的Pending不会主动创建，如果当前的PendingIntent之前不存在，那么getActivity，getService，getBroadCast方法会直接返回null，即获取PendingIntent失败。这个标记位很少见，他无法单独使用，在开发中没有太多的意义
+* FLAG_CANCEL_CURRENT
+当前描述的PendingIntent如果已经存在，那么他们都会被cancel，然后系统会创建一个新的PendingIntent。对于通知栏消息来说，那些cancel的消息单击后无法打开
+* FLAG_UPDATE_CURRENT
+当前描述的PendingIntent如果已经存在，那么他们都会被更新，即他们的Intent中的Extras会被替换成最新
+从上面的分析来讲，还是不是非常好理解这四个标记位
+这里在结合通知栏消息在描述一遍。
+`Manager.notify(1,nootification)`如果notifi的第一个参数id是常量，那么多次调用notify只能弹出一个通知，后续的通知会把前面的通知完全替代掉，而如果每一次的id都不同，那么多次调用notify会弹出多个通知。如果notify方法中的id是常量，那么不管pendingIntent是否匹配，后面的通知会直接替换前面的通知。
+如果notify方法的id每一次都不一样，那么当pendingIntent不匹配时，这里的匹配规则指的是PendingIntent中的Intent相同并且requestCode相同，这种情况下不管采用什么标记位，这些通知都不会互相干扰。如果pendingIntent处于匹配状态时，这个时候要分情况讨论，如果采用FLAG_ONE_SHOT标记位，那么后续的通知中的PendingIntent会和第一条通知保持一致，如果其中包含Extras，单击任何一条通知后，剩余的通知将无法打开，当所有的通知被清除后，又会重复这个过程。如果采用FLAG_CANCEL_CURRENT标记位，那么只有最新的通知可以打开，之前弹出的通知都无法打开；如果使用FLAG_UPDATE_CURRENT，那么之前通知中用的PendingIntent会被更新和最新的一条保持一致，包括其中的Extras，并且这些通知都是可以打开的
+
+## RemoteViews的内部机制
+## RemoteViews的意义
 
 # 第六章 Android的Drawable
 # 第七章 Android 动画深入分析  
