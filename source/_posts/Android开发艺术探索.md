@@ -9936,6 +9936,86 @@ PendingIntent的匹配规则是：如果两个PendingIntent他们内部的Intent
 如果notify方法的id每一次都不一样，那么当pendingIntent不匹配时，这里的匹配规则指的是PendingIntent中的Intent相同并且requestCode相同，这种情况下不管采用什么标记位，这些通知都不会互相干扰。如果pendingIntent处于匹配状态时，这个时候要分情况讨论，如果采用FLAG_ONE_SHOT标记位，那么后续的通知中的PendingIntent会和第一条通知保持一致，如果其中包含Extras，单击任何一条通知后，剩余的通知将无法打开，当所有的通知被清除后，又会重复这个过程。如果采用FLAG_CANCEL_CURRENT标记位，那么只有最新的通知可以打开，之前弹出的通知都无法打开；如果使用FLAG_UPDATE_CURRENT，那么之前通知中用的PendingIntent会被更新和最新的一条保持一致，包括其中的Extras，并且这些通知都是可以打开的
 
 ## RemoteViews的内部机制
+RemoteViews的作用是在其他进程中显示并更新View的显示。为了更好的理解他的内部机制，我们来看一下他的主要功能。首先看一下构造方法，这里介绍一种最常用的构造方法`new RemoteViews(context.getPackageName(), R.layout.widget);`。它接受两个值，一个是应用包名，一个是待加载的布局文件。这里很好理解。
+RemoteViews不支持所有的View类型
+目前支持的类型如下
+* Layout
+FramLayout,LinearLayout,RelativeLayout,CridLayout
+* View
+AnalogClock,Button,CHronometer,ImageButton,ImageView,ProgressBar,TestView,ViewFlipper，ListView，GridView，StackView，AdapterViewFlipper，ViewStub
+上面描述的是RemoteViews所支持的所有View的类型，RemoteViews不支持他们的子类以及其他View类型。也就是说RemoteViews中不能使用除了上述列表意外的View也无法使用自定义View。比如我们在通知栏的RemoteViews中使用系统的EditText，那么通知栏消息将无法弹出并会报错。
+```
+? W/AppWidgetHostView: updateAppWidget couldn't find any view, using error view
+    android.view.InflateException: Binary XML file line #14: Binary XML file line #14: Error inflating class android.widget.EditText
+    Caused by: android.view.InflateException: Binary XML file line #14: Error inflating class android.widget.EditText
+    Caused by: android.view.InflateException: Binary XML file line #14: Class not allowed to be inflated android.widget.EditText
+        at android.view.LayoutInflater.failNotAllowed(LayoutInflater.java:686)
+        at android.view.LayoutInflater.createView(LayoutInflater.java:612)
+        at com.android.internal.policy.PhoneLayoutInflater.onCreateView(PhoneLayoutInflater.java:58)
+        at android.view.LayoutInflater.onCreateView(LayoutInflater.java:720)
+        at android.view.LayoutInflater.createViewFromTag(LayoutInflater.java:788)
+        at android.view.LayoutInflater.createViewFromTag(LayoutInflater.java:730)
+        at android.view.LayoutInflater.rInflate(LayoutInflater.java:863)
+        at android.view.LayoutInflater.rInflateChildren(LayoutInflater.java:824)
+        at android.view.LayoutInflater.inflate(LayoutInflater.java:515)
+        at android.view.LayoutInflater.inflate(LayoutInflater.java:423)
+        at android.widget.RemoteViews.inflateView(RemoteViews.java:3278)
+        at android.widget.RemoteViews.apply(RemoteViews.java:3255)
+        at android.appwidget.AppWidgetHostView.applyRemoteViews(AppWidgetHostView.java:451)
+        at android.appwidget.AppWidgetHostView.updateAppWidget(AppWidgetHostView.java:380)
+        at com.android.launcher3.LauncherAppWidgetHostView.updateAppWidget(SourceFile:19)
+        at android.appwidget.AppWidgetHost.updateAppWidgetView(AppWidgetHost.java:404)
+        at android.appwidget.AppWidgetHost.startListening(AppWidgetHost.java:202)
+        at com.android.launcher3.LauncherAppWidgetHost.startListening(SourceFile:9)
+        at com.android.launcher3.Launcher.onStart(SourceFile:577)
+        at android.app.Instrumentation.callActivityOnStart(Instrumentation.java:1333)
+        at android.app.Activity.performStart(Activity.java:6992)
+        at android.app.Activity.performRestart(Activity.java:7066)
+        at android.app.Activity.performResume(Activity.java:7071)
+        at android.app.ActivityThread.performResumeActivity(ActivityThread.java:3620)
+        at android.app.ActivityThread.handleResumeActivity(ActivityThread.java:3685)
+        at android.app.ActivityThread$H.handleMessage(ActivityThread.java:1643)
+        at android.os.Handler.dispatchMessage(Handler.java:105)
+        at android.os.Looper.loop(Looper.java:164)
+        at android.app.ActivityThread.main(ActivityThread.java:6541)
+        at java.lang.reflect.Method.invoke(Native Method)
+        at com.android.internal.os.Zygote$MethodAndArgsCaller.run(Zygote.java:240)
+        at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:767)
+```
+
+意思是无法找到这个控件，无法inflate。然后就无法显示控件
+
+
+RemoteViews没有提供findViewById的方法，因此我们无法直接访问里面的View的数据。而必须通过RemoteViews所提供的一系列set方法来完成。当然这个是因为RemoteViews在其他进程中，所以无法直接findViewById。这里列举一些常用的方法
+
+|方法名|作用|
+|:--:|:--:|
+|setTextViewText(int viewId, CharSequence text) |设置文字内容|
+|setTextViewTextSize(int viewId, int units, float size)|设置文字大小|
+|setViewVisibility(int viewId, int visibility)|设置是否可见|
+|setImageViewBitmap(int viewId, Bitmap bitmap)|设置图片|
+|setEmptyView(int viewId, int emptyViewId)|设置空图片|
+
+从表可以看出，原本可以直接调用View的方法，但是现在必须通过RemoteViews的set方法才能完成，而且冲方法声明上来看，很像是通过反射来完成的
+下面来描述一下RemoteViews的内部机制，由于RemoteViews主要用于通知栏和桌面小部件中，这里就通过他们来分析一下RemoteViews的工作流程。我们知道，通知栏和桌面小插件部分是分别由NotifacationManager和AppWidgetmanager来管理的，而NotificationManager和AppWidgetManager通过Binder分别和SystemServer进程中的NotificationMangaerService以及AppWidgetService进行通信。由此可见，通知栏和左面小部件中的布局是在NotificationManagerServcice和AppWidgetService中加载的，他们运行在系统的SystemServer中，这就和我们构成了跨进程通讯的场景。
+
+首先RemoteViews会通过Binder传递到SystemServer进程，这是因为RemoteViews实现了Parcelable接口
+```
+public class RemoteViews implements Parcelable, Filter {...}
+```
+因此他可以跨进程传输，系统会根据RemoteViews中的包名的该信息去得到该应用的资源。然后会通过layoutInflater去加载RemoteViews中的布局文件。在SystemServer进程中加载后的布局文件是一个普通的View，只不过相对于我们的进程而言是一个RemoteViews，但是要记住，RemoteViews不是一个View，他是一个数据结构，实现了Parcelable接口，用来跨进程通讯的。接着系统会对View执行一系列更新界面的任务。这些人无语是我们通过set方法来提交的，但是set方法对于View的更新不是立即就做的，在RemoteViews内部会记录所有的更新操作，直到RemoteViews被加载以后才会执行，这样RemoteViews就可以在SYstemServer进程中显示了。这就是我们所看到了通知栏或者小部件中的内容。当我们需要跟新UI的时候，我们需要调用一系列的set方法，并通过NotificationManager和AppWidgetManager来提交跟新任务。具体的跟新操作也是在SystemServer进程中完成的。
+从理论上来说。系统完全可以通过Binder去支持所有的View和View的操作，但是这样的代价太大了，因为View的方法太多了，另外就是大量的IPC操作会影响效率。为了解决这个问题，系统并没有通过BInder去直接支持View的跨进程通讯，而是提供了一个Action的概念，Action代表一个View的操作，Action同样实现了Parcelable接口。
+```
+private abstract static class Action implements Parcelable {}
+
+```
+
+系统首先将View对象中的具体操作分装到Action对象中，并将这些对象跨进程传输到远程进程。接着在远程进程中执行Action对象的具体操作。在我们的应用中每调用一次set方法，RemoteViews中就会添加一个对应的Action对象，当我们通过NotificationManager和AppWidgetManager，来提交我们的更新时，这些Action对象就会传输到远程进程中并在远程进程中依次执行。
+
+
+
+
+
 ## RemoteViews的意义
 
 # 第六章 Android的Drawable

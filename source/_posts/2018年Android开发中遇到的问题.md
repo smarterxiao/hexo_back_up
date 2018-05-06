@@ -269,3 +269,14 @@ private final String GIF_PATH = "file:///android_asset/licai_refresh_header.gif"
 如果使用git报错：
 fatal: could not read Username for 'https://github.com': No such file or directo
 不知道解决办法可以升级一下git版本看一下 ，我是这样解决的
+
+
+## 2.18.5.6
+开发这么长时间了，第一次见到系统原来自带了这种控件
+* ViewFlipper
+如何实现一个上下滚动的TextView。可以使用一下ViewFlipper。这个是Android自带的控件
+* AdapterViewFlipper
+也是一个类似ViewFlipper，自由播放的控件
+* StackView
+https://blog.csdn.net/small_lee/article/details/51544975
+一个类似照片墙的控件
