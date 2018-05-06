@@ -10614,7 +10614,41 @@ drawable有很多种
 
 在实际的开发中，Drawable常被用来作为View的背景使用，Drawable一般是通过XML来定义的。当然，我们可以通过代码创建具体的drawable对象。只是用代码创建比较复杂。
 
+
 ## Drawable的分类
+看到上面的截图没有，种类有很多，这里就主要讲解几种常用的，比如BitmapDrawable，ShapeDrawable,layerDrawable,StateListDrawable等，这里就不一一列举了，下面分别介绍一下他们的细节
+
+### BitmapDrawable
+这个是最简单的Drawable了，他表示的就是一张图片。在实际开发过程中，我们可以直接引用原始的图片就可以了，但是也可以使用XML来描述他，通过XML来描述BitmapDrawable可以设置更多的效果：
+```
+<?xml version="1.0" encoding="utf-8"?>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@mipmap/ic_launcher"
+    android:antialias="false"
+    android:dither="false"
+    android:gravity="center"
+    android:mipMap="false"
+    android:tileMode="clamp"
+    >
+
+</bitmap>
+```
+看一下这些属性的含义
+
+* android:src
+  这个很简单，就是图片资源的id
+* android:antialias
+  是否开启图片抗锯齿功能，开启后会让图片变得平滑，同时也会在一定程度上面降低图片的清晰度，但是这个降低的幅度可以忽略。所以应当开启这个选项。
+* android:dither
+  是否开启抖动效果。当图片的像素配置和手机屏幕的像素配置不一致的时候，开启这个选项可以让高质量的图片在低质量的屏幕上还能保持比较好的显示效果，比如图片的色彩模式是ARGB8888，但是设备所支持的色彩模式为RGB555，这个时候开启抖动选项可以让图片不会过于失真。在ANdroiid中创建的Bitmap一般会选用ARGB8888这个模式，即ARGB各占8位，在这种色彩模式下，一个像素所占的大小为4个字节，一个像素的位数总和越高，图像也就越逼真。因此，这个也应该开启
+* android:filter
+  是否开启过滤效果，当图片尺寸被拉伸或者压缩时，开启过滤效果可以保持较好的显示效果，因此也应该开启
+* android:gravity
+  当图片大小小于容器大小是，可以设置这个选项来定位图片，这个属性的可选项较多，不过可以使用|来组合使用
+
+|可选项|含义|
+|:--:|:--:|
+|top|将图片放在容器顶部，不改变图片大小|
 
 # 第七章 Android 动画深入分析  
 # 第八章 理解Windows和WindowsManager
