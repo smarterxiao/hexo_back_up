@@ -10012,9 +10012,516 @@ private abstract static class Action implements Parcelable {}
 
 系统首先将View对象中的具体操作分装到Action对象中，并将这些对象跨进程传输到远程进程。接着在远程进程中执行Action对象的具体操作。在我们的应用中每调用一次set方法，RemoteViews中就会添加一个对应的Action对象，当我们通过NotificationManager和AppWidgetManager，来提交我们的更新时，这些Action对象就会传输到远程进程中并在远程进程中依次执行。
 
+![Alt text](图像1525593096.png "RemoteViews内部机制")
+
+远程进程的RemoteViews的apply方法进行View的更新操作，具体的View更新操作是由Action对象内部的apply来完成的。上述方法的好处显而易见，首先不需要定义大量的Binder接口，其次通过在远程进程中批量执行RemoteViews的修改操作从而避免大量的IPC操作，这就提高了程序的性能，由此可见，Android系统在这方面的设计很巧妙。
+上面从理论分析了RemoteViews的机制,现在从源码的角度来分析一下RemoteViews的，先看一下一系列的set方法
+```
+public void setImageViewBitmap(int viewId, Bitmap bitmap) {
+     setBitmap(viewId, "setImageBitmap", bitmap);
+ }
+
+```
+
+可以看到set方法最终调用了一个setBitmap方法
+```
+public void setBitmap(int viewId, String methodName, Bitmap value) {
+    addAction(new BitmapReflectionAction(viewId, methodName, value));
+}
+
+```
+可以看到，这里就出现了action
+```
+private void addAction(Action a) {
+    if (hasLandscapeAndPortraitLayouts()) {
+        throw new RuntimeException("RemoteViews specifying separate landscape and portrait" +
+                " layouts cannot be modified. Instead, fully configure the landscape and" +
+                " portrait layouts individually before constructing the combined layout.");
+    }
+    if (mActions == null) {
+        mActions = new ArrayList<Action>();
+    }
+    mActions.add(a);
+
+    // update the memory usage stats
+    a.updateMemoryUsageEstimate(mMemoryUsageCounter);
+}
+
+```
+从上面的代码可以看到，RemoteViews内部有一个Action集合，外界每调用一次set方法，RemoteViews就会为其创建一个Action对象并加入到这个集合中。需要注意的是这里仅仅是将action对象保存了起来，并未对View进行实际操作。这一点在上面的理论分析中已经提到过了。一个set方法的源码已经分析完毕了，但是我们还是不知道什么时候会将这个集合传递出去。这里要看一下RemoteViews的apply方法
+```
+public View apply(Context context, ViewGroup parent, OnClickHandler handler) {
+        RemoteViews rvToApply = getRemoteViewsToApply(context);
+
+        View result = inflateView(context, rvToApply, parent);
+        loadTransitionOverride(context, handler);
+
+        rvToApply.performApply(result, parent, handler);
+
+        return result;
+    }
+```
+从上面的代码可以看出，首先会通过LayoutLnflater去加载RemoteViews中的布局文件，RemoteViews中布局文件可以通过getLayoutId这个方法获得，加载完布局文件后会通过performApply去执行一些更新操作
 
 
+```
+private void performApply(View v, ViewGroup parent, OnClickHandler handler) {
+      if (mActions != null) {
+          handler = handler == null ? DEFAULT_ON_CLICK_HANDLER : handler;
+          final int count = mActions.size();
+          for (int i = 0; i < count; i++) {
+              Action a = mActions.get(i);
+              a.apply(v, parent, handler);
+          }
+      }
+  }
 
+```
+可以看到他的作用是遍历action的集合并执行action对象。每一次的set操作对应一个action对象，所以说这里才是真正操作View的地方。
+
+RemoteViews在通知栏和桌面小部件的工作过程和上面描述的过程是一致的，当我们调用RemoteViews的set方法时，并不会立即更新界面，而是必须要通过NotificationManager的notify方法以及AppWidgetManager的updateAppWidget才能更新他们的界面。实际上在AppWidgetManger的updateAppWidget的内部实现的，apply和reApply的区别在于：apply会加载布局并更新界面，reApply只会更新界面。通知栏和桌面小插件在初始化界面会调用apply方法，而在后续的更新界面则会调用reApply方法。这里看看一下AppWidgetHostView的updateAppWidget方法
+
+```
+
+public void updateAppWidget(RemoteViews remoteViews) {
+    applyRemoteViews(remoteViews, true);
+}
+
+protected void applyRemoteViews(RemoteViews remoteViews, boolean useAsyncIfPossible) {
+       if (LOGD) Log.d(TAG, "updateAppWidget called mOld=" + mOld);
+
+       boolean recycled = false;
+       View content = null;
+       Exception exception = null;
+
+       // Capture the old view into a bitmap so we can do the crossfade.
+       if (CROSSFADE) {
+           if (mFadeStartTime < 0) {
+               if (mView != null) {
+                   final int width = mView.getWidth();
+                   final int height = mView.getHeight();
+                   try {
+                       mOld = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                   } catch (OutOfMemoryError e) {
+                       // we just won't do the fade
+                       mOld = null;
+                   }
+                   if (mOld != null) {
+                       //mView.drawIntoBitmap(mOld);
+                   }
+               }
+           }
+       }
+
+       if (mLastExecutionSignal != null) {
+           mLastExecutionSignal.cancel();
+           mLastExecutionSignal = null;
+       }
+
+       if (remoteViews == null) {
+           if (mViewMode == VIEW_MODE_DEFAULT) {
+               // We've already done this -- nothing to do.
+               return;
+           }
+           content = getDefaultView();
+           mLayoutId = -1;
+           mViewMode = VIEW_MODE_DEFAULT;
+       } else {
+           if (mAsyncExecutor != null && useAsyncIfPossible) {
+               inflateAsync(remoteViews);
+               return;
+           }
+           // Prepare a local reference to the remote Context so we're ready to
+           // inflate any requested LayoutParams.
+           mRemoteContext = getRemoteContext();
+           int layoutId = remoteViews.getLayoutId();
+
+           // If our stale view has been prepared to match active, and the new
+           // layout matches, try recycling it
+           if (content == null && layoutId == mLayoutId) {
+               try {
+                   remoteViews.reapply(mContext, mView, mOnClickHandler);
+                   content = mView;
+                   recycled = true;
+                   if (LOGD) Log.d(TAG, "was able to recycle existing layout");
+               } catch (RuntimeException e) {
+                   exception = e;
+               }
+           }
+
+           // Try normal RemoteView inflation
+           if (content == null) {
+               try {
+                 //在这里===========================
+                   content = remoteViews.apply(mContext, this, mOnClickHandler);
+                   if (LOGD) Log.d(TAG, "had to inflate new layout");
+               } catch (RuntimeException e) {
+                   exception = e;
+               }
+           }
+
+           mLayoutId = layoutId;
+           mViewMode = VIEW_MODE_CONTENT;
+       }
+
+       applyContent(content, recycled, exception);
+       updateContentDescription(mInfo);
+   }
+```
+可以看到有一行` content = remoteViews.apply(mContext, this, mOnClickHandler);`
+
+现在了解了具体的做法，现在来看一下action他儿子
+```
+private final class ReflectionAction extends Action {
+        static final int TAG = 2;
+
+        static final int BOOLEAN = 1;
+        static final int BYTE = 2;
+        static final int SHORT = 3;
+        static final int INT = 4;
+        static final int LONG = 5;
+        static final int FLOAT = 6;
+        static final int DOUBLE = 7;
+        static final int CHAR = 8;
+        static final int STRING = 9;
+        static final int CHAR_SEQUENCE = 10;
+        static final int URI = 11;
+        // BITMAP actions are never stored in the list of actions. They are only used locally
+        // to implement BitmapReflectionAction, which eliminates duplicates using BitmapCache.
+        static final int BITMAP = 12;
+        static final int BUNDLE = 13;
+        static final int INTENT = 14;
+        static final int COLOR_STATE_LIST = 15;
+        static final int ICON = 16;
+
+        String methodName;
+        int type;
+        Object value;
+
+        ReflectionAction(int viewId, String methodName, int type, Object value) {
+            this.viewId = viewId;
+            this.methodName = methodName;
+            this.type = type;
+            this.value = value;
+        }
+
+        ReflectionAction(Parcel in) {
+            this.viewId = in.readInt();
+            this.methodName = in.readString();
+            this.type = in.readInt();
+            //noinspection ConstantIfStatement
+            if (false) {
+                Log.d(LOG_TAG, "read viewId=0x" + Integer.toHexString(this.viewId)
+                        + " methodName=" + this.methodName + " type=" + this.type);
+            }
+
+            // For some values that may have been null, we first check a flag to see if they were
+            // written to the parcel.
+            switch (this.type) {
+                case BOOLEAN:
+                    this.value = in.readInt() != 0;
+                    break;
+                case BYTE:
+                    this.value = in.readByte();
+                    break;
+                case SHORT:
+                    this.value = (short)in.readInt();
+                    break;
+                case INT:
+                    this.value = in.readInt();
+                    break;
+                case LONG:
+                    this.value = in.readLong();
+                    break;
+                case FLOAT:
+                    this.value = in.readFloat();
+                    break;
+                case DOUBLE:
+                    this.value = in.readDouble();
+                    break;
+                case CHAR:
+                    this.value = (char)in.readInt();
+                    break;
+                case STRING:
+                    this.value = in.readString();
+                    break;
+                case CHAR_SEQUENCE:
+                    this.value = TextUtils.CHAR_SEQUENCE_CREATOR.createFromParcel(in);
+                    break;
+                case URI:
+                    if (in.readInt() != 0) {
+                        this.value = Uri.CREATOR.createFromParcel(in);
+                    }
+                    break;
+                case BITMAP:
+                    if (in.readInt() != 0) {
+                        this.value = Bitmap.CREATOR.createFromParcel(in);
+                    }
+                    break;
+                case BUNDLE:
+                    this.value = in.readBundle();
+                    break;
+                case INTENT:
+                    if (in.readInt() != 0) {
+                        this.value = Intent.CREATOR.createFromParcel(in);
+                    }
+                    break;
+                case COLOR_STATE_LIST:
+                    if (in.readInt() != 0) {
+                        this.value = ColorStateList.CREATOR.createFromParcel(in);
+                    }
+                    break;
+                case ICON:
+                    if (in.readInt() != 0) {
+                        this.value = Icon.CREATOR.createFromParcel(in);
+                    }
+                default:
+                    break;
+            }
+        }
+
+        public void writeToParcel(Parcel out, int flags) {
+            out.writeInt(TAG);
+            out.writeInt(this.viewId);
+            out.writeString(this.methodName);
+            out.writeInt(this.type);
+            //noinspection ConstantIfStatement
+            if (false) {
+                Log.d(LOG_TAG, "write viewId=0x" + Integer.toHexString(this.viewId)
+                        + " methodName=" + this.methodName + " type=" + this.type);
+            }
+
+            // For some values which are null, we record an integer flag to indicate whether
+            // we have written a valid value to the parcel.
+            switch (this.type) {
+                case BOOLEAN:
+                    out.writeInt((Boolean) this.value ? 1 : 0);
+                    break;
+                case BYTE:
+                    out.writeByte((Byte) this.value);
+                    break;
+                case SHORT:
+                    out.writeInt((Short) this.value);
+                    break;
+                case INT:
+                    out.writeInt((Integer) this.value);
+                    break;
+                case LONG:
+                    out.writeLong((Long) this.value);
+                    break;
+                case FLOAT:
+                    out.writeFloat((Float) this.value);
+                    break;
+                case DOUBLE:
+                    out.writeDouble((Double) this.value);
+                    break;
+                case CHAR:
+                    out.writeInt((int)((Character)this.value).charValue());
+                    break;
+                case STRING:
+                    out.writeString((String)this.value);
+                    break;
+                case CHAR_SEQUENCE:
+                    TextUtils.writeToParcel((CharSequence)this.value, out, flags);
+                    break;
+                case URI:
+                    out.writeInt(this.value != null ? 1 : 0);
+                    if (this.value != null) {
+                        ((Uri)this.value).writeToParcel(out, flags);
+                    }
+                    break;
+                case BITMAP:
+                    out.writeInt(this.value != null ? 1 : 0);
+                    if (this.value != null) {
+                        ((Bitmap)this.value).writeToParcel(out, flags);
+                    }
+                    break;
+                case BUNDLE:
+                    out.writeBundle((Bundle) this.value);
+                    break;
+                case INTENT:
+                    out.writeInt(this.value != null ? 1 : 0);
+                    if (this.value != null) {
+                        ((Intent)this.value).writeToParcel(out, flags);
+                    }
+                    break;
+                case COLOR_STATE_LIST:
+                    out.writeInt(this.value != null ? 1 : 0);
+                    if (this.value != null) {
+                        ((ColorStateList)this.value).writeToParcel(out, flags);
+                    }
+                    break;
+                case ICON:
+                    out.writeInt(this.value != null ? 1 : 0);
+                    if (this.value != null) {
+                        ((Icon)this.value).writeToParcel(out, flags);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private Class<?> getParameterType() {
+            switch (this.type) {
+                case BOOLEAN:
+                    return boolean.class;
+                case BYTE:
+                    return byte.class;
+                case SHORT:
+                    return short.class;
+                case INT:
+                    return int.class;
+                case LONG:
+                    return long.class;
+                case FLOAT:
+                    return float.class;
+                case DOUBLE:
+                    return double.class;
+                case CHAR:
+                    return char.class;
+                case STRING:
+                    return String.class;
+                case CHAR_SEQUENCE:
+                    return CharSequence.class;
+                case URI:
+                    return Uri.class;
+                case BITMAP:
+                    return Bitmap.class;
+                case BUNDLE:
+                    return Bundle.class;
+                case INTENT:
+                    return Intent.class;
+                case COLOR_STATE_LIST:
+                    return ColorStateList.class;
+                case ICON:
+                    return Icon.class;
+                default:
+                    return null;
+            }
+        }
+
+        @Override
+        public void apply(View root, ViewGroup rootParent, OnClickHandler handler) {
+            final View view = root.findViewById(viewId);
+            if (view == null) return;
+
+            Class<?> param = getParameterType();
+            if (param == null) {
+                throw new ActionException("bad type: " + this.type);
+            }
+
+            try {
+                getMethod(view, this.methodName, param).invoke(view, wrapArg(this.value));
+            } catch (ActionException e) {
+                throw e;
+            } catch (Exception ex) {
+                throw new ActionException(ex);
+            }
+        }
+
+        @Override
+        public Action initActionAsync(ViewTree root, ViewGroup rootParent, OnClickHandler handler) {
+            final View view = root.findViewById(viewId);
+            if (view == null) return ACTION_NOOP;
+
+            Class<?> param = getParameterType();
+            if (param == null) {
+                throw new ActionException("bad type: " + this.type);
+            }
+
+            try {
+                Method method = getMethod(view, this.methodName, param);
+                Method asyncMethod = getAsyncMethod(method);
+
+                if (asyncMethod != null) {
+                    Runnable endAction = (Runnable) asyncMethod.invoke(view, wrapArg(this.value));
+                    if (endAction == null) {
+                        return ACTION_NOOP;
+                    } else {
+                        // Special case view stub
+                        if (endAction instanceof ViewStub.ViewReplaceRunnable) {
+                            root.createTree();
+                            // Replace child tree
+                            root.findViewTreeById(viewId).replaceView(
+                                    ((ViewStub.ViewReplaceRunnable) endAction).view);
+                        }
+                        return new RunnableAction(endAction);
+                    }
+                }
+            } catch (ActionException e) {
+                throw e;
+            } catch (Exception ex) {
+                throw new ActionException(ex);
+            }
+
+            return this;
+        }
+
+        public int mergeBehavior() {
+            // smoothScrollBy is cumulative, everything else overwites.
+            if (methodName.equals("smoothScrollBy")) {
+                return MERGE_APPEND;
+            } else {
+                return MERGE_REPLACE;
+            }
+        }
+
+        public String getActionName() {
+            // Each type of reflection action corresponds to a setter, so each should be seen as
+            // unique from the standpoint of merging.
+            return "ReflectionAction" + this.methodName + this.type;
+        }
+
+        @Override
+        public boolean prefersAsyncApply() {
+            return this.type == URI || this.type == ICON;
+        }
+    }
+```
+可以看到，他是一个反射动作，通过他对使用反射的方式`  getMethod(view, this.methodName, param).invoke(view, wrapArg(this.value));`
+
+```
+private class TextViewSizeAction extends Action {
+    public TextViewSizeAction(int viewId, int units, float size) {
+        this.viewId = viewId;
+        this.units = units;
+        this.size = size;
+    }
+
+    public TextViewSizeAction(Parcel parcel) {
+        viewId = parcel.readInt();
+        units = parcel.readInt();
+        size  = parcel.readFloat();
+    }
+
+    public void writeToParcel(Parcel dest, int flags) {
+        dest.writeInt(TAG);
+        dest.writeInt(viewId);
+        dest.writeInt(units);
+        dest.writeFloat(size);
+    }
+
+    @Override
+    public void apply(View root, ViewGroup rootParent, OnClickHandler handler) {
+        final TextView target = root.findViewById(viewId);
+        if (target == null) return;
+        target.setTextSize(units, size);
+    }
+
+    public String getActionName() {
+        return "TextViewSizeAction";
+    }
+
+    int units;
+    float size;
+
+    public final static int TAG = 13;
+}
+```
+这个比较简单，就不分析了。
+关于单击事件，RemoteVies中只支持发起PendingIntent，不支持onClickListener模式。另外我们需要注意setOnClickPendingIntent，setPengdingIntentTemplate，setOnClickFillIInIntent之间的联系。
+首先：setOnClickPendingIntent用于给普通的View设置单击事件，但是不能给集合设置单击事件（ListView和StackView）中的View设置单击事件；其次要给ListView和stackView中的Item设置单击事件，必须将SetPendingIntentTemplate和setOnClickFillInIntent组合才可以。
 
 ## RemoteViews的意义
 
