@@ -10524,8 +10524,98 @@ private class TextViewSizeAction extends Action {
 首先：setOnClickPendingIntent用于给普通的View设置单击事件，但是不能给集合设置单击事件（ListView和StackView）中的View设置单击事件；其次要给ListView和stackView中的Item设置单击事件，必须将SetPendingIntentTemplate和setOnClickFillInIntent组合才可以。
 
 ## RemoteViews的意义
+在之前的章节，已经分析了RemoteViews的内部机制，了解RemoteViews的内部机制可以让我妈更加清晰的了解通知栏和桌面小工具的实现原理。但是本章对RemoteViews的探索并没有终止。在本章节中我们将打造一个模拟通知栏并实现跨进程的UI更新操作。
+
+
+首先是两个Activityy分别运行在不同的进程中，一个名字叫A，一个名字叫B，其中A扮演模拟通知栏的角色，B则可以不听的发送通知栏消息，当然这是模拟消息的信息。为了模拟通知栏效果，我们修改A的Progress属性，使其运行在单独的进程。这样A和B就构成了多进程通讯。我们在B中创建RemoteViews对象，然后通知A显示这个RemoteViews对象。如何通过通知A显示B中的remoteViews呢？我们可以像系统一样使用Binder来实现，但是为了简单期间就使用广播。B每发送一次通知，就会发送一个特定广播，然后A接受到这个特定广播，后开始显示B中定义的RemoteViews对象，这个过程和系统的通知栏消息的显示过程几乎一致，或者说这里就是负值了通知栏的显示过程而已。
+首先看一下B的实现。B只要构造RemoteViews并将其传递给A就可以了。这一过程通知栏采用Binder实现，这里采用广播来实现
+
+
+```
+public class AActivity extends Activity {
+
+
+    private static final String TAG = "MainActivity";
+    private LinearLayout mRemoteViewsContent;
+    private BroadcastReceiver mRemoteViewReceiver = new BroadcastReceiver() {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+          RemoteViews remoteViews = intent.getParcelableExtra("xxx,xxx");
+                 if (remoteViews != null) {
+                     updateUI(remoteViews);
+                 }
+        }
+    };
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        initView();
+    }
+
+    private void initView() {
+        mRemoteViewsContent=findViewById(R.id.test);
+        IntentFilter filter=new IntentFilter("xxx,xxx");
+        registerReceiver(mRemoteViewReceiver,filter);
+    }
+
+
+
+    private void  updateUI(RemoteViews remoteViews){
+        View view=remoteViews.apply(this,mRemoteViewsContent);
+        mRemoteViewsContent.addView(view);
+    }
+
+    @Override
+    protected void onDestroy() {
+        unregisterReceiver(mRemoteViewReceiver);
+        super.onDestroy();
+
+
+    }
+}
+
+```
+
+```
+public class BActivity extends Activity {
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        RemoteViews remoteViews = new RemoteViews(getPackageName(), R.layout.b_activity);
+
+        remoteViews.setTextViewText(R.id.msg, "msg from process :");
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, DemoActivity_1.class), PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent openActivity2 = PendingIntent.getActivity(this, 0, new Intent(this, DemoActivity_2.class), PendingIntent.FLAG_UPDATE_CURRENT);
+        remoteViews.setOnClickPendingIntent(R.id.item_holder, pendingIntent);
+
+
+        Intent intent = new Intent("xxx.xxx");
+        intent.putExtra("xxx.xxx", remoteViews);
+        sendBroadcast(intent);
+
+    }
+}
+
+```
+
+就是一个数据的传递。
 
 # 第六章 Android的Drawable
+本章的话题是Android的drawable，drawable表示一种可以在Canvas上进行绘制的抽象的概念，他的种类有很多，这里介绍一下。然后drawable在定制一些特殊View时很方便。他有很多优点，比如使用简单，比自定义View成本低很多。其次，非图片类型的Drawable占用空间小，对减小apk体积有很大的帮助。
+## Drawable简介
+drawable有很多种
+
+
+![Alt text](图像1525616978.png "这个是在Drawable上面所有的子类")
+
+在实际的开发中，Drawable常被用来作为View的背景使用，Drawable一般是通过XML来定义的。当然，我们可以通过代码创建具体的drawable对象。只是用代码创建比较复杂。
+
+## Drawable的分类
+
 # 第七章 Android 动画深入分析  
 # 第八章 理解Windows和WindowsManager
 # 第九章 四大组件的工作流程
