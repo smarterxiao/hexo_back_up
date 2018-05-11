@@ -7,8 +7,6 @@ tags: android进阶第一步
 >  这个是Android 开发艺术探索的读书笔记，感觉在把android群英传整理之后对android的知识体系有了更加深入的理解，好记性不如烂笔头，还是记录一下。
 
 # 第一章 Activity的生命周期和启动模式
-> Activity的理解
-
 ## Android 的生命周期全面分析
 ### 正常情况下的生命周期分析
 
@@ -10649,6 +10647,182 @@ drawable有很多种
 |可选项|含义|
 |:--:|:--:|
 |top|将图片放在容器顶部，不改变图片大小|
+|bottom|将图片放在容器底部，不改变图片大小|
+|left|将图片放在容器左部，不改变图片大小|
+|right|将图片放在容器右部，不改变图片大小|
+|center_vertical|将图片竖直居中，不改变图片大小|
+|center_horizontal|将图片水平居中，不改变图片大小|
+|center|将图片居中，不改变图片大小|
+|fill_vertical|将图片竖直方向填充容器|
+|fill_horizontal|将图片水平方向填充容器|
+|fill|将图片填充容器，包含水平和竖直两个方向，这个是默认值|
+|clip_vertical|附加选项，表示竖直方向剪裁，较少使用|
+|clip_horizontal|附加选项，表示水平方向剪裁，较少使用|
+
+* android:mipMap
+这是一种图像相关的处理技术，也叫纹理映射，比较抽象，这里也不对他进行深究，默认值为false，这个选项开发中不常用，具体可以看一下 https://baike.baidu.com/item/%E7%BA%B9%E7%90%86%E6%98%A0%E5%B0%84/7366346 了解一下。这个做游戏会用的比较多
+
+* android:tileMode
+平铺模式，这个选项有如下几个值，disabled，clamp，repeat，mirror。其中disabled表示关闭平铺模式，这个是默认值。当开启平铺模式之后，gravity属性会被忽略，这里主要说一下repeat，mirror，clamp的区别。
+这里直接看效果图。这个样子比较明显
+
+
+![Alt text](huaji.jpg "原图")
+
+clamp效果
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@mipmap/test"
+    android:antialias="true"
+    android:dither="true"
+    android:gravity="center"
+    android:mipMap="true"
+    android:tileMode="clamp"
+    >
+</bitmap>
+```
+
+![Alt text](device-2018-05-07-105130.png "clamp")
+
+mirror效果
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@mipmap/test"
+    android:antialias="true"
+    android:dither="true"
+    android:gravity="center"
+    android:mipMap="true"
+    android:tileMode="mirror"
+    >
+</bitmap>
+```
+
+![Alt text](device-2018-05-07-105505.png "mirror")
+
+
+repeat效果
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@mipmap/test"
+    android:antialias="true"
+    android:dither="true"
+    android:gravity="center"
+    android:mipMap="true"
+    android:tileMode="repeat"
+    >
+</bitmap>
+```
+
+![Alt text](device-2018-05-07-105557.png "repeat")
+
+可以看到明显的区别
+接下来介绍一下ninePatchDrawable，他表示一张.9格式的图片，.9格式的图片可以自动的根据所需要的宽和高进行缩放并保证不失真，之所以把它和BitmapDrawable放在一起介绍是因为他们都表示一张图片。和BitmapDrawable一样，在实际使用中直接引用图片即可。但是也可以通过xml来描述.9图
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<nine-patch xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@mipmap/test">
+
+</nine-patch>
+```
+可以把它作为背景使用
+
+### ShapeDrawable
+shapeDrable是也是一个常用的drawable。他的作用是绘制一些比较复杂的图形，比如圆形
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval"
+    android:dither="true">
+    <corners android:radius="2dp" />
+    <gradient android:angle="20" />
+    <padding android:bottom="20dp" />
+    <size android:height="20dp" />
+    <solid android:color="#ff0000" />
+    <stroke android:color="#00ff00" />
+
+</shape>
+```
+
+这里先来看一下一个最基本的shape写法，然后分析一下常用的几个属性
+
+* android:shape
+  这个表示图形的形状，有四个选项rectangle(矩形)，oval（椭圆），line(横线)，ring（圆环）。他默认是矩形的，另外，line和ring这两个选项必须要通过<stroke>这个标签来指定线条的宽度和颜色信息，否则将无法达到预期的显示效果，针对ring这个形状，有5个特殊的属性：android:innerRadius,android:thickness,android:innerRadiusRatio,android:thicknessRatio和android:useLevel，他们的含义
+
+  |value|desciption|
+  |:---:|:---:|
+  |android:innerRadius|圆环的内半径，和innerRadiusRatio属性同时存在，以innerRadius为准|
+  |android:thickness|圆环厚度，即外半径减去内半径的大小，和innerRadiusRatio同时存在，以innerRadius为准|
+  |android:innerRadiusRatio|外半径占整个drawable宽度的比例。默认值为9，如果值为n，那么内半径的宽度=宽度/n|
+  |android:thicknessRatio|厚度占整个drawable宽度的比例。默认值为3，如果值为n，那么厚度的宽度=厚度/n|
+  |android:useLevel|一般使用false，否则无法达到效果，除非他被当做LevelListDrawable|
+
+* conners
+  表示4个角的角度，他只适用于shape，这里是指圆角的程度，用px或者dp来表示。
+  * android:radius  为四个角度同时设定相同的角度，优先级低
+  * android:bottomLeftRadius 不同角度的高度，优先级高
+  * android:bottomRightRadius
+  * android:topLeftRadius
+  * android:topRightRadius
+
+* gradient 他与sold标签互相排斥，其中solid表示纯色填充，而gradient则表示渐变效果，gradient有如下几个属性
+  * angle 渐变的角度，默认值是0，其值必须是45的倍数，0表示从左到右，90表示从下到上，具体的效果需要看显示的效果来微调。
+  * centerX 渐变的中心的横坐标
+  * centerY 渐变的中心的纵坐标
+  * startColor 开始颜色
+  * centerColor 中间颜色
+  * endColor 渐变的结束色
+  * gradientRadius 渐变半径 仅当type=radial是有效
+  * useLevel 一般为false，当drawable所谓stateListDrawable使用时有效
+  * type 渐变类别，有linear（线性渐变），radial（径向渐变），sweep（扫描渐变）三种，其中默认是线性渐变
+* sold 表示填充色
+* stroke 描边
+* padding 表示空白，不是shape的空白，而是View的空白
+* size 表示这个shape的固有大小 如果设置，那么这个就是shape的固有大小，但是作为背景时会被拉伸。
+### layerDrawable
+laywerDrawable对应的XML是标签layer-list，他表示一种层次化的drawable集合，通过不同的drawable放置在不同层面上从而达到叠加后的效果
+```
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:id="@+id/ddd" android:drawable="@drawable/huaji2"/>
+    <item android:id="@+id/ddd333" android:drawable="@drawable/huaji2"/>
+</layer-list>
+```
+每一个item都表示一个drawable，item的结构也比较简单，下面的会覆盖上层的item，通过合理分层可以实现一些特殊的效果
+这里实现一个微信中文本输入框的效果
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item  >
+        <shape android:shape="rectangle">
+            <solid android:color="#0ac39e"/>
+        </shape>
+
+       </item>
+    <item  android:bottom="6dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#ffffff"/>
+        </shape>
+    </item>
+    <item  android:bottom="1dp" android:left="1dp" android:right="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#ffffff"/>
+
+        </shape>
+    </item>
+</layer-list>
+```
+
+![Alt text](device-2018-05-11-174618.png "效果图")
 
 # 第七章 Android 动画深入分析  
 # 第八章 理解Windows和WindowsManager
