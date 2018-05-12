@@ -10824,6 +10824,298 @@ laywerDrawable对应的XML是标签layer-list，他表示一种层次化的drawa
 
 ![Alt text](device-2018-05-11-174618.png "效果图")
 
+### StateListDrawable
+这个对应selector标签，表示drawable集合，每个drawable都对应着View的一种状态，这样系统会根据View的状态来选择合适的drawable。
+```
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+<item
+    android:drawable="@drawable/test3"
+    android:state_accelerated="true"
+    android:state_active="true"
+    android:state_checkable="true"
+    android:state_checked="true"
+    android:state_drag_can_accept="true"
+    android:state_drag_hovered="true"
+    android:state_enabled="true"
+    android:state_first="true"
+    android:state_focused="true"
+    android:state_hovered="true"
+    android:state_last="true"
+    android:state_middle="true"
+    android:state_pressed="true"
+    android:state_selected="true"
+    android:state_single="true"
+    android:state_window_focused="true"
+    android:state_activated="true"/>
+</selector>
+```
+可以看一下有这么多种状态量
+* android:constantSize
+  StateListDrawable的固定大小是不随着其状态的改变而改变的，改变状态会导致stateListDrawable切换到具体的drawable,而不同的Drawable具有不同的固定大小，True表示StateListDrawable的固定大小保持不变，这是他的固定大小是内部所有drawable的最大值，false则会随着状态的改变而改变，此选项默认值为false
+* android:mDisallowInterceptTouchEventOnHeader
+  是否开启抖动效果，之前说过，最好开启
+* android:variablePadding
+  stateListDrawable的padding表示你是否随着其状态改变而改变，true表示会随着状态的改变而改变，false表示stateListDrawable的padding是内部所有Drawable的padding的最大值，默认值是false。建议不要开启
+
+|状态|含义|
+|:--:|:--:|
+|android:state_pressed|表示按下状态，比如Button被按下后没有松开时的状态|
+|android:state_focus|表示View已经获取了焦点|
+|android:state_selected|表示用户选择了View|
+|android:state_checked|表示用户选中了View，一般适用于CheckBox这类在选中和非选中状态之前切换的View|
+|android:state_enable|表示View当前处于可用状态|
+
+### LevelListDrawable
+LevelListDrawable对应于level-list标签，他同样表示一个drawable集合，集合中的每一个Drawable都有一个等级level的概念，根据不同的等级，LevelListDrawable会切换为对应的Drawable，他的语法如下
+```
+<?xml version="1.0" encoding="utf-8"?>
+<level-list xmlns:android="http://schemas.android.com/apk/res/android">
+<item android:drawable="@drawable/test3"
+    android:maxLevel="1"
+    android:minLevel="2"
+    />
+</level-list>
+```
+
+上面的语法中，每个item表示一个drawable，并且有对应的等级范围，由android：min_level和android:maxLevel来指定，最大值和最小值会对应此item中的drawable。下面是一个例子，当他作为View的背景时。可以通过drawable的setLevel方法来设置不同的等级从而切换不同的drawable。如果它被用来所imageView的背前景，还可以通过imageView的setImageLevel方法来切换drawable，最后的drawable的顶级是有范围的，即0-10000，最小等级是0，也就是默认值，最大等级是10000。
+
+### TransitionDrawable
+TransitionDrawable对应于transition标签，他用于实现两个drawable之间的淡入淡出效果，他的语法如下
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<transition xmlns:android="http://schemas.android.com/apk/res/android">
+<item android:drawable="@drawable/test333"></item>
+    <item android:drawable="@drawable/huaji2"></item>
+</transition>
+```
+这样就定义了一组淡入淡出变换
+然后通过
+```
+    TextView tv = findViewById(R.id.tx);
+    TransitionDrawable background = (TransitionDrawable) tv.getBackground();
+    background.startTransition(1000);
+    background.reverseTransition(1000);
+```
+通过这两种方式进行调用，注意，这个一开始两张图片就会叠加在一起，然后会有一个淡入淡出的过程。
+从滑稽头像变成狗狗
+![Alt text](device-2018-05-12-160955.png "效果图")
+
+### insetDrawable
+这个对应inset标签，他可以将其他drawable内嵌到自己当中，可以在周围流出一定的间距，当一个View希望自己的背景比自己的实际区域小的时候就可以通过insetDrawable
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetBottom="15dp"
+    android:insetRight="15dp"
+    android:insetLeft="15dp"
+    android:insetTop="15dp"
+
+    >
+    <shape android:shape="rectangle">
+        <solid android:color="#ff0000"></solid>
+    </shape>
+</inset>
+```
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:id="@+id/tx"
+        android:text="jdkfjksd"
+        android:background="@drawable/test7"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</android.support.constraint.ConstraintLayout>
+```
+![Alt text](device-2018-05-12-161610.png "效果图")
+
+### ScaleDrawable
+对应的标签是scale，他可以根据自己的等级将指定的drawable缩放到一定的比例。
+```
+<?xml version="1.0" encoding="utf-8"?>
+<scale xmlns:android="http://schemas.android.com/apk/res/android"
+android:drawable="@drawable/test333"
+android:level="10"
+android:scaleHeight="50%">
+</scale>
+```
+
+注意：这里的scaleHeight和scaleWidth是要百分比，是要缩小或者放大的百分比，如果是scaleHeight=25%，那么就是高度缩小25%
+
+![Alt text](device-2018-05-12-163022.png "效果图")
+
+这个是高度缩小25% 本来是全屏的
+
+scaleDrawable有一点难以理解，这里我们先要弄明白他的等级这个概念，`android:level`的默认值是0，表示不可见，这个是默认值，想要scaleDrawable可见，他的等级不能为0，这一点可以从源码看出来
+
+```
+@Override
+ public void draw(Canvas canvas) {
+     final Drawable d = getDrawable();
+     if (d != null && d.getLevel() != 0) {
+         d.draw(canvas);
+     }
+ }
+
+```
+如果等级为0，是不会绘制的。
+这里在看一下他的`onBoundsChanges`方法，入下所示
+
+```
+@Override
+   protected void onBoundsChange(Rect bounds) {
+       final Drawable d = getDrawable();
+       final Rect r = mTmpRect;
+       final boolean min = mState.mUseIntrinsicSizeAsMin;
+       final int level = getLevel();
+
+       int w = bounds.width();
+       if (mState.mScaleWidth > 0) {
+           final int iw = min ? d.getIntrinsicWidth() : 0;
+           w -= (int) ((w - iw) * (MAX_LEVEL - level) * mState.mScaleWidth / MAX_LEVEL);
+       }
+
+       int h = bounds.height();
+       if (mState.mScaleHeight > 0) {
+           final int ih = min ? d.getIntrinsicHeight() : 0;
+           h -= (int) ((h - ih) * (MAX_LEVEL - level) * mState.mScaleHeight / MAX_LEVEL);
+       }
+
+       final int layoutDirection = getLayoutDirection();
+       Gravity.apply(mState.mGravity, w, h, bounds, r, layoutDirection);
+
+       if (w > 0 && h > 0) {
+           d.setBounds(r.left, r.top, r.right, r.bottom);
+       }
+   }
+
+```
+
+在这里可以看到drawable的大小和等级以及缩放比例的关系，这里那高度来说
+```
+int h = bounds.height();
+if (mState.mScaleHeight > 0) {
+    final int ih = min ? d.getIntrinsicHeight() : 0;
+    h -= (int) ((h - ih) * (MAX_LEVEL - level) * mState.mScaleHeight / MAX_LEVEL);
+}
+```
+一般ih都是0，所以上面可以简化为  h -= (int) (h * (10000 - level) * mState.mScaleHeight / 10000)，可见，如果scaleDrawable的级别越大，那么内部的drawable看起来越大，如果scaleDrawable的XML中所指定的缩放比例越大，那么内部的drawable看起来越小，所以看效果，scaleDrawable更加偏向于缩小一个特定的drawable。
+
+```
+TextView tv = findViewById(R.id.tx);
+ ScaleDrawable scaleDrawable= (ScaleDrawable) tv.getBackground();
+scaleDrawable.setLevel(1);
+```
+
+### ClipDrawable
+clipDrawable 对应clip标签，他可以根据自己当前的等级来裁切另一个drawable,剪裁方向可以通过clipOrientation和gravity来控制
+
+clipDrawable
+```
+<?xml version="1.0" encoding="utf-8"?>
+<clip xmlns:android="http://schemas.android.com/apk/res/android"
+    android:clipOrientation="vertical"
+    android:gravity="bottom"
+
+    android:drawable="@drawable/test333">
+
+</clip>
+```
+
+imageView
+```
+
+    <ImageView
+        android:id="@+id/tx"
+        android:src="@drawable/test9"
+        android:layout_width="100dp"
+        android:layout_height="100dp" />
+```
+设置优先级
+```
+ImageView tv = findViewById(R.id.tx);
+ClipDrawable clipDrawable= (ClipDrawable) tv.getDrawable();
+lipDrawable.setLevel(5000);
+```
+
+![Alt text](device-2018-05-12-165851.png "效果图")
+
+* clipOrientation表示剪裁方向
+  上面的是竖直方向
+* gravity表示从哪开始剪裁
+
+|gravity选项|含义|
+|:---:|:---:|
+|top|将内部的drawable放在容器的顶部，不改变他的大小，如果为竖直剪裁，那么从顶部开始剪裁|
+|bottom|将内部的drawable放在容器的底部，不改变他的大小，如果为竖直剪裁，那么从底部开始剪裁|
+|left|将内部的drawable放在容器的左部，不改变他的大小，如果为水平剪裁，那么从左部开始剪裁|
+|right|将内部的drawable放在容器的右部，不改变他的大小，如果为水平剪裁，那么从右部开始剪裁|
+|center_vertical|将内部的drawable放在容器的竖直居中，不改变他的大小，如果为竖直剪裁，那么从底部和头部同时开始剪裁|
+|fill_vertical|将内部的drawable在竖直方向上填充容器，不改变他的大小，如果为竖直剪裁，那么仅当clipDrawable的等级为0（0表示clipDrawable被完全剪裁，即不可见）时，才能有剪裁行为|
+|center_horizontal|将内部的drawable放在容器的水平居中，不改变他的大小，如果为水平剪裁，那么从左部和右部同时开始剪裁|
+|fill_horizontal|将内部的drawable在水平方向上填充容器，不改变他的大小，如果为水平剪裁，那么仅当clipDrawable的等级为0（0表示clipDrawable被完全剪裁，即不可见）时，才能有剪裁行为|
+|center|将内部的drawable放在容器的居中，不改变他的大小，如果为水平剪裁，那么从左部和右部同时开始剪裁，如果为竖直剪裁，那么从底部和头部同时开始剪裁|
+|fill|使内部的Drawable在水平和竖直方向上同时填充容器，仅当ClipDrawable的等级为0时，才能有剪裁行为|
+|clip_vertical|表示竖直方向剪裁，较少使用|
+|clip_horizontal|表示水平方向剪裁，较少使用|
+
+前面也提及到他的等级是有范围的，就是0-10000，最小是0，最大是10000，如果是0这个等级，就表示完全剪裁，就是什么都没了，如果是10000，表示不剪裁，如果设置为8000，表示剪裁了20%，对于clipDrawable来说，等级越大，剪裁的部分越小
+
+### 自定义Drawable
+drawable的使用范围很单一，一个是作为imageView中图像来显示，一个是作为View的背景显示，大多数情况下drawable都是以View的背景出现的，drawable的原理很简单，其核心就是draw方法，在之前分析了draw的过程。这里可以通过使用重写drawable的draw方法来自定义drawable
+通常我们没有必要去自定义drawable，这是因为自定义的drawable无法在XML中使用，这就降低了自定义Drawable的使用范围，下面演示一个自定义View的过程
+
+```
+public class CustomDrawable extends Drawable {
+    private Paint mPaint;
+
+    public CustomDrawable() {
+
+        mPaint= new Paint(Paint.ANTI_ALIAS_FLAG);
+        mPaint.setColor(Color.parseColor("#ff0000"));
+    }
+
+    @Override
+    public void draw(@NonNull Canvas canvas) {
+        final Rect r=getBounds();
+        float cx=r.exactCenterX();
+        float cy=r.exactCenterY();
+        canvas.drawCircle(cx,cy,Math.min(cx,cy),mPaint);
+    }
+
+    @Override
+    public void setAlpha(int alpha) {
+        mPaint.setAlpha(alpha);
+        invalidateSelf();
+    }
+
+    @Override
+    public void setColorFilter(@Nullable ColorFilter colorFilter) {
+        mPaint.setColorFilter(colorFilter);
+        invalidateSelf();
+    }
+
+    @Override
+    public int getOpacity() {
+        return PixelFormat.TRANSLUCENT;
+    }
+}
+
+```
+如果要实现具体的，可以参考一下BitmapDrawable和ShapeDrawable
+
+
 # 第七章 Android 动画深入分析  
 # 第八章 理解Windows和WindowsManager
 # 第九章 四大组件的工作流程
