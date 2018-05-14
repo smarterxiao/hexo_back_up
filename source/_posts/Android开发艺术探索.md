@@ -4,7 +4,7 @@ date: 2018-01-27 17:08:20
 tags: android进阶第一步
 ---
 
->  这个是Android 开发艺术探索的读书笔记，感觉在把android群英传整理之后对android的知识体系有了更加深入的理解，好记性不如烂笔头，还是记录一下。
+>  这个是Android 开发艺术探索的读书笔记，感觉在把android群英传整理之后对android的知识体系有了更加深入的理解，好记性不如烂笔头，还是记录一下。https://github.com/appium/android-apidemos/blob/master/src/io/appium/android/apis/animation/Rotate3dAnimation.java 这个是这本书项目源码 作者的
 
 # 第一章 Activity的生命周期和启动模式
 ## Android 的生命周期全面分析
@@ -11115,8 +11115,343 @@ public class CustomDrawable extends Drawable {
 ```
 如果要实现具体的，可以参考一下BitmapDrawable和ShapeDrawable
 
-
 # 第七章 Android 动画深入分析  
+Android的动画可以分为三种：View动画，帧动画和属性动画，其实帧动画也属于View动画的一种，只不过他和平移。旋转等常见的View动画在表现形式上略有不用而已。View动画通过场景里的对象不断做图像变换（平移，缩放，旋转，透明度）从而产生动画效果，他是一种渐进式的动画，并且View动画支持自定义。帧动画通过顺序播放一系列图像从而产生动画效果，可以简单理解为图片切换动画。属性动画是API11的新特性，在低版本无法使用水性动画，但是我们任然可以通过使用兼容库来使用它。
+
+## View动画
+View动画的作用对象是View，他支持4中动画效果，分别是平移动画，缩放动画，旋转动画，透明动画，处理这四种经典的动画，帧动画也属于View动画，但是帧动画的表现形式和上面四种动画不太一样，为了更好了区分这四种变换和帧动画。这里的View动画就表示4中变换，不包括帧动画。
+### View动画的种类
+View动画的四种变换效果对应着4个Animation的子类：TranslateAnimation，ScaleAnimation，RotateAnimation，AlphaAnimation，这四种动画可以通过XML来创建，也可以通过代码来动态创建
+
+|名称|标签|子类|效果|
+|:---:|:---:|:---:|:---:|
+|平移动画|translate|TranslateAnimation|移动View|
+|缩放动画|scale|ScaleAnimation|放大或者缩小View|
+|旋转动画|rotate|RotateAnimation|旋转View|
+|透明动画|alpha|alphaAnimation|改变View的透明度|
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <alpha
+        android:fromAlpha="1"
+        android:toAlpha="0.3" />
+
+    <rotate
+        android:fromDegrees="0"
+        android:pivotX="0"
+        android:pivotY="0"
+        android:toDegrees="2" />
+
+    <translate
+        android:fromXDelta="0"
+        android:fromYDelta="0"
+        android:toXDelta="100"
+        android:toYDelta="100" />
+
+    <scale
+        android:fromXScale="0"
+        android:fromYScale="0"
+        android:pivotX="5"
+        android:pivotY="5"
+        android:toXScale="2"
+        android:toYScale="2"/>
+</set>
+```
+从上面语法可以看出View动画既可以是单个动画，也可以是一系列动画
+set标签标示动画集合，对应animationSet这个类，他可以包含若干个动画，并且内部也是可以嵌套其他动画集合的，他的连个属性如下
+
+* android:interpolator
+  标示动画集合所采用的的差值器，差值器影响动画的速度，比如非匀速，加速度，减速等播放效果
+* android:shareInterpolator
+  标示集合动画是否共享一个差值器，如果集合不指定差值器，那么子动画就需要单独指定差值器或者使用默认值
+* translate
+
+|标签|含义|
+|:---:|:---:|
+|android:fromXDelta|表示x的起始值，比如0|
+|android:fromYDelta|表示y的起始值，比如0|
+|android:toXDelta|表示x的结束值，比如100|
+|android:toYDelta|表示y的结束值|
+
+* scale
+这里会提及一个轴点的概念，默认的轴点是中心点，是左右两个方向同时缩放，如果设置轴点为右边界，那么View就会只向左边进行缩放，可以试一下
+
+|标签|含义|
+|:---:|:---:|
+|android:fromXScale|水平方向的起始值，比如0.5|
+|android:fromYScale|竖直方向的起始值，比如0.5|
+|android:toXScale|水平方向的结束值，比如0.5|
+|android:toYScale|竖直方向的结束值，比如0.5|
+|android:pivotX|缩放的轴点的X坐标，会影响缩放效果|
+|android:pivotY|缩放的轴点的Y坐标，会影响缩放效果|
+
+* rotate
+  旋转动画中也有轴点的概念，他会影响旋转的具体效果，默认情况下是围绕中心点进行旋转的
+
+|标签|含义|
+|:---:|:---:|
+|android:fromDegrees|旋转开始的角度，比如0|
+|android:toDegrees|旋转结束的角度，比如180|
+|android:pivotX|旋转的轴点x坐标|
+|android:pivotY|旋转的轴点y坐标|
+
+* alpha
+
+|标签|含义|
+|:---:|:---:|
+|android:fromAlpha|表示透明度起始值，比如0|
+|android:toAlpha|表示透明度结束值，比如1|
+
+* 公共属性
+
+|标签|含义|
+|:---:|:---:|
+|android:duration|动画持续时间|
+|android:fillAfter|动画结束之后是否停留在当前位置，true表示停留，false表示不停留|
+
+上面简单介绍了一下View动画的分类和常用的属性值及其含义，现在来看一下效果
+首先是单个动画效果
+
+* translate 效果
+
+动画xml
+```[xml]
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android" android:duration="10000">
+    <translate
+        android:fromXDelta="0"
+        android:fromYDelta="0"
+        android:toXDelta="1000"
+        android:toYDelta="1000" />
+</set>
+```
+
+activity
+```[java]
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        ImageView tv = findViewById(R.id.tx);
+        Animation animation = AnimationUtils.loadAnimation(this, R.anim.filename);
+        tv.startAnimation(animation);
+    }
+}
+
+```
+
+布局XML
+```[xml]
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <ImageView
+        android:id="@+id/tx"
+        android:src="@drawable/test333"
+        android:layout_width="100dp"
+        android:layout_height="100dp" />
+
+</android.support.constraint.ConstraintLayout>
+```
+
+![Alt text](move.gif "移动效果图")
+
+*  scale 效果
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="10000">
+    <scale
+        android:fromXScale="0"
+        android:fromYScale="0"
+        android:toXScale="2"
+        android:toYScale="2" />
+</set>
+```
+![Alt text](scale_1.gif "缩放效果图")
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="10000">
+    <scale
+
+        android:fromXScale="0"
+        android:fromYScale="0"
+        android:pivotX="300"
+        android:pivotY="300"
+        android:toXScale="2"
+        android:toYScale="2" />
+</set>
+```
+
+![Alt text](scale_2.gif "设置轴点的缩放效果图")
+
+* rotate 效果
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="10000">
+    <rotate
+        android:fromDegrees="0"
+        android:toDegrees="180" />
+</set>
+```
+![Alt text](rotate_1.gif "旋转效果图")
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="10000">
+    <rotate
+        android:fromDegrees="0"
+        android:pivotX="300"
+        android:pivotY="300"
+        android:toDegrees="180" />
+</set>
+```
+![Alt text](rotate_2.gif "设置轴点的旋转效果图")
+
+* alpha 效果
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="10000">
+    <alpha
+        android:fromAlpha="0.3"
+        android:toAlpha="1" />
+</set>
+```
+![Alt text](alpha.gif "透明度变化效果")
+
+使用代码设置动画
+
+```
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        ImageView tv = findViewById(R.id.tx);
+        AlphaAnimation alphaAnimation=new AlphaAnimation(0,1);
+        alphaAnimation.setDuration(10000);
+        tv.startAnimation(alphaAnimation);
+    }
+}
+
+```
+组合动画就是将几个标签放在一起，这样几个动画同时播放
+
+这里做一个验证
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="3000" android:fillAfter="true">
+    <translate
+        android:fromXDelta="0"
+        android:fromYDelta="0"
+        android:toXDelta="300"
+        android:toYDelta="300" />
+</set>
+```
+设置`android:fillAfter="true"` 这样移动之后就不会回去，但是给View设置点击事件，看一下点击事件会不会随着动画移动
+```
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        ImageView tv = findViewById(R.id.tx);
+        Animation animation = AnimationUtils.loadAnimation(this, R.anim.filename);
+        tv.startAnimation(animation);
+        tv.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Toast.makeText(MainActivity.this, "点击我了", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+}
+
+```
+发现点击事件还是停留在原来的地方，点击移动之后View显示的位置是没有点击事件的。
+View动画的原理是在draw的时候操作画布
+
+### 自定义动画
+
+除了系统提供的四种View动画外，我们还可以自定义View动画，自定义动画是一件既简单又复杂的事情，说简单是他操作比较简单，只需要继承Animation并且实现他的抽象方法initialize和applyTransformation,在initialize中做一些简单的初始化，在applyTransformation中做相应的矩阵变化即可，很多时候需要采用camera来简化矩阵的变换过程，说他复杂，是因为自定义View动画的过程主要是矩阵变化的过程，而矩阵都是数学上面的概念，如果对这个不熟悉，就比较困难了。
+
+这里实现一个简单的3d旋转动画
+
+
+```
+public class Rotate3dAnimation extends Animation {
+    private final float mFromDegrees;
+    private final float mToDegrees;
+    private final float mCenterX;
+    private final float mCenterY;
+    private final float mDepthZ;
+    private final boolean mReverse;
+    private Camera mCamera;
+
+    public Rotate3dAnimation(float fromDegrees, float toDegrees,
+                             float centerX, float centerY, float depthZ, boolean reverse) {
+        mFromDegrees = fromDegrees;
+        mToDegrees = toDegrees;
+        mCenterX = centerX;
+        mCenterY = centerY;
+        mDepthZ = depthZ;
+        mReverse = reverse;
+    }
+
+    @Override
+    public void initialize(int width, int height, int parentWidth, int parentHeight) {
+        super.initialize(width, height, parentWidth, parentHeight);
+        mCamera = new Camera();
+    }
+
+    @Override
+    protected void applyTransformation(float interpolatedTime, Transformation t) {
+        final float fromDegrees = mFromDegrees;
+        float degrees = fromDegrees + ((mToDegrees - fromDegrees) * interpolatedTime);
+
+        final float centerX = mCenterX;
+        final float centerY = mCenterY;
+        final Camera camera = mCamera;
+        final Matrix matrix = t.getMatrix();
+        camera.save();
+        if (mReverse) {
+            camera.translate(0.0f, 0.0f, mDepthZ * interpolatedTime);
+        } else {
+            camera.translate(0.0f, 0.0f, mDepthZ * (1.0f - interpolatedTime));
+        }
+        camera.rotateY(degrees);
+        camera.getMatrix(matrix);
+        camera.restore();
+        matrix.preTranslate(-centerX, -centerY);
+        matrix.postTranslate(centerX, centerY);
+    }
+}
+```
+
+![Alt text](rotate_3d.gif "3d旋转效果")
+
+### 帧动画
+
+## View动画的特殊使用场景
+## 属性动画
+## 使用动画注意事项
 # 第八章 理解Windows和WindowsManager
 # 第九章 四大组件的工作流程
 # 第十章 Android的消息机制
