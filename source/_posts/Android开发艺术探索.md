@@ -11448,11 +11448,1708 @@ public class Rotate3dAnimation extends Animation {
 ![Alt text](rotate_3d.gif "3d旋转效果")
 
 ### 帧动画
+帧动画是播放一组预先设定好的图片，类似于电影播放，不同于View动画，系统提供了另外一个类AnimationDrawable来使用帧动画，帧动画的使用比较简单
+
+这个是放在res/drawable中的
+```
+<?xml version="1.0" encoding="utf-8"?>
+<animation-list xmlns:android="http://schemas.android.com/apk/res/android">
+<item android:drawable="@drawable/test333" android:duration="200"/>
+    <item android:drawable="@drawable/test333" android:duration="200"/>
+</animation-list>
+```
+然后将它设置播放就可以
+```
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        final ImageView tv = findViewById(R.id.tx);
+        AnimationDrawable animationDrawable = (AnimationDrawable) tv.getDrawable();
+        animationDrawable.start();
+    }
+}
+
+```
 
 ## View动画的特殊使用场景
+一些特殊的animation
+### LayoutAnimation
+LayoutAnimation作用于ViewGroup，为ViewGroup指定一个动画，这样当他的子元素在出厂的时候都会有这种动画效果，这种动画效果常常被用在ListView上面，我们时常看到一种特殊的ListView，他的每一个item都以一定的动画效果出现，这个不是什么高深的技术，他使用的就是LayoutAnimation。LayoutAnimation是一个动画集合，为了给ViewGroup的子元素加上出场效果
+在res/anim文件夹下面创建
+```
+<?xml version="1.0" encoding="utf-8"?>
+<layoutAnimation xmlns:android="http://schemas.android.com/apk/res/android"
+    android:animation="@anim/anim_item"
+    android:animationOrder="normal"
+    android:delay="0.5">
+
+
+</layoutAnimation>
+```
+
+* android:delay 表示动画开始时的延迟，如果元素入场动画的时间周期都为300，那么0.5表示每个元素都需要延迟150ms才能播放入场动画，总体来说第一个延迟150，第二个延迟300，以此类推
+* android：animationOrder  表示子元素播放动画的顺序，有三种选项：normal，reverse和random，其中normal表示顺序，reverse表示逆向，random表示随机
+* android:animation 表示元素指定的入场动画
+
+在res/anim下面anim_item
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="300"
+    android:shareInterpolator="true">
+    <alpha
+        android:fromAlpha="0.0"
+        android:toAlpha="1.0" />
+    <translate
+        android:fromXDelta="500"
+        android:toXDelta="0" />
+</set>
+```
+activity
+```[java]
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        ListView tv = findViewById(R.id.list);
+        ArrayList<String> datas = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            datas.add("name" + i);
+        }
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, R.layout.content_list_item, R.id.name, datas);
+        tv.setAdapter(adapter);
+    }
+
+}
+
+```
+activity xml
+```
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <ListView
+        android:id="@+id/list"
+        android:layoutAnimation="@anim/test111"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</android.support.constraint.ConstraintLayout>
+```
+![Alt text](list_animation.gif "listView动画效果")
+
+也可以使用代码实现这个效果
+```
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        ListView tv = findViewById(R.id.list);
+        Animation animation=AnimationUtils.loadAnimation(this,R.anim.test111);
+        LayoutAnimationController controller=new LayoutAnimationController(animation);
+        controller.setDelay(0.5f);
+        controller.setOrder(LayoutAnimationController.ORDER_NORMAL);
+        tv.setLayoutAnimation(controller);
+        ArrayList<String> datas = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            datas.add("name" + i);
+        }
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, R.layout.content_list_item, R.id.name, datas);
+        tv.setAdapter(adapter);
+    }
+
+}
+```
+
+### Activity的切换效果
+activity有默认的切换效果，但是这个效果我们可以自定义的，主要用到overridePendingtransition()这个方法，这个方法必须在startActivity(Intent)或者finish()之后调用才能生效，他的含义如下
+* enterAnim  activity被打开动画
+* exitAnim activity被暂停时，所需要的动画
+
+```
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        findViewById(R.id.bt).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MainActivity.this, TestActivity.class);
+                startActivity(intent);
+                //入场动画
+                overridePendingTransition(R.anim.enter_anim,R.anim.exit_anim);
+            }
+        });
+    }
+
+}
+
+```
+```
+public class TestActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_test);
+        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+
+        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
+        fab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
+                        .setAction("Action", null).show();
+            }
+        });
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        //出场动画
+        overridePendingTransition(R.anim.enter_anim,R.anim.exit_anim);
+    }
+}
+
+```
+res/anim/exit_anim.xml
+```[exit_anim]
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="300"
+  >
+    <alpha
+        android:fromAlpha="1"
+        android:toAlpha="0" />
+</set>
+```
+res/anim/enter_anim.xml
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="300">
+    <alpha
+        android:fromAlpha="0"
+        android:toAlpha="1" />
+</set>
+```
+
+这里是一个简单的透明度变化
+![Alt text](activity.gif "activity 动画效果")
+
+fragment也可以添加切换动画，是在api11之后引入的，可以通过fragmentTransaciton的`setCustomAnimations()`方法来添加切换动画
 ## 属性动画
+属性动画是API11新加入的特性，和View动画不同，他对作用对象进行了脱产，属性动画可以对任意对象做动画，甚至还可以没有对象...
+属性动画中的ValueAnimator，ObjectAnimator和AnimatorSet等概念，通过他们可以实现不同的效果
+### 使用属性动画
+属性动画可以对任意对象的属性进行动画设置，而不仅仅是View，他改变的是一个对象的属性，而View动画只是在draw的时候对画布进行操作。属性动画的默认时间间隔是300ms，默认帧率是10ms/帧。 如果需要兼容android2.3之前的版本，可以使用nineoldandroids这个库。比较常用的几个动画类是ValueAnimator，ObjectAnimator和Animatorset。其中ObjectAnimator继承自ValueAnimator，AnimatorSet是动画集合，可以定义一组动画。
+```
+        ObjectAnimator.ofFloat(bt,"translationY",-bt.getHeight()).start();
+```
+一个简单的ObjectAnimator动画，这个是系统已经内置好的，在Y轴方向上面进行平移
+
+```
+ValueAnimator colorAnim=ObjectAnimator.ofInt(bt,"backgroundColor",0xffff8080,0xff8080ff);
+colorAnim.setDuration(3000);
+colorAnim.setEvaluator(new ArgbEvaluator());
+colorAnim.setRepeatCount(ValueAnimator.INFINITE);
+colorAnim.setRepeatMode(ValueAnimator.REVERSE);
+colorAnim.start();
+```
+![Alt text](color_change.gif "颜色变化")
+动画集合
+```
+AnimatorSet set = new AnimatorSet();
+
+     set.playTogether(ObjectAnimator.ofFloat(bt, "rotationX", 0, 360)
+             , ObjectAnimator.ofFloat(bt, "rotationY", 0, 180)
+             , ObjectAnimator.ofFloat(bt, "rotation", 0, -90)
+             , ObjectAnimator.ofFloat(bt, "translationX", 0, 90)
+             , ObjectAnimator.ofFloat(bt, "translationY", 0, 90)
+             , ObjectAnimator.ofFloat(bt, "scaleX", 1, 1.5f)
+             , ObjectAnimator.ofFloat(bt, "scaleY", 1, 1.5f)
+             , ObjectAnimator.ofFloat(bt, "alpha", 1, 0.25f, 1));
+     set.setDuration(5000).start();
+```
+![Alt text](animator_set.gif "属性动画集合变换")
+
+除了使用代码实现之外，还可以通过XML来实现，属性动画的定义需要在res/animator目录下面,和View动画res/anim做区分。语法规则如下
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:ordering="together">
+    <objectAnimator
+        android:duration="300"
+        android:propertyName="x"
+        android:valueTo="20"
+        android:valueType="intType" />
+
+    <animator android:valueType="colorType" />
+    <set android:ordering="together">
+
+    </set>
+    <propertyValuesHolder />
+</set>
+```
+属性动画的各种参数都比较好理解，在XML中可以定义ValueAnimator，ObjectAnimator，Animatorset：其中ValueAnimator对应aniamtor，OnjectAnimator对应OnjectAnimator，set表示Animatorset。在set中有一个标签android:vrdering同时又连个属性可选：together和sequentially，其中together表示动画集合中的子动画同时播放，sequentially表示动画集合中的自动化按照前后顺序播放，默认是together
+
+|标签|含义|
+|:---:|:---:|
+|android:propertyName|表示属性动画的作用对象的属性名称|
+|android:duration|表示动画的时长|
+|android:valueFrom|表示属性的起始值|
+|android:valueTo|表示属性结束值|
+|android:startOffset|表示动画演示，当动画开始后，多少毫秒后会真正播放此动画|
+|android:reoeatCount|表示动画的重复次数：这里说明一下默认值是你0，-1代表无线循环|
+|android:repeatMode|表示动画的重复模式：有连个选项restart和reverse，一个是连续重复，一个是逆向重复|
+|android:valueType|表示android：propertyName所指定的类型，有intType，floatType，colorType,pathType|
+
+来一个例子
+
+```
+Animator animator = AnimatorInflater.loadAnimator(this, R.animator.animator_1);
+ animator.setTarget(bt);
+ animator.start();
+```
+建议使用代码，很多东西需要动态测量的
+### 理解插值器和估值器
+TimeInterpolator中文译为时间插值器，他的作用是根据时间流逝的百分比来计算出当前属性改变的百分比，系统预置有LinearInterpolator(线性插值器：匀速动画)，AccelerateDecelerateInterPolator(加速插值器：动画两头慢，中间快)，decelerateInterpolator（减速插值器：速度越来越慢）等。TyepEvaluator中文翻译为类型估值算法，也叫估值器，他的作用是更具当前属性改变的百分比计算改变后的值，有intEvalutor，FloatEvaluator和ArgbEvaluator。
+这里看一下实例
+这里有一个匀速运动的动画，所以采用线性插值器和整型估值算法，在40ms内，View的X属性从0-40的变换
+由于动画的默认刷新率为10ms/帧,所以该动画分为5帧进行，我们来考虑第三帧，x=20 r=20ms 当时间t=20ms的时候，时间流逝的百分比是（20/40）0.5，意味着现在时间过了一半，那么X改变了多少呢，这个就需要线性估值算法来操作了。当时间流逝一半的时候，X的变换也应该是一半，即x改变的是0.5.看一下他的源码
+```
+public class LinearInterpolator extends BaseInterpolator implements NativeInterpolatorFactory {
+
+    public LinearInterpolator() {
+    }
+
+    public LinearInterpolator(Context context, AttributeSet attrs) {
+    }
+
+    public float getInterpolation(float input) {
+        return input;
+    }
+
+    /** @hide */
+    @Override
+    public long createNativeInterpolator() {
+        return NativeInterpolatorFactoryHelper.createLinearInterpolator();
+    }
+}
+
+```
+可以看到线性插值器的返回和输出值一样，英雌插值器返回的值是0.5，这意味着x的改变时0.5，这个时候插值器的工作就完成了
+这里在看一下DecelerateInterpolator 减速插值器的`getInterpolation`可以看到对输入值进行处理了
+```
+public class DecelerateInterpolator extends BaseInterpolator implements NativeInterpolatorFactory {
+    public DecelerateInterpolator() {
+    }
+
+    /**
+     * Constructor
+     *
+     * @param factor Degree to which the animation should be eased. Setting factor to 1.0f produces
+     *        an upside-down y=x^2 parabola. Increasing factor above 1.0f makes exaggerates the
+     *        ease-out effect (i.e., it starts even faster and ends evens slower)
+     */
+    public DecelerateInterpolator(float factor) {
+        mFactor = factor;
+    }
+
+    public DecelerateInterpolator(Context context, AttributeSet attrs) {
+        this(context.getResources(), context.getTheme(), attrs);
+    }
+
+    /** @hide */
+    public DecelerateInterpolator(Resources res, Theme theme, AttributeSet attrs) {
+        TypedArray a;
+        if (theme != null) {
+            a = theme.obtainStyledAttributes(attrs, R.styleable.DecelerateInterpolator, 0, 0);
+        } else {
+            a = res.obtainAttributes(attrs, R.styleable.DecelerateInterpolator);
+        }
+
+        mFactor = a.getFloat(R.styleable.DecelerateInterpolator_factor, 1.0f);
+        setChangingConfiguration(a.getChangingConfigurations());
+        a.recycle();
+    }
+
+    public float getInterpolation(float input) {
+        float result;
+        if (mFactor == 1.0f) {
+            result = (float)(1.0f - (1.0f - input) * (1.0f - input));
+        } else {
+            result = (float)(1.0f - Math.pow((1.0f - input), 2 * mFactor));
+        }
+        return result;
+    }
+
+    private float mFactor = 1.0f;
+
+    /** @hide */
+    @Override
+    public long createNativeInterpolator() {
+        return NativeInterpolatorFactoryHelper.createDecelerateInterpolator(mFactor);
+    }
+}
+
+```
+再来看一下整型估值算法
+```
+public class IntEvaluator implements TypeEvaluator<Integer> {
+    public Integer evaluate(float fraction, Integer startValue, Integer endValue) {
+        int startInt = startValue;
+        return (int)(startInt + fraction * (endValue - startInt));
+    }
+}
+```
+三个参数表示估值小数，开始值，结束值，对应于我们的例子就分别是0.55,0,40 这样整型估值器给我吗就返回20 。
+
+属性动画要求对象的改属性有set和get方法（可选）插值器和估值器处理系统提供的，还可以自定义，实现也很简单
+插值器继承BaseInterpolator，估值器继承TypeEvaluator
+http://www.jcodecraeer.com/a/anzhuokaifa/androidkaifa/2015/0110/2292.html
+### 属性动画的监听器
+属性动画提供了监听器用于监听动画的播放过程，主要有两个接口AnimatorUpdateListener和AnimatorListener
+
+```
+public static interface AnimatorListener {
+     default void onAnimationStart(Animator animation, boolean isReverse) {
+         onAnimationStart(animation);
+     }
+     default void onAnimationEnd(Animator animation, boolean isReverse) {
+         onAnimationEnd(animation);
+     }
+     void onAnimationStart(Animator animation);
+     void onAnimationEnd(Animator animation);
+     void onAnimationCancel(Animator animation);
+     void onAnimationRepeat(Animator animation);
+ }
+```
+
+也可以使用AnimatorListenerAdapter这个已经实现好的，在具体实现某一个方法
+ValueAnimator.AnimatorUpdateListener 这个比较特殊，他会监听整个动画的过程，动画是由许多帧组成的，每播放一帧，onAnimationUpdate就会被调用
+
+```
+public static interface AnimatorUpdateListener {
+    void onAnimationUpdate(ValueAnimator animation);
+}
+
+```
+
+### 对任意属性做动画
+这里先提出一个问题：给Button加一个动画，让这个Button的宽度从当前宽度增加到500px，这个可以使用View动画，但是View动画只是对canvas的修改，他的实质并没有变化，点击事件等并没有移动到当前显示的大小，这个就可以使用属性动画
+```
+ObjectAnimator.ofInt(bt,"width",500).setDuration(5000).start();
+```
+但是在AndroidStudio中会显示报红，提示没有这个属性
+下面分析一下属性动画的原理:属性动画要求动画作用的对象提供该属性的set和get方法，属性动画根据外界传递的该属性的初始值和最终值，以动画的效果多次调用set方法，每一次传递的set方法都不一样，确切的说随着时间的推移，所传递的值越来越接近最终值，总结一下，我们对object的属性abc做动画，如果想让动画生效，那么要满足两个条件
+1. object必须要提供setAbc方法，如果动画没有初始化传递值，还要提供getAbc方法，因为系统要去取abc的初始值，（如果这条不满足，程序直接crash）
+2. object的setAbc属性必须可以通过某正方式反映出来，不然无效，没有任何效果
+
+以上两个条件缺一不可，那么我们队width属性做动画为什么没有效果，因为button内部虽然提供了setwidth和getwidth的方法，但是这个方法并不是改变视图的大小，他是textView新添加的方法，View是没有这个setWidth方法的，由于Button继承了TextView，所以But透明也就有了setWidth方法。下卖弄看一下这个getWidth和setWidth方法的源码
+
+```
+public void setWidth(int pixels) {
+    mMaxWidth = mMinWidth = pixels;
+    mMaxWidthMode = mMinWidthMode = PIXELS;
+
+    requestLayout();
+    invalidate();
+}
+
+public final int getWidth() {
+    return mRight - mLeft;
+}
+
+```
+
+可以看到getWidth确实是获取View的宽度，但是setWidth是设置TextView的最大宽度和最小宽度，并不是设置View的宽度。这个和TextView的宽度不是一个东西。具体来说textView的宽度应该对应android:layout_width属性，而TextView还有一个属性android:width这个属性就对应TextView的setWidth方法，总之，TextView和Button的setWidth、getWidth干的是不同的事情，通过setWidth无法改变控件的宽度，所以对width做属性动画是没有效果的。针对上面这个问题，官方文档给了3种解决方案
+* 给你的对象加上set和get方法，如果有权限的话
+* 用一个类来包装原始的对象，间接为其提供get和set属性
+* 采用ValueAnimator监听动画过程，自己实现属性动画的改变
+
+针对这三种解决办法，这里给出具体的介绍
+1. 给你的对象加上get和set方法，如果你有权限的话
+这个意思很好理解，如果你有权限的话，加上get和set就可以，但是很多时候不可行
+2. 用一个类来包装原始的对象，间接为其提供get和set属性
+这是一种很实用的方法。
+
+```
+
+public class MainActivity extends AppCompatActivity {
+
+    private View bt;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        bt = findViewById(R.id.bt);
+
+    }
+
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        ViewWrapper viewWrapper = new ViewWrapper(bt);
+        ObjectAnimator.ofInt(viewWrapper, "width", 500).setDuration(5000).start();
+    }
+
+    private static class ViewWrapper {
+        private View mTarget;
+
+        public ViewWrapper(View target) {
+            mTarget = target;
+        }
+
+        private int getWidth() {
+            return mTarget.getLayoutParams().width;
+        }
+
+        private void setWidth(int width) {
+            mTarget.getLayoutParams().width = width;
+            mTarget.requestLayout();
+        }
+
+    }
+}
+
+```
+
+![Alt text](animator_show1.gif "效果")
+
+3. 采用ValueAnimator，监听动画过程，自己实现属性的改变
+首先说说什么是ValueAnimator，ValueAnimator本身不作用与任何对象，也就是直接使用它没有任何动画效果，他可以对一个值做动画，然后我们可以监听其动画过程，在动画过程中修改我们的对象的属性值，就相当于我们给对象做了动画
+
+```
+
+@Override
+  public void onWindowFocusChanged(boolean hasFocus) {
+      super.onWindowFocusChanged(hasFocus);
+//        ViewWrapper viewWrapper = new ViewWrapper(bt);
+      performAnimate(bt,0,500);
+  }
+
+private void performAnimate(final View target, final int start, final int end) {
+    ValueAnimator valueAnimator=ValueAnimator.ofInt(1,100);
+    valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+        private IntEvaluator intEvaluator=new IntEvaluator();
+        @Override
+        public void onAnimationUpdate(ValueAnimator animation) {
+            //获取当前进度
+            int currentValue= (int) animation.getAnimatedValue();
+            //获取当前动画占整个动画的百分比
+            float fraction=animation.getAnimatedFraction();
+            target.getLayoutParams().width=intEvaluator.evaluate(fraction,start,end);
+            target.requestLayout();
+        }
+    });
+    valueAnimator.setDuration(5000);
+    valueAnimator.start();
+}
+
+```
+
+![Alt text](animator_show1.gif "效果")
+
+这里还要说一下，在这个方法里面去当前值1-100和当前占的比例，我们可以计算出现在的宽度，如果时间过了一半，当前是50，比例为0.5，假设Button的初始宽度是100，那么最终的宽度是500，那么增加的宽度应该是总增加宽度的一半就是（500-100）* 0.5总宽度是（500-100）* 0.5+100
+
+###属性动画的工作原理
+属性动画要求动画作用的对象提供该属性的set方法，属性动画根据你传递的改属性的初始值和最终值。以动画的效果多次调用set方法，每次set的值都不一样，随着时间的推移不断接近最终值，如果没有传递初始值，那么还有有get方法去获取最终值
+现在来看一下属性动画的源码
+
+就用上面讲的那个例子
+```
+    ObjectAnimator.ofInt(viewWrapper,"width",0,500).setDuration(2000).start();
+```
+
+先看一下ofInt方法
+
+```
+public static ObjectAnimator ofInt(Object target, String propertyName, int... values) {
+      ObjectAnimator anim = new ObjectAnimator(target, propertyName);
+      anim.setIntValues(values);
+      return anim;
+  }
+
+```
+看一下他的构造方法，这里创建PropertyValuesHolder并初始化，然后进行赋值
+```
+public void setPropertyName(@NonNull String propertyName) {
+    // mValues could be null if this is being constructed piecemeal. Just record the
+    // propertyName to be used later when setValues() is called if so.
+    if (mValues != null) {
+        PropertyValuesHolder valuesHolder = mValues[0];
+        String oldName = valuesHolder.getPropertyName();
+        valuesHolder.setPropertyName(propertyName);
+        mValuesMap.remove(oldName);
+        mValuesMap.put(propertyName, valuesHolder);
+    }
+    mPropertyName = propertyName;
+    // New property/values/target should cause re-initialization prior to starting
+    mInitialized = false;
+}
+
+```
+这里创建对象并且调用了setIntValues这个方法
+```
+@Override
+public void setIntValues(int... values) {
+    if (mValues == null || mValues.length == 0) {
+        // No values yet - this animator is being constructed piecemeal. Init the values with
+        // whatever the current propertyName is
+        if (mProperty != null) {
+            setValues(PropertyValuesHolder.ofInt(mProperty, values));
+        } else {
+            setValues(PropertyValuesHolder.ofInt(mPropertyName, values));
+        }
+    } else {
+        super.setIntValues(values);
+    }
+}
+```
+
+在看一下start方法
+
+```
+@Override
+public void start() {
+    AnimationHandler.getInstance().autoCancelBasedOn(this);
+    if (DBG) {
+        Log.d(LOG_TAG, "Anim target, duration: " + getTarget() + ", " + getDuration());
+        for (int i = 0; i < mValues.length; ++i) {
+            PropertyValuesHolder pvh = mValues[i];
+            Log.d(LOG_TAG, "   Values[" + i + "]: " +
+                pvh.getPropertyName() + ", " + pvh.mKeyframes.getValue(0) + ", " +
+                pvh.mKeyframes.getValue(1));
+        }
+    }
+    super.start();
+}
+
+```
+意思很简单，就是会判断如果当前动画，等待的动画，延迟的动画中有和当前动画相同的动画，就会把相同的动画取消掉，然后就是调用父类的start方法
+
+```[valueAnimator]
+@Override
+ public void start() {
+     start(false);
+ }
+
+```
+也就是调用valueAnimator的这个方法
+```
+private void start(boolean playBackwards) {
+     if (Looper.myLooper() == null) {
+         throw new AndroidRuntimeException("Animators may only be run on Looper threads");
+     }
+     mReversing = playBackwards;
+     mSelfPulse = !mSuppressSelfPulseRequested;
+     // Special case: reversing from seek-to-0 should act as if not seeked at all.
+     if (playBackwards && mSeekFraction != -1 && mSeekFraction != 0) {
+         if (mRepeatCount == INFINITE) {
+             // Calculate the fraction of the current iteration.
+             float fraction = (float) (mSeekFraction - Math.floor(mSeekFraction));
+             mSeekFraction = 1 - fraction;
+         } else {
+             mSeekFraction = 1 + mRepeatCount - mSeekFraction;
+         }
+     }
+     mStarted = true;
+     mPaused = false;
+     mRunning = false;
+     mAnimationEndRequested = false;
+     // Resets mLastFrameTime when start() is called, so that if the animation was running,
+     // calling start() would put the animation in the
+     // started-but-not-yet-reached-the-first-frame phase.
+     mLastFrameTime = -1;
+     mFirstFrameTime = -1;
+     mStartTime = -1;
+     addAnimationCallback(0);
+
+     if (mStartDelay == 0 || mSeekFraction >= 0 || mReversing) {
+         // If there's no start delay, init the animation and notify start listeners right away
+         // to be consistent with the previous behavior. Otherwise, postpone this until the first
+         // frame after the start delay.
+         startAnimation();
+         if (mSeekFraction == -1) {
+             // No seek, start at play time 0. Note that the reason we are not using fraction 0
+             // is because for animations with 0 duration, we want to be consistent with pre-N
+             // behavior: skip to the final value immediately.
+             setCurrentPlayTime(0);
+         } else {
+             setCurrentFraction(mSeekFraction);
+         }
+     }
+ }
+
+```
+可以看到属性动画是要运行在looper线程中的，由于属性动画会改变UI，所以这里的looper线程指的是主线程，然后会调用到jni层，之后会调用回来，调用doAnimationFrame方法
+```
+public final boolean doAnimationFrame(long frameTime) {
+     if (mStartTime < 0) {
+         // First frame. If there is start delay, start delay count down will happen *after* this
+         // frame.
+         mStartTime = mReversing ? frameTime : frameTime + (long) (mStartDelay * sDurationScale);
+     }
+
+     // Handle pause/resume
+     if (mPaused) {
+         mPauseTime = frameTime;
+         removeAnimationCallback();
+         return false;
+     } else if (mResumed) {
+         mResumed = false;
+         if (mPauseTime > 0) {
+             // Offset by the duration that the animation was paused
+             mStartTime += (frameTime - mPauseTime);
+         }
+     }
+
+     if (!mRunning) {
+         // If not running, that means the animation is in the start delay phase of a forward
+         // running animation. In the case of reversing, we want to run start delay in the end.
+         if (mStartTime > frameTime && mSeekFraction == -1) {
+             // This is when no seek fraction is set during start delay. If developers change the
+             // seek fraction during the delay, animation will start from the seeked position
+             // right away.
+             return false;
+         } else {
+             // If mRunning is not set by now, that means non-zero start delay,
+             // no seeking, not reversing. At this point, start delay has passed.
+             mRunning = true;
+             startAnimation();
+         }
+     }
+
+     if (mLastFrameTime < 0) {
+         if (mSeekFraction >= 0) {
+             long seekTime = (long) (getScaledDuration() * mSeekFraction);
+             mStartTime = frameTime - seekTime;
+             mSeekFraction = -1;
+         }
+         mStartTimeCommitted = false; // allow start time to be compensated for jank
+     }
+     mLastFrameTime = frameTime;
+     // The frame time might be before the start time during the first frame of
+     // an animation.  The "current time" must always be on or after the start
+     // time to avoid animating frames at negative time intervals.  In practice, this
+     // is very rare and only happens when seeking backwards.
+     final long currentTime = Math.max(frameTime, mStartTime);
+     boolean finished = animateBasedOnTime(currentTime);
+
+     if (finished) {
+         endAnimation();
+     }
+     return finished;
+ }
+
+```
+最后会调用animateBasedOnTime这个方法,他又调用了animateValue这个方法
+```
+void animateValue(float fraction) {
+      fraction = mInterpolator.getInterpolation(fraction);
+      mCurrentFraction = fraction;
+      int numValues = mValues.length;
+      for (int i = 0; i < numValues; ++i) {
+          mValues[i].calculateValue(fraction);
+      }
+      if (mUpdateListeners != null) {
+          int numListeners = mUpdateListeners.size();
+          for (int i = 0; i < numListeners; ++i) {
+              mUpdateListeners.get(i).onAnimationUpdate(this);
+          }
+      }
+  }
+
+
+```
+这里calculateValue这个方法就是计算每一帧动画所对应的属性值，下面看一下在哪儿调用set和get方法的
+在这个PropertyValuesHolder类里面，会调用方法
+```
+private void setupValue方法(Object target, Keyframe kf) {
+    if (mProperty != null) {
+        Object value = convertBack(mProperty.get(target));
+        kf.setValue(value);
+    } else {
+        try {
+            if (mGetter == null) {
+                Class targetClass = target.getClass();
+                setupGetter(targetClass);
+                if (mGetter == null) {
+                    // Already logged the error - just return to avoid NPE
+                    return;
+                }
+            }
+            Object value = convertBack(mGetter.invoke(target));
+            kf.setValue(value);
+        } catch (InvocationTargetException e) {
+            Log.e("PropertyValuesHolder", e.toString());
+        } catch (IllegalAccessException e) {
+            Log.e("PropertyValuesHolder", e.toString());
+        }
+    }
+}
+
+```
+可以发现是通过反射调用的。
+当动画下一帧到来的时候，propertyValuesHolder中的setAnimatedValue方法会将新的属性设置给对象
+
+```
+void setAnimatedValue(Object target) {
+    if (mProperty != null) {
+        mProperty.set(target, getAnimatedValue());
+    }
+    if (mSetter != null) {
+        try {
+            mTmpValueArray[0] = getAnimatedValue();
+            mSetter.invoke(target, mTmpValueArray);
+        } catch (InvocationTargetException e) {
+            Log.e("PropertyValuesHolder", e.toString());
+        } catch (IllegalAccessException e) {
+            Log.e("PropertyValuesHolder", e.toString());
+        }
+    }
+}
+
+```
+
+
 ## 使用动画注意事项
+1. OOM问题
+这个问题只要出现在帧动画中，图片数量很多就很容易出现OOM,所以建议使用gif来替代
+2. 内存泄漏
+在属性动画中有一类无限循环动画，这类动画需要在Activity退出的时候及时停止，否则将导致Activity无法释放从而导致内存泄露，通过验证后发现View动画不存在这个问题
+3. 兼容性问题
+属性动画在3.0一下有兼容性问题，但是现在默认最低版本一般是4.4。这个问题不大。
+4. View动画的问题
+View动画主要是对View的影像做动画，就是在draw的时候改变矩阵，但是他并没有改变View的状态，因此有时候会出现动画完成后无法隐藏的问题，就是setVisibility(View.Gone)失效的问题，要通过view。clearAnimation（）来清除。
+5. 不要使用px，这个大家都知道
+6. 动画元素的交互
+View动画平移之后还在原地，新位置是无法触发点击事件的，属性动画可以
+7. 硬件加速
+使用动画过程中建议开启硬件加速，这样会提高动画流畅性
+
 # 第八章 理解Windows和WindowsManager
+window表示一个窗口的概念，这里不是windows操作系统哦！在日常开发中直接接触window的机会并不多，但是在某些特殊的时候我们需要在桌面上显示类似悬浮窗的东西，那么这个就需要使用window了。window是一个抽象类，他的具体实现是photoWindow，创建一个window是很简单的事情，只需要通过windowManager即可完成。windowManager是外界访问window的入口，window的具体实现位于windowManagerService中，windowManager和WindowManagerService的交互是一个IPC过程，android中所有的视图都是通过window来呈现的，不管是activity。dialog。还是toast，他们的视图实际上都是附加在window上面的，因此window是View的直接管理者，从第四章View的事件分发机制也可以看出来，单击事件是有window传递给decorView的，然后再有decorView传递给我们的View，就连activity的设置视图的方法setContentView在底层也是通过window来完成的。
+## window和wondowManager
+为了分析window的工作机制，我们需要先了解如何使用windowManager添加一个window。下面的代码展示了如何通过windowManger添加window的过程，是不是很简单呢
+如果是android8.0及以上，需要加权限
+```
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+```
+不然会报错：permission denied for window type 2010
+```
+public class MainActivity extends AppCompatActivity {
+
+    private View bt;
+    int OVERLAY_PERMISSION_CODE = 1000;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        bt = findViewById(R.id.bt);
+
+    }
+
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        addOverlay();
+
+    }
+
+    public void addOverlay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, OVERLAY_PERMISSION_CODE);
+            }else{
+                Button mFloatButton = new Button(this);
+                mFloatButton.setText("button");
+                mFloatButton.setBackgroundColor(Color.RED);
+                WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, 0, 0, PixelFormat.TRANSPARENT);
+                layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED;
+                layoutParams.gravity = Gravity.LEFT | Gravity.TOP;
+                layoutParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
+                layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+                layoutParams.x = 100;
+                layoutParams.y = 100;
+                layoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+                getWindowManager().addView(mFloatButton, layoutParams);
+            }
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == OVERLAY_PERMISSION_CODE) {
+
+            if (Settings.canDrawOverlays(this)) {
+                Button mFloatButton = new Button(this);
+                mFloatButton.setText("button");
+                WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, 0, 0, PixelFormat.TRANSPARENT);
+                layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED;
+                layoutParams.gravity = Gravity.LEFT | Gravity.TOP;
+                layoutParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
+                layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+                layoutParams.x = 100;
+                layoutParams.y = 100;
+                layoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+                getWindowManager().addView(mFloatButton, layoutParams);
+            }
+        }
+    }
+}
+
+```
+![Alt text](device-2018-05-16-160142.png "红色的是添加的button")
+这里列举一下比较常用的flags属性
+* FLAT_NOT_FOCUSABLE
+表示window不需要焦点，也不需要接收各种输入时间，此标记会同时启用FLAG_NOT_TOUCH_MODAL，最终会将事件直接传递给下层具有焦点的window
+* FLAG_NOT_TOUCH_MODAL
+此模式下，系统会将当前window区域以外的单机事件传递给底层的window，当前window区域以内的单击事件则自己处理，这个标记很重要，一般来说都需要开启，否则其他window无法接收到单击事件
+* FLAG_SHOW_WHEN_LOCKED
+开启此模式可以让window显示在锁屏桌面上
+
+Type参数表示window的类型，window有三种类型，分别是应用window，子window和系统window。应用类window对应着一个activity，子window不能单独存在，他需要衣服在特定的父window中，比如常见的一些dialog就是一个子window。系统window是需要声明权限才能创建的window，比如toast和系统状态栏都是系统window。
+window是分层的，每个window都有对应的z-ordered，层级大的会覆盖在层级晓得window的上面，这个和html的z-index的概念是完全一致的。在三类window中，应用window的层级范围是1-99，子window的层级范围是1000-9999，系统window的层级范围是2000-2999，这些层级范围对应着windowManager.layoutParams的type参数，如果想要window位于所有window的最顶层，那么采用较大的层数即可，很显然系统window的层级是最大的，而且系统层级有很多只，一般我们选用 TYPE_SYSTEM_OVERLAY或者TYPE_SYSTEM_ERROR,如果采用TYPE_SYSTEM_ERROR，只需要为type之地当这个层级就可以mLayoutParams.type=layoutParams.TYPE_SYSTEM_ERROR，同时声明权限
+```
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+```
+因为系统类型的window是需要权限检查的，如果不在AndroidManifest中添加权限，会提示申请权限失败
+windowManager所提供的功能很简单，常用的只有三个方法，即添加View、更新View和删除View。这三个方法定义在Viewmanager中，而WindowManager继承ViewManager
+```
+public interface ViewManager
+{
+    /**
+     * Assign the passed LayoutParams to the passed View and add the view to the window.
+     * <p>Throws {@link android.view.WindowManager.BadTokenException} for certain programming
+     * errors, such as adding a second view to a window without removing the first view.
+     * <p>Throws {@link android.view.WindowManager.InvalidDisplayException} if the window is on a
+     * secondary {@link Display} and the specified display can't be found
+     * (see {@link android.app.Presentation}).
+     * @param view The view to be added to this window.
+     * @param params The LayoutParams to assign to view.
+     */
+    public void addView(View view, ViewGroup.LayoutParams params);
+    public void updateViewLayout(View view, ViewGroup.LayoutParams params);
+    public void removeView(View view);
+}
+```
+对于开发者来说，windowManager常用的就这三个功能而已，但是这三个功能已经足够我们使用了，他可以创建一个window并向其添加View，还可以更新window中的View，如果想要删除一个window，只需要删除他里面的View就可以。由此看来，windowManager操作window过程更像是在操作window中的view。我们时常见到那种可以拖动的window效果，其实是很好实现的，只需要根据手机的位置来指定layoutParams中的x和y就可以改变window的位置，首先给View设置onTouchListener，在ontouch中不断更新就可以
+```
+final Button mFloatButton = new Button(this);
+              mFloatButton.setText("button");
+              mFloatButton.setBackgroundColor(Color.RED);
+              final WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, 0, 0, PixelFormat.TRANSPARENT);
+              layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED;
+              layoutParams.gravity = Gravity.LEFT | Gravity.TOP;
+              layoutParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
+              layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+              layoutParams.x = 100;
+              layoutParams.y = 100;
+              layoutParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+
+              mFloatButton.setOnTouchListener(new View.OnTouchListener() {
+                  @Override
+                  public boolean onTouch(View v, MotionEvent event) {
+                      float rawX = event.getRawX();
+                      float rawY = event.getRawY();
+                      switch (event.getAction()) {
+                          case MotionEvent.ACTION_MOVE:
+                              layoutParams.x= (int) rawX;
+                              layoutParams.y= (int) rawY;
+                              getWindowManager().updateViewLayout(mFloatButton, layoutParams);
+                              break;
+                      }
+                      return false;
+                  }
+              });
+              getWindowManager().addView(mFloatButton, layoutParams);
+```
+
+## window的内部机制
+window是一个抽象的概念，每一个window都对应着一个view和一个ViewRootImpl，window和View通过ViewRootImpl来建立联系，英雌window并不是实际存在的，他是以View的形式存在的，这一点从windowManager的定义可以看出来，他提供了三个方法addview，updateViewLayout和removeView都是针对View的，这说明View是window存在的尸体。在实际使用过程中无法访问window，对window的访问过程必须公国windowmanager。为了分析window的颞部机制，这里从window的添加，删除以及更新说起
+
+### window的添加过程
+window的添加过程需要通过windowManager的addView来实现，windowManager是一个接口，他的真正实现是windowManagerImpl类，在windowManagerInpl中window的三大操作如下:这里移除了一些代码
+```
+public final class WindowManagerImpl implements WindowManager {
+    private final WindowManagerGlobal mGlobal = WindowManagerGlobal.getInstance();
+    private final Context mContext;
+    private final Window mParentWindow;
+    @Override
+    public void addView(@NonNull View view, @NonNull ViewGroup.LayoutParams params) {
+        applyDefaultToken(params);
+        mGlobal.addView(view, params, mContext.getDisplay(), mParentWindow);
+    }
+
+    @Override
+    public void updateViewLayout(@NonNull View view, @NonNull ViewGroup.LayoutParams params) {
+        applyDefaultToken(params);
+        mGlobal.updateViewLayout(view, params);
+    }
+
+
+
+    @Override
+    public void removeView(View view) {
+        mGlobal.removeView(view, false);
+    }
+
+}
+```
+
+从这里可以看出windowMangerImpl并没有直接实现window的三大操作，而是全部交给了WindowManagerGlobal，WindowManagerGlobal用工厂方法向外界提供自己的实例
+
+```
+public void addView(View view, ViewGroup.LayoutParams params,
+          Display display, Window parentWindow) {
+
+      //检查参数是否合法，如果是子window，那么还要调整一下布局
+      if (view == null) {
+          throw new IllegalArgumentException("view must not be null");
+      }
+      if (display == null) {
+          throw new IllegalArgumentException("display must not be null");
+      }
+      if (!(params instanceof WindowManager.LayoutParams)) {
+          throw new IllegalArgumentException("Params must be WindowManager.LayoutParams");
+      }
+
+      final WindowManager.LayoutParams wparams = (WindowManager.LayoutParams) params;
+      if (parentWindow != null) {
+          parentWindow.adjustLayoutParamsForSubWindow(wparams);
+      } else {
+          // If there's no parent, then hardware acceleration for this view is
+          // set from the application's hardware acceleration setting.
+          final Context context = view.getContext();
+          if (context != null
+                  && (context.getApplicationInfo().flags
+                          & ApplicationInfo.FLAG_HARDWARE_ACCELERATED) != 0) {
+              wparams.flags |= WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
+          }
+      }
+
+      ViewRootImpl root;
+      View panelParentView = null;
+
+      synchronized (mLock) {
+          // Start watching for system property changes.
+          if (mSystemPropertyUpdater == null) {
+              mSystemPropertyUpdater = new Runnable() {
+                  @Override public void run() {
+                      synchronized (mLock) {
+                          for (int i = mRoots.size() - 1; i >= 0; --i) {
+                              mRoots.get(i).loadSystemProperties();
+                          }
+                      }
+                  }
+              };
+              SystemProperties.addChangeCallback(mSystemPropertyUpdater);
+          }
+
+          int index = findViewLocked(view, false);
+          if (index >= 0) {
+              if (mDyingViews.contains(view)) {
+                  // Don't wait for MSG_DIE to make it's way through root's queue.
+                  mRoots.get(index).doDie();
+              } else {
+                  throw new IllegalStateException("View " + view
+                          + " has already been added to the window manager.");
+              }
+              // The previous removeView() had not completed executing. Now it has.
+          }
+
+          // If this is a panel window, then find the window it is being
+          // attached to for future reference.
+          if (wparams.type >= WindowManager.LayoutParams.FIRST_SUB_WINDOW &&
+                  wparams.type <= WindowManager.LayoutParams.LAST_SUB_WINDOW) {
+              final int count = mViews.size();
+              for (int i = 0; i < count; i++) {
+                  if (mRoots.get(i).mWindow.asBinder() == wparams.token) {
+                      panelParentView = mViews.get(i);
+                  }
+              }
+          }
+
+          root = new ViewRootImpl(view.getContext(), display);
+
+          view.setLayoutParams(wparams);
+
+          mViews.add(view);
+          mRoots.add(root);
+          mParams.add(wparams);
+
+          // do this last because it fires off messages to start doing things
+          try {
+              root.setView(view, wparams, panelParentView);
+          } catch (RuntimeException e) {
+              // BadTokenException or InvalidDisplayException, clean up.
+              if (index >= 0) {
+                  removeViewLocked(index, true);
+              }
+              throw e;
+          }
+      }
+  }
+
+```
+
+一些比较重要的参数
+```
+private final ArrayList<View> mViews = new ArrayList<View>();
+  private final ArrayList<ViewRootImpl> mRoots = new ArrayList<ViewRootImpl>();
+  private final ArrayList<WindowManager.LayoutParams> mParams =
+          new ArrayList<WindowManager.LayoutParams>();
+  private final ArraySet<View> mDyingViews = new ArraySet<View>();
+
+```
+上面代码声明了mViews存储的是所有window所对应的View，mRoots存储的是所有window岁对应的ViewRootImol，mparams存储的是所有window所对应的布局参数，而mDyingView存储的是那些正在被删除的View对象，但是还没有完成删除的window对象，add通过如下方式将window的一系列对象添加到列表中
+```
+
+root = new ViewRootImpl(view.getContext(), display);
+view.setLayoutParams(wparams);
+mViews.add(view);
+mRoots.add(root);
+mParams.add(wparams);
+```
+
+通过ViewRootImpl来更新界面并完成window的添加过程
+这个不愁由ViewRootImol的setView方法来完成
+```
+ root.setView(view, wparams, panelParentView);
+```
+在setView的内部会通过requestLayout来完成异步刷新请求。在下面的代码中，scheduleTraversals实际是View的绘制入口
+
+```
+@Override
+ public void requestLayout() {
+     if (!mHandlingLayoutInLayoutRequest) {
+         checkThread();
+         mLayoutRequested = true;
+         scheduleTraversals();
+     }
+ }
+
+```
+接着会通过windowsession最终完成windoow的添加过程。在下面代码中mWindowSession的类型是IWindowSession，他是一个Binder对象，真正的实现类是Session，也就是说window的添加过程其实是一次ipc调用
+setView中的一行代码
+```
+res = mWindowSession.addToDisplay(mWindow, mSeq, mWindowAttributes,
+                       getHostVisibility(), mDisplay.getDisplayId(),
+                       mAttachInfo.mContentInsets, mAttachInfo.mStableInsets,
+                       mAttachInfo.mOutsets, mInputChannel);
+```
+
+```
+public static IWindowSession getWindowSession() {
+    synchronized (WindowManagerGlobal.class) {
+        if (sWindowSession == null) {
+            try {
+                InputMethodManager imm = InputMethodManager.getInstance();
+                IWindowManager windowManager = getWindowManagerService();
+                sWindowSession = windowManager.openSession(
+                        new IWindowSessionCallback.Stub() {
+                            @Override
+                            public void onAnimatorScaleChanged(float scale) {
+                                ValueAnimator.setDurationScale(scale);
+                            }
+                        },
+                        imm.getClient(), imm.getInputContext());
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        }
+        return sWindowSession;
+    }
+}
+```
+
+session是这个包下面的package com.android.server.wm;
+
+在session内部会通过windowManagerService来实现window的添加
+```
+@Override
+ public int addToDisplay(IWindow window, int seq, WindowManager.LayoutParams attrs,
+         int viewVisibility, int displayId, Rect outContentInsets, Rect outStableInsets,
+         Rect outOutsets, InputChannel outInputChannel) {
+     return mService.addWindow(this, window, seq, attrs, viewVisibility, displayId,
+             outContentInsets, outStableInsets, outOutsets, outInputChannel);
+ }
+
+```
+这样addwindow就交给windowManagerservice去处理了
+
+
+### window的删除过程
+window的删除过程和添加过程是类似的，都是先通过windowmanagerImpl后在进一步通过windowManagerGlobal来实现，下面是windowManagerImpl来实现。下面是windowManagerGlobal的removeView的实现：
+```
+
+public void removeView(View view, boolean immediate) {
+    if (view == null) {
+        throw new IllegalArgumentException("view must not be null");
+    }
+
+    synchronized (mLock) {
+        int index = findViewLocked(view, true);
+        View curView = mRoots.get(index).getView();
+        removeViewLocked(index, immediate);
+        if (curView == view) {
+            return;
+        }
+
+        throw new IllegalStateException("Calling with view " + view
+                + " but the ViewAncestor is attached to " + curView);
+    }
+}
+```
+removeView的逻辑很清晰，首先通过findViewLocked来查找待删除的View的索引，这个查找过程就是建立的数据遍历，然后在调用removeViewLocked来做进一步删除操作，如下所示
+```
+private void removeViewLocked(int index, boolean immediate) {
+    ViewRootImpl root = mRoots.get(index);
+    View view = root.getView();
+
+    if (view != null) {
+        InputMethodManager imm = InputMethodManager.getInstance();
+        if (imm != null) {
+            imm.windowDismissed(mViews.get(index).getWindowToken());
+        }
+    }
+    boolean deferred = root.die(immediate);
+    if (view != null) {
+        view.assignParent(null);
+        if (deferred) {
+            mDyingViews.add(view);
+        }
+    }
+}
+```
+
+removeViewLocked是通过ViewRootImpl来完成删除操作的，在windowManager中提供了两种删除接口`removeView`和`removeViewImmediate`，他们分别表示异步删除和同步删除，其中removeViewImmediate使用起来需要特别注意，一般来说不需要使用此方法来删除window以避免意外的错误发生，这里主要说一下异步删除的情况，据图的操作由ViewRootImol的die方法来完成，在异步删除的情况下，die方法只是发送一个请求删除的消息后就立刻返回了，这个时候View并没有完成删除操作，所以最后会将其添加到mDyingViews中，mDyingViews表示待删除的View列表，ViewRootImpl的die方法如下所示
+```
+boolean die(boolean immediate) {
+    // Make sure we do execute immediately if we are in the middle of a traversal or the damage
+    // done by dispatchDetachedFromWindow will cause havoc on return.
+    if (immediate && !mIsInTraversal) {
+        doDie();
+        return false;
+    }
+
+    if (!mIsDrawing) {
+        destroyHardwareRenderer();
+    } else {
+        Log.e(mTag, "Attempting to destroy the window while drawing!\n" +
+                "  window=" + this + ", title=" + mWindowAttributes.getTitle());
+    }
+    mHandler.sendEmptyMessage(MSG_DIE);
+    return true;
+}
+
+```
+在爹方法内部只是做了简单的判断，如果是异步操作，那么久发送一个MSG_DIE的消息，ViewRootImpl中的handler会处理此消息并调用doDie方法，如果是同步删除（立即删除），那么久不需要发送消息，直接调用doDie方法，这就是这两种删除方式的区别，在dodie内部会调用dispatchDetachedFromWindow方法，真正删除View的逻辑在dispatchDetachedFromWindow方法内部实现，dispatchDetachedFromWindow方法主要做四件事
+
+```
+void dispatchDetachedFromWindow() {
+       if (mView != null && mView.mAttachInfo != null) {
+           mAttachInfo.mTreeObserver.dispatchOnWindowAttachedChange(false);
+           mView.dispatchDetachedFromWindow();
+       }
+
+       mAccessibilityInteractionConnectionManager.ensureNoConnection();
+       mAccessibilityManager.removeAccessibilityStateChangeListener(
+               mAccessibilityInteractionConnectionManager);
+       mAccessibilityManager.removeHighTextContrastStateChangeListener(
+               mHighContrastTextManager);
+       removeSendWindowContentChangedCallback();
+
+       destroyHardwareRenderer();
+
+       setAccessibilityFocus(null, null);
+
+       mView.assignParent(null);
+       mView = null;
+       mAttachInfo.mRootView = null;
+
+       mSurface.release();
+
+       if (mInputQueueCallback != null && mInputQueue != null) {
+           mInputQueueCallback.onInputQueueDestroyed(mInputQueue);
+           mInputQueue.dispose();
+           mInputQueueCallback = null;
+           mInputQueue = null;
+       }
+       if (mInputEventReceiver != null) {
+           mInputEventReceiver.dispose();
+           mInputEventReceiver = null;
+       }
+       try {
+           mWindowSession.remove(mWindow);
+       } catch (RemoteException e) {
+       }
+
+       // Dispose the input channel after removing the window so the Window Manager
+       // doesn't interpret the input channel being closed as an abnormal termination.
+       if (mInputChannel != null) {
+           mInputChannel.dispose();
+           mInputChannel = null;
+       }
+
+       mDisplayManager.unregisterDisplayListener(mDisplayListener);
+
+       unscheduleTraversals();
+   }
+
+```
+
+
+1. 垃圾回收相关工作，比如清除数据和消息，移除回调
+2. 通过Session的remove方法删除Window：mWindowSession.remove(mWindow)，这同样是一个IPC过程，最终会调用WindowManagerService的removeWindow方法
+3. 调用View的DispatchDetachedFromWindow方法，在内部会调用View的onDetachedFromWindow()以及onDetachedFromWindowInternal()。对于onDetachedFromWindow（）方法大家一定不陌生，当View从window上面移除的时候，这个方法就会被调用，这个方法内部做一些资源回收的工作，比如终止动画，停止线程等
+4. 调用WindowmanagerGlobal的doRemoveView方法刷新数据，包括mRoots，mParams以及mDyingViews，需要将当前Window所关联的这三个对象从列表中删除
+
+### window的更新过程
+到这里，Window的产出过程已经分析完毕，现在来分析一下更新过程，还是要看WindowManagerGlobal的updateViewLayout方法，如下所示
+
+```
+
+public void updateViewLayout(View view, ViewGroup.LayoutParams params) {
+      if (view == null) {
+          throw new IllegalArgumentException("view must not be null");
+      }
+      if (!(params instanceof WindowManager.LayoutParams)) {
+          throw new IllegalArgumentException("Params must be WindowManager.LayoutParams");
+      }
+
+      final WindowManager.LayoutParams wparams = (WindowManager.LayoutParams)params;
+
+      view.setLayoutParams(wparams);
+
+      synchronized (mLock) {
+          int index = findViewLocked(view, true);
+          ViewRootImpl root = mRoots.get(index);
+          mParams.remove(index);
+          mParams.add(index, wparams);
+          root.setLayoutParams(wparams, false);
+      }
+  }
+```
+
+updateViewlayout方法做的事情就比较简单了，首先他需要更新View的LayoutParams并替换掉老的LayoutParams，接着在更新ViewRootImol中的LayoutParams，这一步是通过ViewRootImpl的setlayoutParams方法来实现的，在ViewRootImpl中会通过scheduleTraversals方法来对View重新布局，包括测量、布局、重绘这三个过程。除了View本身的重绘以外，ViewRootImol还会通过WindowSession来更新Window的视图，这个过程最终是由WindowManagerService的relayoutWindow来实现的，同样他是一个IPC过程
+
+## window的创建过程
+
+通过上面的分析可以看出，View是Android中视图的呈现方式，但是View并不能单独存在，他必须附着在Window这个抽象的概念上面，因此有视图的地方就有window。那些地方有视图呢？这个读者都比较清楚，Android中刻印提供视图的地方有Activity，dialog，toast初次之外，还有一些依托window而实现的视图，比如PopUpWIndow，菜单，他们也是视图，有视图的地方就有window，因此Activity、dialog、Toast等视图都对应着一个window。本节将分析的地方就有window的 创建过程，通过这个过程加深对window的进一步理解。
+
+
+### Activity的window创建过程
+要分析activitty中的window的创建过程就必须了解activity的启动过程，详细的过程会在下一章介绍，这里先介绍一个大概过程，先有点印象。Activity的启动过程很复杂，最终会由ActivityThread中的performLaunchActivity来完成整个启动过程，在这个方法内部会通过类加载器创建activity的实例，并调用attach方法为其关联运行中所依赖的一系列上下文环境变量，代码如下所示
+activityThread
+```
+private Activity performLaunchActivity(ActivityClientRecord r, Intent customIntent) {
+    // System.out.println("##### [" + System.currentTimeMillis() + "] ActivityThread.performLaunchActivity(" + r + ")");
+
+    ActivityInfo aInfo = r.activityInfo;
+    if (r.packageInfo == null) {
+        r.packageInfo = getPackageInfo(aInfo.applicationInfo, r.compatInfo,
+                Context.CONTEXT_INCLUDE_CODE);
+    }
+
+    ComponentName component = r.intent.getComponent();
+    if (component == null) {
+        component = r.intent.resolveActivity(
+            mInitialApplication.getPackageManager());
+        r.intent.setComponent(component);
+    }
+
+    if (r.activityInfo.targetActivity != null) {
+        component = new ComponentName(r.activityInfo.packageName,
+                r.activityInfo.targetActivity);
+    }
+
+    ContextImpl appContext = createBaseContextForActivity(r);
+    Activity activity = null;
+    try {
+        java.lang.ClassLoader cl = appContext.getClassLoader();
+        activity = mInstrumentation.newActivity(
+                cl, component.getClassName(), r.intent);
+        StrictMode.incrementExpectedActivityCount(activity.getClass());
+        r.intent.setExtrasClassLoader(cl);
+        r.intent.prepareToEnterProcess();
+        if (r.state != null) {
+            r.state.setClassLoader(cl);
+        }
+    } catch (Exception e) {
+        if (!mInstrumentation.onException(activity, e)) {
+            throw new RuntimeException(
+                "Unable to instantiate activity " + component
+                + ": " + e.toString(), e);
+        }
+    }
+
+    try {
+        Application app = r.packageInfo.makeApplication(false, mInstrumentation);
+
+        if (localLOGV) Slog.v(TAG, "Performing launch of " + r);
+        if (localLOGV) Slog.v(
+                TAG, r + ": app=" + app
+                + ", appName=" + app.getPackageName()
+                + ", pkg=" + r.packageInfo.getPackageName()
+                + ", comp=" + r.intent.getComponent().toShortString()
+                + ", dir=" + r.packageInfo.getAppDir());
+
+        if (activity != null) {
+            CharSequence title = r.activityInfo.loadLabel(appContext.getPackageManager());
+            Configuration config = new Configuration(mCompatConfiguration);
+            if (r.overrideConfig != null) {
+                config.updateFrom(r.overrideConfig);
+            }
+            if (DEBUG_CONFIGURATION) Slog.v(TAG, "Launching activity "
+                    + r.activityInfo.name + " with config " + config);
+            Window window = null;
+            if (r.mPendingRemoveWindow != null && r.mPreserveWindow) {
+                window = r.mPendingRemoveWindow;
+                r.mPendingRemoveWindow = null;
+                r.mPendingRemoveWindowManager = null;
+            }
+            appContext.setOuterContext(activity);
+            activity.attach(appContext, this, getInstrumentation(), r.token,
+                    r.ident, app, r.intent, r.activityInfo, title, r.parent,
+                    r.embeddedID, r.lastNonConfigurationInstances, config,
+                    r.referrer, r.voiceInteractor, window, r.configCallback);
+
+            if (customIntent != null) {
+                activity.mIntent = customIntent;
+            }
+            r.lastNonConfigurationInstances = null;
+            checkAndBlockForNetworkAccess();
+            activity.mStartedActivity = false;
+            int theme = r.activityInfo.getThemeResource();
+            if (theme != 0) {
+                activity.setTheme(theme);
+            }
+
+            activity.mCalled = false;
+            if (r.isPersistable()) {
+                mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState);
+            } else {
+                mInstrumentation.callActivityOnCreate(activity, r.state);
+            }
+            if (!activity.mCalled) {
+                throw new SuperNotCalledException(
+                    "Activity " + r.intent.getComponent().toShortString() +
+                    " did not call through to super.onCreate()");
+            }
+            r.activity = activity;
+            r.stopped = true;
+            if (!r.activity.mFinished) {
+                activity.performStart();
+                r.stopped = false;
+            }
+            if (!r.activity.mFinished) {
+                if (r.isPersistable()) {
+                    if (r.state != null || r.persistentState != null) {
+                        mInstrumentation.callActivityOnRestoreInstanceState(activity, r.state,
+                                r.persistentState);
+                    }
+                } else if (r.state != null) {
+                    mInstrumentation.callActivityOnRestoreInstanceState(activity, r.state);
+                }
+            }
+            if (!r.activity.mFinished) {
+                activity.mCalled = false;
+                if (r.isPersistable()) {
+                    mInstrumentation.callActivityOnPostCreate(activity, r.state,
+                            r.persistentState);
+                } else {
+                    mInstrumentation.callActivityOnPostCreate(activity, r.state);
+                }
+                if (!activity.mCalled) {
+                    throw new SuperNotCalledException(
+                        "Activity " + r.intent.getComponent().toShortString() +
+                        " did not call through to super.onPostCreate()");
+                }
+            }
+        }
+        r.paused = true;
+
+        mActivities.put(r.token, r);
+
+    } catch (SuperNotCalledException e) {
+        throw e;
+
+    } catch (Exception e) {
+        if (!mInstrumentation.onException(activity, e)) {
+            throw new RuntimeException(
+                "Unable to start activity " + component
+                + ": " + e.toString(), e);
+        }
+    }
+
+    return activity;
+}
+```
+activity的attach方法
+```
+final void attach(Context context, ActivityThread aThread,
+           Instrumentation instr, IBinder token, int ident,
+           Application application, Intent intent, ActivityInfo info,
+           CharSequence title, Activity parent, String id,
+           NonConfigurationInstances lastNonConfigurationInstances,
+           Configuration config, String referrer, IVoiceInteractor voiceInteractor,
+           Window window, ActivityConfigCallback activityConfigCallback) {
+       attachBaseContext(context);
+
+       mFragments.attachHost(null /*parent*/);
+
+       mWindow = new PhoneWindow(this, window, activityConfigCallback);
+       mWindow.setWindowControllerCallback(this);
+       mWindow.setCallback(this);
+       mWindow.setOnWindowDismissedCallback(this);
+       mWindow.getLayoutInflater().setPrivateFactory(this);
+       if (info.softInputMode != WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED) {
+           mWindow.setSoftInputMode(info.softInputMode);
+       }
+       if (info.uiOptions != 0) {
+           mWindow.setUiOptions(info.uiOptions);
+       }
+       mUiThread = Thread.currentThread();
+
+       mMainThread = aThread;
+       mInstrumentation = instr;
+       mToken = token;
+       mIdent = ident;
+       mApplication = application;
+       mIntent = intent;
+       mReferrer = referrer;
+       mComponent = intent.getComponent();
+       mActivityInfo = info;
+       mTitle = title;
+       mParent = parent;
+       mEmbeddedID = id;
+       mLastNonConfigurationInstances = lastNonConfigurationInstances;
+       if (voiceInteractor != null) {
+           if (lastNonConfigurationInstances != null) {
+               mVoiceInteractor = lastNonConfigurationInstances.voiceInteractor;
+           } else {
+               mVoiceInteractor = new VoiceInteractor(voiceInteractor, this, this,
+                       Looper.myLooper());
+           }
+       }
+
+       mWindow.setWindowManager(
+               (WindowManager)context.getSystemService(Context.WINDOW_SERVICE),
+               mToken, mComponent.flattenToString(),
+               (info.flags & ActivityInfo.FLAG_HARDWARE_ACCELERATED) != 0);
+       if (mParent != null) {
+           mWindow.setContainer(mParent.getWindow());
+       }
+       mWindowManager = mWindow.getWindowManager();
+       mCurrentConfig = config;
+
+       mWindow.setColorMode(info.colorMode);
+   }
+```
+
+在Activity的attach方法里面，系统会创建activity所属的window对象并未其设置回调接口，window对象的创建是PhoneWindow。由于activity实现了window的callback接口，因此，当window接收到外界状态改变时会回调activity的方法，Callback接口中方法很多，但是有几个确实我们非常熟悉的，比如onAttachToWindow、onDetachedFromWindow、dispatchTouchEvent等等，代码如下所示
+
+
+从activityy的setContentView的实现可以看出，Activity将具体实现交给了Window来处理，而Window的具体实现是phoneWindow，所以只需要看phonewindow的关联逻辑即可，PhoneWindow的setContentView方法大致遵循如下几个步骤
+1. 如果没有decorView就创建他
+DecorView是一个FrameLayout。他是Activity中顶级的View，一般来说他包含内部标题栏和内部蓝，但是这个会随着主题的变化而改变，不管怎么样，内容栏是一定要存在的，并且内容栏固定具体的id，就是content，那么他完整的id是android.R.content。decorView的创建过程由installDecor方法来完成，在方法内部会通过generateDecor方法来直接创建DecorView，这个时候DecorView还是一个空白的FramLayout
+
+看一下DecorView的构造方法
+```
+DecorView(Context context, int featureId, PhoneWindow window,
+          WindowManager.LayoutParams params) {
+      super(context);
+      mFeatureId = featureId;
+
+      mShowInterpolator = AnimationUtils.loadInterpolator(context,
+              android.R.interpolator.linear_out_slow_in);
+      mHideInterpolator = AnimationUtils.loadInterpolator(context,
+              android.R.interpolator.fast_out_linear_in);
+
+      mBarEnterExitDuration = context.getResources().getInteger(
+              R.integer.dock_enter_exit_duration);
+      mForceWindowDrawsStatusBarBackground = context.getResources().getBoolean(
+              R.bool.config_forceWindowDrawsStatusBarBackground)
+              && context.getApplicationInfo().targetSdkVersion >= N;
+      mSemiTransparentStatusBarColor = context.getResources().getColor(
+              R.color.system_bar_background_semi_transparent, null /* theme */);
+
+      updateAvailableWidth();
+
+      setWindow(window);
+
+      updateLogTag(params);
+
+      mResizeShadowSize = context.getResources().getDimensionPixelSize(
+              R.dimen.resize_shadow_size);
+      initResizingPaints();
+  }
+
+```
+
+看一下phonewindow的setContentView这个方法
+
+```
+@Override
+    public void setContentView(int layoutResID) {
+        // Note: FEATURE_CONTENT_TRANSITIONS may be set in the process of installing the window
+        // decor, when theme attributes and the like are crystalized. Do not check the feature
+        // before this happens.
+        if (mContentParent == null) {
+            installDecor();
+        } else if (!hasFeature(FEATURE_CONTENT_TRANSITIONS)) {
+            mContentParent.removeAllViews();
+        }
+
+        if (hasFeature(FEATURE_CONTENT_TRANSITIONS)) {
+            final Scene newScene = Scene.getSceneForLayout(mContentParent, layoutResID,
+                    getContext());
+            transitionTo(newScene);
+        } else {
+            mLayoutInflater.inflate(layoutResID, mContentParent);
+        }
+        mContentParent.requestApplyInsets();
+        final Callback cb = getCallback();
+        if (cb != null && !isDestroyed()) {
+            cb.onContentChanged();
+        }
+        mContentParentExplicitlySet = true;
+    }
+```
+
+看一下他的generateLayout方法和installDecor方法
+
+decorView的结构和系统版本以及主题都有关系
+
+### 将View添加到decoordView的mContentParent中
+这里setContentView方法会inflate，这个时候activity的布局就加载到decorView中了,他只是添加到mContentParent中，因此叫做setContentView
+
+### 回调Activity的onContentChanged方法通知Activity视图已经发生改变
+
+这个过程就更简单了，由于Activity实现了Window的Callback接口，这里表示Activity的布局已经被添加到DecorView的mContentParent中了，使其可以做相应的处理。Activity的onContentChanged方法是个空的实现，我们可以在子Activity中处理这个回调
+```
+      final Callback cb = getCallback();
+      if (cb != null && !isDestroyed()) {
+          cb.onContentChanged();
+      }
+```
+经过了上面的三个步骤，到这里为止，decorView已经被创建并初始化完毕，activity的布局文件已经成功添加到了DecorView的mContentParent中，但是这个时候DecorView还没有被WindowManager正式添加到Window，这里需要正确的理解window的抽象概念，window跟多表示一种抽象功能的集合，虽然说早在Activity的attach方法中window就已经被创建了，但是这个时候由于decorView没有被windowManager识别，所以这个时候window无法提供具体的功能，因为他还无法识别外界传出的输入信息，。在activityThread的handleResumeActivity方法中，首先会调用activity的onResume，接着会调用activity的makeVisible，正是在makeVisible方法，decorView真正完成了添加和显示的过程，到这里，Activitty视图才能被用户看到
+
+```
+void makeVisible() {
+       if (!mWindowAdded) {
+           ViewManager wm = getWindowManager();
+           wm.addView(mDecor, getWindow().getAttributes());
+           mWindowAdded = true;
+       }
+       mDecor.setVisibility(View.VISIBLE);
+   }
+
+```
+### dialog的window创建过程
+
+
+dialog的window的创建过程和activity类似，有如下几个步骤
+1. 创建window
+dialog中window的创建同样通过policyManager的makeNewWindow方法来完成，创建后的对象实际就是phoneWindow，这个过程和activity的window创建过程一致，这里就不详细说明了
+2. 初始化decorView并将dialog视图添加到decorView中
+初始化dialog，这个过程和activity类似
+3. 将decorView添加到window中并显示
+在dialog的show方法中，会通过windowmanager将decorView添加到window中显示
+
+从上面三个步骤可以发现，dialog的window创建和activity的window创建过程很类似，二者几乎没有什么区别，当dialog被关闭是，他会通过windowmanager来移除decorView
+普通的dialog有一个特殊之处就是必须采用activity的context，如果采用application的context，那么就会报错
+提示如下
+```
+token null is not for an application
+```
+这里信息很明确，是没有应用token所导致的，而应用token一般只有activity拥有，所以这里只需要activity作为context来显示对话框，另外，系统window比较特殊，他可以不需要token，英雌在上面的例子，只需要指定对话框的window为系统类型就可以正常弹出对话框，在本章一开始就讲到，windowmanager。layoutParams中的type表示window的类型，而系统window的层级范围是2000-2999，这些成绩范围就对应着type参数，系统window的层级有很多值3，对于本利来说，可以选用TYPE_SYSTEM_OVERLAY来指定对话框的类型为系统window类型
+
+```
+Dialog dialog
+             =new Dialog(this.getApplicationContext());
+     dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY);
+```
+然后别忘忘记了在androidManifest中声明权限从而可以使用系统window
+
+```
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+```
+
+
+### Toast的window创建过程
+toast和dialog不同，他的工作过程就稍微复杂一点，首先toast也是基于window来实现的，但是由于toast具有定时取消这一个功能，所以系统采用handler。在toast的内部由拉令中IPC过程，第一类是Toast访问NotificationManagerService，第二类是NotifacationManagerService回调Toast的TN接口，关于IPC的一些知识，可以参照之前的内容，这里将NotificationManagerService简称为NMS
+
+Toast属于系统window，他的内部视图由两种方式指定，一种是系统默认样式，一种是通过setView方法来指定一个自定义View，不管怎么样，他们都对应Toast的一个View类型的内部成员mNextView。Toast提供了show和cancel方法分别用于显示和影藏Toast，他们的内部是一个IPC过程，show方法和cancel方法实现如下
+
+```
+public void show() {
+       if (mNextView == null) {
+           throw new RuntimeException("setView must have been called");
+       }
+
+       INotificationManager service = getService();
+       String pkg = mContext.getOpPackageName();
+       TN tn = mTN;
+       tn.mNextView = mNextView;
+
+       try {
+           service.enqueueToast(pkg, tn, mDuration);
+       } catch (RemoteException e) {
+           // Empty
+       }
+   }
+
+
+   static private INotificationManager getService() {
+        if (sService != null) {
+            return sService;
+        }
+        sService = INotificationManager.Stub.asInterface(ServiceManager.getService("notification"));
+        return sService;
+    }
+
+
+   public void cancel() {
+       mTN.cancel();
+   }
+```
+从上面的代码可以看到，显示和隐藏都是通过NMS来实现的，由于NMS运行在系统进程中，所以只能通过远程调用来显示和隐藏Toast,看一下`getService`这个方法。需要注意的是TN这个类，他是一个Binder类，在Toast和NMS进行IPC过程中，当NMS处理TOast的显示或者隐藏的过程都会回调TN中的方法，这个时候由于TN运行在Binder线程池中，所以需要通过Handler将其切换到当前线程中，这里的当前线程是指发送Toast请求所在的线程。注意，由于这里使用handler，所以这意味着Toast无法在没有Looper的线程中弹出，这是因为Handler需要使用looper才能完成线程的切换功能，关于handler和looper的具体介绍可以看后面的内容
+
+首先看一下Toast的显示过程，他调用了NMS的enqueueToast
+
+
+
+
+
+
+
 # 第九章 四大组件的工作流程
 # 第十章 Android的消息机制
 # 第十一章 Android的线程和线程池
