@@ -5,6 +5,7 @@ tags: android进阶第一步
 ---
 
 >  这个是Android 开发艺术探索的读书笔记，感觉在把android群英传整理之后对android的知识体系有了更加深入的理解，好记性不如烂笔头，还是记录一下。https://github.com/appium/android-apidemos/blob/master/src/io/appium/android/apis/animation/Rotate3dAnimation.java 这个是这本书项目源码 作者的
+>  这里看的是Androoid 8.0的代码，和作者的5.0略有不同
 
 # 第一章 Activity的生命周期和启动模式
 ## Android 的生命周期全面分析
@@ -13144,13 +13145,262 @@ public void show() {
 
 首先看一下Toast的显示过程，他调用了NMS的enqueueToast
 
+可以看到在show的时候调用了
+
+```
+public void show() {
+       if (mNextView == null) {
+           throw new RuntimeException("setView must have been called");
+       }
+
+       INotificationManager service = getService();
+       String pkg = mContext.getOpPackageName();
+       TN tn = mTN;
+       tn.mNextView = mNextView;
+
+       try {
+           service.enqueueToast(pkg, tn, mDuration);  调用了enqueueToast方法
+       } catch (RemoteException e) {
+           // Empty
+       }
+   }
+
+```
+
+NMS的enqueueToast方法的第一个参数表示当前应用的包名，第二个参数tn表示远程回调，第三个表示Toast显示的时长。enqueueToast首先将Toast请求封装为ToastRecord对象并将其添加到一个mToastQueue的队列中。mToastQueue其实是一个ArrayList。对于非系统应用来说，mToastQueue最多同时存在50个ToastRecord，这样所示为了防止DOS(Denial of Service)。如果不这么做，事项一下，如果我们通过大量循环去接连弹出Toast，那么其他应用就没有机会弹出Toast，那么对于其他应用的Toast请求，系统的行为就是拒绝服务，这就是拒绝服务攻击的含义，这种手段常用于网络攻击中。这里对每一个应用都进行了判断，每一个应用最多有50个
+
+```
+@Override
+        public void enqueueToast(String pkg, ITransientNotification callback, int duration)
+        {
+            if (DBG) {
+                Slog.i(TAG, "enqueueToast pkg=" + pkg + " callback=" + callback
+                        + " duration=" + duration);
+            }
+
+            if (pkg == null || callback == null) {
+                Slog.e(TAG, "Not doing toast. pkg=" + pkg + " callback=" + callback);
+                return ;
+            }
+
+            final boolean isSystemToast = isCallerSystemOrPhone() || ("android".equals(pkg));
+            final boolean isPackageSuspended =
+                    isPackageSuspendedForUser(pkg, Binder.getCallingUid());
+
+            if (ENABLE_BLOCKED_TOASTS && !isSystemToast &&
+                    (!areNotificationsEnabledForPackage(pkg, Binder.getCallingUid())
+                            || isPackageSuspended)) {
+                Slog.e(TAG, "Suppressing toast from package " + pkg
+                        + (isPackageSuspended
+                                ? " due to package suspended by administrator."
+                                : " by user request."));
+                return;
+            }
+
+            synchronized (mToastQueue) {
+                int callingPid = Binder.getCallingPid();
+                long callingId = Binder.clearCallingIdentity();
+                try {
+                    ToastRecord record;
+                    int index = indexOfToastLocked(pkg, callback);
+                    // If it's already in the queue, we update it in place, we don't
+                    // move it to the end of the queue.
+                    if (index >= 0) {
+                        record = mToastQueue.get(index);
+                        record.update(duration);
+                    } else {
+                        //就是这里
+                        // Limit the number of toasts that any given package except the android
+                        // package can enqueue.  Prevents DOS attacks and deals with leaks.
+                        if (!isSystemToast) {
+                            int count = 0;
+                            final int N = mToastQueue.size();
+                            for (int i=0; i<N; i++) {
+                                 final ToastRecord r = mToastQueue.get(i);
+                                 if (r.pkg.equals(pkg)) {
+                                     count++;
+                                     if (count >= MAX_PACKAGE_NOTIFICATIONS) {// 判断是否大于50个
+                                         Slog.e(TAG, "Package has already posted " + count
+                                                + " toasts. Not showing more. Package=" + pkg);
+                                         return;
+                                     }
+                                 }
+                            }
+                        }
+
+                        Binder token = new Binder();
+                        mWindowManagerInternal.addWindowToken(token, TYPE_TOAST, DEFAULT_DISPLAY);
+                        record = new ToastRecord(callingPid, pkg, callback, duration, token);
+                        mToastQueue.add(record);
+                        index = mToastQueue.size() - 1;
+                        keepProcessAliveIfNeededLocked(callingPid);
+                    }
+                    // If it's at index 0, it's the current toast.  It doesn't matter if it's
+                    // new or just been updated.  Call back and tell it to show itself.
+                    // If the callback fails, this will remove it from the list, so don't
+                    // assume that it's valid after this.
+                    if (index == 0) {
+                        showNextToastLocked();
+                    }
+                } finally {
+                    Binder.restoreCallingIdentity(callingId);
+                }
+            }
+        }
+```
+正常情况下，一个应用不可能达到上限，当ToastRecord被添加到mToastQueue中后，NMS就会通过shwoNextToastLocked方法来显示当前的toast。下面的代码很好理解，需要注意的是，Toast的显示时由ToastRecord的Callback来完成的，这个callback实际上就是Toast中的TN对象的远程Binder，通过callBack来访问TN中的方法是需要跨进程来完成的，最终被调用的TN中的方法会运行在发起Toast请求的应用的Binder线程池中
+
+```
+void showNextToastLocked() {
+        ToastRecord record = mToastQueue.get(0);
+        while (record != null) {
+            if (DBG) Slog.d(TAG, "Show pkg=" + record.pkg + " callback=" + record.callback);
+            try {
+                record.callback.show(record.token);
+                // 这里是发送一条延时消息
+                scheduleTimeoutLocked(record);
+                return;
+            } catch (RemoteException e) {
+                Slog.w(TAG, "Object died trying to show notification " + record.callback
+                        + " in package " + record.pkg);
+                // remove it from the list and let the process die
+                int index = mToastQueue.indexOf(record);
+                if (index >= 0) {
+                    mToastQueue.remove(index);
+                }
+                keepProcessAliveIfNeededLocked(record.pid);
+                if (mToastQueue.size() > 0) {
+                    record = mToastQueue.get(0);
+                } else {
+                    record = null;
+                }
+            }
+        }
+    }
+
+```
+延时消息
+```
+@GuardedBy("mToastQueue")
+    private void scheduleTimeoutLocked(ToastRecord r)
+    {
+        mHandler.removeCallbacksAndMessages(r);
+        Message m = Message.obtain(mHandler, MESSAGE_TIMEOUT, r);
+        long delay = r.duration == Toast.LENGTH_LONG ? LONG_DELAY : SHORT_DELAY;
+        mHandler.sendMessageDelayed(m, delay);
+    }
+```
+上面的LONG_DELAY是3.5s，而SHORT_DELAY是2s。延迟相应的时间后，NMS会通过cancelToastLocked方法来隐藏Toast并将其从mToastQueue中移除，这个时候如果mToastQueue还有其他Toast，那么NMS就继续显示其他的Toast。
+Toast的隐藏也是通过ToastRecord的callback来完成的，这同样越是一次IPC过程，他的工作方式和TOast的显示过程类似，如下所示。
+```
+@GuardedBy("mToastQueue")
+ void cancelToastLocked(int index) {
+     ToastRecord record = mToastQueue.get(index);
+     try {
+         record.callback.hide();
+     } catch (RemoteException e) {
+         Slog.w(TAG, "Object died trying to hide notification " + record.callback
+                 + " in package " + record.pkg);
+         // don't worry about this, we're about to remove it from
+         // the list anyway
+     }
+
+     ToastRecord lastToast = mToastQueue.remove(index);
+     mWindowManagerInternal.removeWindowToken(lastToast.token, true, DEFAULT_DISPLAY);
+
+     keepProcessAliveIfNeededLocked(record.pid);
+     if (mToastQueue.size() > 0) {
+         // Show the next one. If the callback fails, this will remove
+         // it from the list, so don't assume that the list hasn't changed
+         // after this point.
+         showNextToastLocked();
+     }
+ }
+```
+通过上面的分析可以知道，Toast的显示和隐藏过程其实是通过Toast中的TN这个类来实现的，他有两个方法show和hide，分别对应Toast的显示与隐藏。这两个方法是被NMS以跨进程的方式调用的，因此他们运行在Binder线程池中，为了将执行环境切换到Tooast所在请求所在的线程，在他们内部使用了handler,TN是Toast的一个内部类
+
+```
+
+mHandler = new Handler(looper, null) {
+            @Override
+            public void handleMessage(Message msg) {
+                switch (msg.what) {
+                    case SHOW: {
+                        IBinder token = (IBinder) msg.obj;
+                        handleShow(token);
+                        break;
+                    }
+                    case HIDE: {
+                        handleHide();
+                        // Don't do this in handleHide() because it is also invoked by
+                        // handleShow()
+                        mNextView = null;
+                        break;
+                    }
+                    case CANCEL: {
+                        handleHide();
+                        // Don't do this in handleHide() because it is also invoked by
+                        // handleShow()
+                        mNextView = null;
+                        try {
+                            getService().cancelToast(mPackageName, TN.this);
+                        } catch (RemoteException e) {
+                        }
+                        break;
+                    }
+                }
+            }
+        };
 
 
+@Override
+    public void show(IBinder windowToken) {
+        if (localLOGV) Log.v(TAG, "SHOW: " + this);
+        mHandler.obtainMessage(SHOW, windowToken).sendToTarget();
+    }
+
+    /**
+     * schedule handleHide into the right thread
+     */
+    @Override
+    public void hide() {
+        if (localLOGV) Log.v(TAG, "HIDE: " + this);
+        mHandler.obtainMessage(HIDE).sendToTarget();
+    }
+```
+这里内部调用了handleShow和handleHide这里才是真正影藏和显示Toast的地方
+添加handleShow会调用
+```
+   mWM.addView(mView, mParams);
+```
+添加handleHide会调用
+```
+   mWM.removeViewImmediate(mView);
+```
 
 
-
-
+这里Toast的Window的创建过程分析已经完成了。任何View都是依赖一个Window的，是附着在Window上面显示的。
 # 第九章 四大组件的工作流程
+这一章讲述一下四大组件的工作过程,说到四大组件，开发者都再熟悉不过了，他们是Activity、Service、BroadcastReceiver、ContentProvide。如何使用四大组件这个不是本章的话题，这个都是基础的内容。这里按照如下逻辑来分析Android的四大组件：首先对四大组件的运行状态和工作方式做一个概括化的描述，接着对四大组件的工作过程进行分析，通过本章节对四大组件有一个更加深刻的认识。
+
+本章主要侧重于四大组件工作过程的分析，通过分析他们的工作过程我们可以更好的理解系统的运行机制。本章的意义在于加深读者对四大组件的工作方式的认识。本章的意义在于加深读者对四大组件工作方式的认识，由于四大组件的特殊性，我们有必要对他有一定的了解。
+
+## 四大组件的运行状态
+Android四大组件中处理BroadcaskReceiver意外，其他三种组件必须都在ANdroidManifest中注册，对于BroadcastReceiver来说，他既可以在AndroidManifest中注册，也可以使用代码来注册。在调用方式上，Activity、Service、BroadcastReceiver需要借助Intent，而ContentProvide不需要借助Intent
+
+Activity是一种展示型的组件，用于向用户直接展示一个界面，并且可以接受用户的输入信息从而进行交互。Activity是最重要的一种组件，对用户来说Activity就是一个Android应用的全部，这是因为其他三大组件对用户来说都是不可感知的。Activity的启动由Intent触发，其中Intent可以分为显示Intent和隐式Intent，显示Intent可以明确指向一个Activity组件，隐式Intent则指向一个或者多个目标Activity组件，当然也可能没有任何一个Activity组件可以处理这个Intent。一个Activity组件可以具有特定的启动模式。关于启动模式在之前已经做了介绍了，同一个Activity组件在不同的启动模式下会有不同的效果。Activity组件也是可以停止的，在实际开发中可以通过Activity的finish方法来结束一个Activity组件的运行。由此看来，Activity组件的主要作用是展示一个界面并和用户交互，他扮演的是一种前台界面的角色。
+
+Service是一种计算型组件，用于在后台执行一系列计算任务。由于Service组件工作在后台，因此用户无法直接感知到他的存在。Service组件和Activity组件略有不同，Activity组件只有一种运行模式，即Activity处于启动装填，但是Service组件却又两种状态：启动状态和绑定状态。当Service组件处于启动状态时，这个时候Service内部可以做一些后台计算，并不需要和外界有直接的交互。尽管Service组件是用于执行后台计算的，但是它本身是运行在主线程中的，因此耗时操作需要在独立的线程中执行，也可以使用IntentService，这个默认是在新建的线程中执行。当Service组件处于绑定状态时，这个时候Service内部同样可以进行后台计算，但是处于这种状态是，外界可以很方便的和Service组件进行通信。Service组件也可以停止的，停止一个Service组件比较复杂，需要灵活使用stopService和unBindService这两个方法才能完全停止一个Service组件。
+
+
+BroadcastReceiver是一种消息性组件，用于在不同的组件乃至不同的应用之间传递消息。BroadcastReceiver同样无法被用户直接感知，因为他工作在系统内部。BroadcastReceiver也叫广播，广播的注册有两种方式：静态注册和动态注册。静态注册时指在AndroidManifest中注册管你胳膊，这种广播在应用安装的时候会被系统解析，因此这种形式的广播不需要启动就可以收到广播。动态注册广播需要通过Context.registerReceiver()来实现，并且不需要的时候可以通过Context.unregisterReceiver()来解除广播，此种形态的广播必须要应用启动之后才能注册并接受广播，应为应用不启动就无法注册广播，无法注册广播就无法收到相应的广播。在开发中通过Context的一系列send方法来发送广播，被发送的广播会被系统发送给该兴趣的接受者，发送和接受过程的匹配是通过<Intent-filter>来描述的。可以发现，BroadcastReceiver组件可以通过实现低耦合的观察者模式，观察者和接受者没有任何耦合。由于BroadcastReceiver的特性，他不适合用来执行耗时操作。BroadcastReceiver一般来说不需要停止，动态注册的要及时解开注册
+
+ContentProvider是一种共享性组件，用于向其他组件内置其他应用共享数据。和BroadcastReceiver一样，ContentProvider无法被用户感知。对于一个ContentProvider组件来说，他的内部需要实现增删改查这四种操作，在他的内部维持着一份数据集合，这个数据集合既可以通过数据库来实现，可以通过其他任意类型来实现，比如List和Map。ContentProvider对数据集合的具体实现方式没有任何要求。需要注意的是ContentProvider内部的insert、delete。update和query方法需要处理好线程同步，英雌这几个方法在Binder线程池汇总被调用，另外ContentProvider组件也不需要手动停止。
+
+## Activity的工作流程
+
+
+
 # 第十章 Android的消息机制
 # 第十一章 Android的线程和线程池
 # 第十二章 Bitmap的加载和Cache
