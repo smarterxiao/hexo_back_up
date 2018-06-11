@@ -1179,7 +1179,7 @@ public interface IBookManager extends IInterface{
 
 可以看到，在接口中声明了一个Binder描述符和另外三个id，这三个id分别表示的是basicTypes、getBookList、addBook方法，这段代码原本也是系统生成的，我们仿照系统生成的规则去手写这部分代码，如果有更多的方法怎么做呢？很显然，我们要在声明一个id，然后按照固定模式声明这个新方法即可，这个比较好理解，不在多说。
 
-* 实现Stub类和Stub类中的Proxy代理类，这段代码我们可以自己写，但是写出来发现和系统生成的代码是一样的，英雌这个Stub类我们只需要参考系统生成的代码即可，只是结构上需要做一下调整，调整后的代码如下所示。
+* 实现Stub类和Stub类中的Proxy代理类，这段代码我们可以自己写，但是写出来发现和系统生成的代码是一样的，因此这个Stub类我们只需要参考系统生成的代码即可，只是结构上需要做一下调整，调整后的代码如下所示。
 
 ```
 public class BookMangerImpl extends Binder implements IBookManager{
@@ -1591,9 +1591,9 @@ public class SecondActivity extends AppCompatActivity {
 
 可以看日志，在SecondActivity中成功的从文件恢复了之前存入对象的数据，这里只所以说内容，是因为反序列化得到对象只是在内容上和序列化之前的对象是一样的，但是他的本质是两个对象
 
-通过文件共享这种方式来共享数据对文件格式是没有具体要求的，比如可以是文本文件，也可以是XML文件，只要读写是双方约定的数据格式即可。通过文件共享的方式也是有局限性的，比如并发读写的问题，想上面的那些例子，如果并发读写，那么我们读出的内容就有可能不是最新的，如果是并发写的话就更加严重了，英雌我们要尽量避免并发写这种情况的操作或者使用线程同步来限制多个线程的写操作，通过上面的分析，我们可以知道，文件共享方式适合在对数据同步要求不高的进程之间进行通信，并用要妥善处理并发读写的问题。
+通过文件共享这种方式来共享数据对文件格式是没有具体要求的，比如可以是文本文件，也可以是XML文件，只要读写是双方约定的数据格式即可。通过文件共享的方式也是有局限性的，比如并发读写的问题，想上面的那些例子，如果并发读写，那么我们读出的内容就有可能不是最新的，如果是并发写的话就更加严重了，因此我们要尽量避免并发写这种情况的操作或者使用线程同步来限制多个线程的写操作，通过上面的分析，我们可以知道，文件共享方式适合在对数据同步要求不高的进程之间进行通信，并用要妥善处理并发读写的问题。
 
-当然SharedPrefences是个特例，众所周知，SharedPrefences是Android中提供的轻量级存储方案，他通过键值对的方式来存储数据，在底层实现上他采用XML文件来存储价值对，每个应用的SharedPrefences文件都可以在当前包所在的data目录下查看到。一般来说，他的目录位于/data/data/package name/shared_prefs 目录下，其中package name 表示的是当前应用的包名，从本质上来说，SharedPrefences也属于文件的一种，但是由于系统对他的读写有一定的缓存策略，记在内从重会有一份SharedPrefences文件的缓存，英雌在多进程模式下，系统对他的读写就变得不可靠，当面对高并发的读写访问，sharedPrefences有很大几率会丢失数据，因此，不建议在进程通信中使用SharePrefences
+当然SharedPrefences是个特例，众所周知，SharedPrefences是Android中提供的轻量级存储方案，他通过键值对的方式来存储数据，在底层实现上他采用XML文件来存储价值对，每个应用的SharedPrefences文件都可以在当前包所在的data目录下查看到。一般来说，他的目录位于/data/data/package name/shared_prefs 目录下，其中package name 表示的是当前应用的包名，从本质上来说，SharedPrefences也属于文件的一种，但是由于系统对他的读写有一定的缓存策略，记在内从重会有一份SharedPrefences文件的缓存，因此在多进程模式下，系统对他的读写就变得不可靠，当面对高并发的读写访问，sharedPrefences有很大几率会丢失数据，因此，不建议在进程通信中使用SharePrefences
 
 ### 使用Messager
 
@@ -1962,7 +1962,6 @@ interface IBookManager {
 在AIDL文件中，并不是所有的数据类型都是可以使用的，那么到底AIDL文件支持哪些数据类型呢？如下
 
 * 基本数据类型(int 、long、char、boolean、double)
-
 * String和CharSequence
 * List：只支持ArrayList，并且每个元素都必须能够被AIDL支持
 * Map：只支持HashMap，里面的每个元素都必须被AIDL支持，包括key和value
@@ -3705,7 +3704,7 @@ password: helloword-安卓
 |Bundle|简单易用|只能传输Bundle支持的数据类型|四大组件间进程通讯|
 |文件共享|简单易用|不适合高并发场景，并且无法做到进程间的即时通讯|五并发访问情形，交换简单的数据实时性不高的场景|
 |AIDL|功能强大，支持一对多并发通信，支持实时通信|使用稍微复杂，需要处理好线程同步|一对多通信并且有RPC需求|
-|Messenger|功能一般，支持一对多串行通信，支持实时通信|不能很好的处理高并发情形，不能支持RPC，数据通过Message进行传输，英雌只能传输Bundle支持的数据类型|低并发的一对多即时通信，五RPC需求，或者无需返回结果的RPC需求|
+|Messenger|功能一般，支持一对多串行通信，支持实时通信|不能很好的处理高并发情形，不能支持RPC，数据通过Message进行传输，因此只能传输Bundle支持的数据类型|低并发的一对多即时通信，五RPC需求，或者无需返回结果的RPC需求|
 |ContentProvide|在数据访问方面功能强大，支持一对多并发数据共享，可通过call方法拓展其他操作|可以理解为受约束的AIDL，主要提供数据源的CRUD操作|一对多的进程间的数据共享|
 |socket|功能强大，可以通过=网络传输字节流，支持一对多并发实时通信|实现细节稍微有点繁琐，不支持直接RPC|网络数据交换|
 
@@ -6551,7 +6550,7 @@ cond5(no)->op12->op13->e
 
 这里先说场景1 ： 这个主要是Viewpager和Fragment配合的时候所组成的页面滑动，主流应用几乎都会使用这个效果。在fragment中有listview。Viewpager内部帮助我们处理了这种冲突，但是如果是scrollView就会遇到冲突。
 再说一下场景2 ： 这种情况就稍微复杂一点，因为是内部和外部同时都会监听同一个方向的滚动，所以系统不知道要将事件分发给谁。一般是内部滑动，外部跟着滑动
-最后说一下场景3 ：场景1和场景2两种情况嵌套，英雌这个比较复杂。
+最后说一下场景3 ：场景1和场景2两种情况嵌套，因此这个比较复杂。
 
 ### 事件冲突的处理规则
 不管冲突多么复杂，总归是有规则的。
@@ -11755,7 +11754,7 @@ public class LinearInterpolator extends BaseInterpolator implements NativeInterp
 }
 
 ```
-可以看到线性插值器的返回和输出值一样，英雌插值器返回的值是0.5，这意味着x的改变时0.5，这个时候插值器的工作就完成了
+可以看到线性插值器的返回和输出值一样，因此插值器返回的值是0.5，这意味着x的改变时0.5，这个时候插值器的工作就完成了
 这里在看一下DecelerateInterpolator 减速插值器的`getInterpolation`可以看到对输入值进行处理了
 ```
 public class DecelerateInterpolator extends BaseInterpolator implements NativeInterpolatorFactory {
@@ -12392,7 +12391,7 @@ final Button mFloatButton = new Button(this);
 ```
 
 ## window的内部机制
-window是一个抽象的概念，每一个window都对应着一个view和一个ViewRootImpl，window和View通过ViewRootImpl来建立联系，英雌window并不是实际存在的，他是以View的形式存在的，这一点从windowManager的定义可以看出来，他提供了三个方法addview，updateViewLayout和removeView都是针对View的，这说明View是window存在的尸体。在实际使用过程中无法访问window，对window的访问过程必须公国windowmanager。为了分析window的颞部机制，这里从window的添加，删除以及更新说起
+window是一个抽象的概念，每一个window都对应着一个view和一个ViewRootImpl，window和View通过ViewRootImpl来建立联系，因此window并不是实际存在的，他是以View的形式存在的，这一点从windowManager的定义可以看出来，他提供了三个方法addview，updateViewLayout和removeView都是针对View的，这说明View是window存在的尸体。在实际使用过程中无法访问window，对window的访问过程必须公国windowmanager。为了分析window的颞部机制，这里从window的添加，删除以及更新说起
 
 ### window的添加过程
 window的添加过程需要通过windowManager的addView来实现，windowManager是一个接口，他的真正实现是windowManagerImpl类，在windowManagerInpl中window的三大操作如下:这里移除了一些代码
@@ -13090,7 +13089,7 @@ dialog中window的创建同样通过policyManager的makeNewWindow方法来完成
 ```
 token null is not for an application
 ```
-这里信息很明确，是没有应用token所导致的，而应用token一般只有activity拥有，所以这里只需要activity作为context来显示对话框，另外，系统window比较特殊，他可以不需要token，英雌在上面的例子，只需要指定对话框的window为系统类型就可以正常弹出对话框，在本章一开始就讲到，windowmanager。layoutParams中的type表示window的类型，而系统window的层级范围是2000-2999，这些成绩范围就对应着type参数，系统window的层级有很多值3，对于本利来说，可以选用TYPE_SYSTEM_OVERLAY来指定对话框的类型为系统window类型
+这里信息很明确，是没有应用token所导致的，而应用token一般只有activity拥有，所以这里只需要activity作为context来显示对话框，另外，系统window比较特殊，他可以不需要token，因此在上面的例子，只需要指定对话框的window为系统类型就可以正常弹出对话框，在本章一开始就讲到，windowmanager。layoutParams中的type表示window的类型，而系统window的层级范围是2000-2999，这些成绩范围就对应着type参数，系统window的层级有很多值3，对于本利来说，可以选用TYPE_SYSTEM_OVERLAY来指定对话框的类型为系统window类型
 
 ```
 Dialog dialog
@@ -13395,10 +13394,517 @@ Service是一种计算型组件，用于在后台执行一系列计算任务。�
 
 BroadcastReceiver是一种消息性组件，用于在不同的组件乃至不同的应用之间传递消息。BroadcastReceiver同样无法被用户直接感知，因为他工作在系统内部。BroadcastReceiver也叫广播，广播的注册有两种方式：静态注册和动态注册。静态注册时指在AndroidManifest中注册管你胳膊，这种广播在应用安装的时候会被系统解析，因此这种形式的广播不需要启动就可以收到广播。动态注册广播需要通过Context.registerReceiver()来实现，并且不需要的时候可以通过Context.unregisterReceiver()来解除广播，此种形态的广播必须要应用启动之后才能注册并接受广播，应为应用不启动就无法注册广播，无法注册广播就无法收到相应的广播。在开发中通过Context的一系列send方法来发送广播，被发送的广播会被系统发送给该兴趣的接受者，发送和接受过程的匹配是通过<Intent-filter>来描述的。可以发现，BroadcastReceiver组件可以通过实现低耦合的观察者模式，观察者和接受者没有任何耦合。由于BroadcastReceiver的特性，他不适合用来执行耗时操作。BroadcastReceiver一般来说不需要停止，动态注册的要及时解开注册
 
-ContentProvider是一种共享性组件，用于向其他组件内置其他应用共享数据。和BroadcastReceiver一样，ContentProvider无法被用户感知。对于一个ContentProvider组件来说，他的内部需要实现增删改查这四种操作，在他的内部维持着一份数据集合，这个数据集合既可以通过数据库来实现，可以通过其他任意类型来实现，比如List和Map。ContentProvider对数据集合的具体实现方式没有任何要求。需要注意的是ContentProvider内部的insert、delete。update和query方法需要处理好线程同步，英雌这几个方法在Binder线程池汇总被调用，另外ContentProvider组件也不需要手动停止。
+ContentProvider是一种共享性组件，用于向其他组件内置其他应用共享数据。和BroadcastReceiver一样，ContentProvider无法被用户感知。对于一个ContentProvider组件来说，他的内部需要实现增删改查这四种操作，在他的内部维持着一份数据集合，这个数据集合既可以通过数据库来实现，可以通过其他任意类型来实现，比如List和Map。ContentProvider对数据集合的具体实现方式没有任何要求。需要注意的是ContentProvider内部的insert、delete。update和query方法需要处理好线程同步，因此这几个方法在Binder线程池汇总被调用，另外ContentProvider组件也不需要手动停止。
 
 ## Activity的工作流程
+本节讲述的内容是Activity的工作过程。为了方便日常的开发工作，系统对四大组件的工作过程进行了很大程度上的封装，这使得开发者无需关注实现细节就可以快速的使用四大组件。Activity作为很重要的一个组件，其内部工作过程当然是做了很多的封装，这种封装是的启动一个Activity变得异常简单。在显示调用形式下，只需要调用如下代码就可以完成
 
+```
+Intent intent =new Intent(this,Main2Activity.class);
+ startActivity(intent);
+```
+
+通过上面的代码即可启动一个具体的Activity，然后新Activity就会被系统启动并展示在用户的眼前。这个过程对于Android开发者来说在普通不过了，但是有没有想过系统内部是如何启动一个Activity的呢？比如新Activity是在什么时候创建？Activity的onCreate方法又是在什么时候被系统回调的呢？这里就是普通开发者到高级开发者再到架构师的必经之路了。从另外一个方面来说，Android作为一个优秀的基于Linux的移动操作系统，其内部一定有很多地方值得我们学习和借鉴的地方，因此了解的过程就是学习Android操作系统。通过对Android操作系统的学习可以提高我们对操作系统在技术实现上的理解，这对于加强开发人员的内功是有帮助的。但是有一点，由于Android的内部实现多数细节都比较复杂，在研究内部实现上来说更加侧重对整体流程的把握，而不能局限在代码细节而无法自拔。
+
+本章节主要分析Activity的启动过程，通过本章节，可以对Activity的启动过程有一个感性的认识。
+
+我们从startActivity开始，发现最终调用了startActivityForResult方法，使用startActivity的requestCode是-1
+```
+public void startActivityForResult(@RequiresPermission Intent intent, int requestCode,
+        @Nullable Bundle options) {
+    if (mParent == null) {
+        options = transferSpringboardActivityOptions(options);
+        Instrumentation.ActivityResult ar =
+            mInstrumentation.execStartActivity(
+                this, mMainThread.getApplicationThread(), mToken, this,
+                intent, requestCode, options);
+        if (ar != null) {
+            mMainThread.sendActivityResult(
+                mToken, mEmbeddedID, requestCode, ar.getResultCode(),
+                ar.getResultData());
+        }
+        if (requestCode >= 0) {
+            // If this start is requesting a result, we can avoid making
+            // the activity visible until the result is received.  Setting
+            // this code during onCreate(Bundle savedInstanceState) or onResume() will keep the
+            // activity hidden during this time, to avoid flickering.
+            // This can only be done when a result is requested because
+            // that guarantees we will get information back when the
+            // activity is finished, no matter what happens to it.
+            mStartedActivity = true;
+        }
+
+        cancelInputsAndStartExitTransition(options);
+        // TODO Consider clearing/flushing other event sources and events for child windows.
+    } else {
+        if (options != null) {
+            mParent.startActivityFromChild(this, intent, requestCode, options);
+        } else {
+            // Note we want to go through this method for compatibility with
+            // existing applications that may have overridden it.
+            mParent.startActivityFromChild(this, intent, requestCode);
+        }
+    }
+}
+```
+注意一下，在第一次启动的时候，mParent是空，然后会调用
+```
+Instrumentation.ActivityResult ar =
+              mInstrumentation.execStartActivity(
+                  this, mMainThread.getApplicationThread(), mToken, this,
+                  intent, requestCode, options);
+```
+要知道这个方法的作用，就要看一下Instrumentation的execStartActivity做了什么操作，首先看一下穿的的参数，mMainThread.getApplicationThread()这个方法获取的类型是ApplicationThread，这个是ActiviityThread的一个内部类，通过分析发现，ApplicationThread和ActiviityThread在启动Activity的过程中发生了很重要的作用
+
+
+```
+public ActivityResult execStartActivity(
+           Context who, IBinder contextThread, IBinder token, Activity target,
+           Intent intent, int requestCode, Bundle options) {
+       IApplicationThread whoThread = (IApplicationThread) contextThread;
+       Uri referrer = target != null ? target.onProvideReferrer() : null;
+       if (referrer != null) {
+           intent.putExtra(Intent.EXTRA_REFERRER, referrer);
+       }
+       if (mActivityMonitors != null) {
+           synchronized (mSync) {
+               final int N = mActivityMonitors.size();
+               for (int i=0; i<N; i++) {
+                   final ActivityMonitor am = mActivityMonitors.get(i);
+                   ActivityResult result = null;
+                   if (am.ignoreMatchingSpecificIntents()) {
+                       result = am.onStartActivity(intent);
+                   }
+                   if (result != null) {
+                       am.mHits++;
+                       return result;
+                   } else if (am.match(who, null, intent)) {
+                       am.mHits++;
+                       if (am.isBlocking()) {
+                           return requestCode >= 0 ? am.getResult() : null;
+                       }
+                       break;
+                   }
+               }
+           }
+       }
+       try {
+           intent.migrateExtraStreamToClipData();
+           intent.prepareToLeaveProcess(who);
+           int result = ActivityManager.getService()
+               .startActivity(whoThread, who.getBasePackageName(), intent,
+                       intent.resolveTypeIfNeeded(who.getContentResolver()),
+                       token, target != null ? target.mEmbeddedID : null,
+                       requestCode, 0, null, options);
+           checkStartActivityResult(result, intent);
+       } catch (RemoteException e) {
+           throw new RuntimeException("Failure from system", e);
+       }
+       return null;
+   }
+```
+
+这里分析一下这个方法,debug跟踪activity的启动，发现最后调用了这些代码
+```
+intent.migrateExtraStreamToClipData();
+    intent.prepareToLeaveProcess(who);
+    int result = ActivityManager.getService()
+        .startActivity(whoThread, who.getBasePackageName(), intent,
+                intent.resolveTypeIfNeeded(who.getContentResolver()),
+                token, target != null ? target.mEmbeddedID : null,
+                requestCode, 0, null, options);
+    checkStartActivityResult(result, intent);
+```
+发现这里使用了ActivityManagerService(下面简称为AMS)，在得到AMS之后，调用AMS的startActivity的方法。
+这里的getService方法获取IActivityManager这个Binder接口,因此AMS也是一个Binder，他是IActivityManager的具体实现。可以发现AMS这个Binder对象采用单例模式对外提供，SIngleton是一个单例封装类，第一次调用他会通过create方法初始化AMS这个Binder对象，在后续的调用过程中则返回之前创建的对象
+
+
+```
+
+public static IActivityManager getService() {
+       return IActivityManagerSingleton.get();
+   }
+
+
+private static final Singleton<IActivityManager> IActivityManagerSingleton =
+          new Singleton<IActivityManager>() {
+              @Override
+              protected IActivityManager create() {
+                  final IBinder b = ServiceManager.getService(Context.ACTIVITY_SERVICE);
+                  final IActivityManager am = IActivityManager.Stub.asInterface(b);
+                  return am;
+              }
+          };
+
+
+public abstract class Singleton<T> {
+              private T mInstance;
+
+              protected abstract T create();
+
+              public final T get() {
+                  synchronized (this) {
+                      if (mInstance == null) {
+                          mInstance = create();
+                      }
+                      return mInstance;
+                  }
+              }
+      }   
+
+
+
+
+```
+
+ServiceManager的getService方法
+```
+public static IBinder getService(String name) {
+      try {
+          IBinder service = sCache.get(name);
+          if (service != null) {
+              return service;
+          } else {
+              return Binder.allowBlocking(getIServiceManager().getService(name));
+          }
+      } catch (RemoteException e) {
+          Log.e(TAG, "error in getService", e);
+      }
+      return null;
+  }
+```
+
+这里先来看一下Instrumentation的checkStartActivityResult方法
+
+```
+public static void checkStartActivityResult(int res, Object intent) {
+    if (!ActivityManager.isStartResultFatalError(res)) {
+        return;
+    }
+
+    switch (res) {
+        case ActivityManager.START_INTENT_NOT_RESOLVED:
+        case ActivityManager.START_CLASS_NOT_FOUND:
+            if (intent instanceof Intent && ((Intent)intent).getComponent() != null)
+                throw new ActivityNotFoundException(
+                        "Unable to find explicit activity class "
+                        + ((Intent)intent).getComponent().toShortString()
+                        + "; have you declared this activity in your AndroidManifest.xml?");
+            throw new ActivityNotFoundException(
+                    "No Activity found to handle " + intent);
+        case ActivityManager.START_PERMISSION_DENIED:
+            throw new SecurityException("Not allowed to start activity "
+                    + intent);
+        case ActivityManager.START_FORWARD_AND_REQUEST_CONFLICT:
+            throw new AndroidRuntimeException(
+                    "FORWARD_RESULT_FLAG used while also requesting a result");
+        case ActivityManager.START_NOT_ACTIVITY:
+            throw new IllegalArgumentException(
+                    "PendingIntent is not an activity");
+        case ActivityManager.START_NOT_VOICE_COMPATIBLE:
+            throw new SecurityException(
+                    "Starting under voice control not allowed for: " + intent);
+        case ActivityManager.START_VOICE_NOT_ACTIVE_SESSION:
+            throw new IllegalStateException(
+                    "Session calling startVoiceActivity does not match active session");
+        case ActivityManager.START_VOICE_HIDDEN_SESSION:
+            throw new IllegalStateException(
+                    "Cannot start voice activity on a hidden session");
+        case ActivityManager.START_ASSISTANT_NOT_ACTIVE_SESSION:
+            throw new IllegalStateException(
+                    "Session calling startAssistantActivity does not match active session");
+        case ActivityManager.START_ASSISTANT_HIDDEN_SESSION:
+            throw new IllegalStateException(
+                    "Cannot start assistant activity on a hidden session");
+        case ActivityManager.START_CANCELED:
+            throw new AndroidRuntimeException("Activity could not be started for "
+                    + intent);
+        default:
+            throw new AndroidRuntimeException("Unknown error code "
+                    + res + " when starting " + intent);
+    }
+}
+
+```
+可以看到他是检查activity是否启动成功的，当无法启动一个activity是，这个方法就会抛出异常，这里看一下我们经常看到的错误
+```
+ have you declared this activity in your AndroidManifest.xml
+```
+activity没有在Manifest.xml注册
+
+这里继续分析startActivity方法，是在AMS中
+```
+@Override
+  public final int startActivity(IApplicationThread caller, String callingPackage,
+          Intent intent, String resolvedType, IBinder resultTo, String resultWho, int requestCode,
+          int startFlags, ProfilerInfo profilerInfo, Bundle bOptions) {
+      return startActivityAsUser(caller, callingPackage, intent, resolvedType, resultTo,
+              resultWho, requestCode, startFlags, profilerInfo, bOptions,
+              UserHandle.getCallingUserId());
+  }
+```
+
+可以看到他其实是调用了startActivityAsUser这个方法
+
+```
+@Override
+public final int startActivityAsUser(IApplicationThread caller, String callingPackage,
+        Intent intent, String resolvedType, IBinder resultTo, String resultWho, int requestCode,
+        int startFlags, ProfilerInfo profilerInfo, Bundle bOptions, int userId) {
+    enforceNotIsolatedCaller("startActivity");
+    userId = mUserController.handleIncomingUser(Binder.getCallingPid(), Binder.getCallingUid(),
+            userId, false, ALLOW_FULL_ONLY, "startActivity", null);
+    // TODO: Switch to user app stacks here.
+    return mActivityStarter.startActivityMayWait(caller, -1, callingPackage, intent,
+            resolvedType, null, null, resultTo, resultWho, requestCode, startFlags,
+            profilerInfo, null, null, bOptions, false, userId, null, null,
+            "startActivityAsUser");
+}
+
+```
+看到这里又进行了转移,转移到了ActivityStarter的`startActivityMayWait`方法,这个方法比较长，这里看一下他关键的方法
+```
+int res = startActivityLocked(caller, intent, ephemeralIntent, resolvedType,
+               aInfo, rInfo, voiceSession, voiceInteractor,
+               resultTo, resultWho, requestCode, callingPid,
+               callingUid, callingPackage, realCallingPid, realCallingUid, startFlags,
+               options, ignoreTargetSecurity, componentSpecified, outRecord, container,
+               inTask, reason);
+```
+
+在进行了对activity启动的一系列判断之后会调用`startActivityLocked`这个方法来启动activity,看一下这个方法
+
+```
+int startActivityLocked(IApplicationThread caller, Intent intent, Intent ephemeralIntent,
+            String resolvedType, ActivityInfo aInfo, ResolveInfo rInfo,
+            IVoiceInteractionSession voiceSession, IVoiceInteractor voiceInteractor,
+            IBinder resultTo, String resultWho, int requestCode, int callingPid, int callingUid,
+            String callingPackage, int realCallingPid, int realCallingUid, int startFlags,
+            ActivityOptions options, boolean ignoreTargetSecurity, boolean componentSpecified,
+            ActivityRecord[] outActivity, ActivityStackSupervisor.ActivityContainer container,
+            TaskRecord inTask, String reason) {
+
+        if (TextUtils.isEmpty(reason)) {
+            throw new IllegalArgumentException("Need to specify a reason.");
+        }
+        mLastStartReason = reason;
+        mLastStartActivityTimeMs = System.currentTimeMillis();
+        mLastStartActivityRecord[0] = null;
+
+        mLastStartActivityResult = startActivity(caller, intent, ephemeralIntent, resolvedType,
+                aInfo, rInfo, voiceSession, voiceInteractor, resultTo, resultWho, requestCode,
+                callingPid, callingUid, callingPackage, realCallingPid, realCallingUid, startFlags,
+                options, ignoreTargetSecurity, componentSpecified, mLastStartActivityRecord,
+                container, inTask);
+
+        if (outActivity != null) {
+            // mLastStartActivityRecord[0] is set in the call to startActivity above.
+            outActivity[0] = mLastStartActivityRecord[0];
+        }
+        return mLastStartActivityResult;
+    }
+
+```
+
+这里又调用了startActivity方法，这个方法比较长 ，找一下关键代码
+看到有一次调用了startActivity的重载方法
+
+```
+private int startActivity(final ActivityRecord r, ActivityRecord sourceRecord,
+          IVoiceInteractionSession voiceSession, IVoiceInteractor voiceInteractor,
+          int startFlags, boolean doResume, ActivityOptions options, TaskRecord inTask,
+          ActivityRecord[] outActivity) {
+      int result = START_CANCELED;
+      try {
+          mService.mWindowManager.deferSurfaceLayout();
+          result = startActivityUnchecked(r, sourceRecord, voiceSession, voiceInteractor,
+                  startFlags, doResume, options, inTask, outActivity);
+      } finally {
+          // If we are not able to proceed, disassociate the activity from the task. Leaving an
+          // activity in an incomplete state can lead to issues, such as performing operations
+          // without a window container.
+          if (!ActivityManager.isStartResultSuccessful(result)
+                  && mStartActivity.getTask() != null) {
+              mStartActivity.getTask().removeActivity(mStartActivity);
+          }
+          mService.mWindowManager.continueSurfaceLayout();
+      }
+
+      postStartActivityProcessing(r, result, mSupervisor.getLastStack().mStackId,  mSourceRecord,
+              mTargetStack);
+
+      return result;
+  }
+
+```
+这里调用了startActivityUnchecked这个方法,我们继续跟踪，可以看到调用了mSupervisor的 `resumeFocusedStackTopActivityLocked`这个方法
+
+
+```
+if (mDoResume) {
+                 mSupervisor.resumeFocusedStackTopActivityLocked();
+             }
+```
+mDoResume这个一定是true
+
+mSupervisor的resumeFocusedStackTopActivityLocked方法会调用这个方法
+```
+boolean resumeFocusedStackTopActivityLocked(
+        ActivityStack targetStack, ActivityRecord target, ActivityOptions targetOptions) {
+    if (targetStack != null && isFocusedStack(targetStack)) {
+        return targetStack.resumeTopActivityUncheckedLocked(target, targetOptions);
+    }
+    final ActivityRecord r = mFocusedStack.topRunningActivityLocked();
+    if (r == null || r.state != RESUMED) {
+        mFocusedStack.resumeTopActivityUncheckedLocked(null, null);
+    } else if (r.state == RESUMED) {
+        // Kick off any lingering app transitions form the MoveTaskToFront operation.
+        mFocusedStack.executeAppTransition(targetOptions);
+    }
+    return false;
+}
+
+```
+
+这个时候又会调用mFocusedStack的`resumeTopActivityUncheckedLocked`方法
+
+
+```
+boolean resumeTopActivityUncheckedLocked(ActivityRecord prev, ActivityOptions options) {
+     if (mStackSupervisor.inResumeTopActivity) {
+         // Don't even start recursing.
+         return false;
+     }
+
+     boolean result = false;
+     try {
+         // Protect against recursion.
+         mStackSupervisor.inResumeTopActivity = true;
+         result = resumeTopActivityInnerLocked(prev, options);
+     } finally {
+         mStackSupervisor.inResumeTopActivity = false;
+     }
+     // When resuming the top activity, it may be necessary to pause the top activity (for
+     // example, returning to the lock screen. We suppress the normal pause logic in
+     // {@link #resumeTopActivityUncheckedLocked}, since the top activity is resumed at the end.
+     // We call the {@link ActivityStackSupervisor#checkReadyForSleepLocked} again here to ensure
+     // any necessary pause logic occurs.
+     mStackSupervisor.checkReadyForSleepLocked();
+
+     return result;
+ }
+
+```
+
+这个时候可以看到会调用resumeTopActivityInnerLocked方法,这里会调用mStackSupervisor的`startSpecificActivityLocked`
+```
+              mStackSupervisor.startSpecificActivityLocked(next, true, false);
+```
+看一下startSpecificActivityLocked方法
+
+```
+void startSpecificActivityLocked(ActivityRecord r,
+         boolean andResume, boolean checkConfig) {
+     // Is this activity's application already running?
+     ProcessRecord app = mService.getProcessRecordLocked(r.processName,
+             r.info.applicationInfo.uid, true);
+
+     r.getStack().setLaunchTime(r);
+
+     if (app != null && app.thread != null) {
+         try {
+             if ((r.info.flags&ActivityInfo.FLAG_MULTIPROCESS) == 0
+                     || !"android".equals(r.info.packageName)) {
+                 // Don't add this if it is a platform component that is marked
+                 // to run in multiple processes, because this is actually
+                 // part of the framework so doesn't make sense to track as a
+                 // separate apk in the process.
+                 app.addPackage(r.info.packageName, r.info.applicationInfo.versionCode,
+                         mService.mProcessStats);
+             }
+             realStartActivityLocked(r, app, andResume, checkConfig);
+             return;
+         } catch (RemoteException e) {
+             Slog.w(TAG, "Exception when starting activity "
+                     + r.intent.getComponent().flattenToShortString(), e);
+         }
+
+         // If a dead object exception was thrown -- fall through to
+         // restart the application.
+     }
+
+     mService.startProcessLocked(r.processName, r.info.applicationInfo, true, 0,
+             "activity", r.intent.getComponent(), false, false, true);
+ }
+```
+
+这里会调用 **真正启动Activity** 的方法`realStartActivityLocked`
+这里会调用这个方法
+```
+app.thread.scheduleLaunchActivity(new Intent(r.intent), r.appToken,
+                System.identityHashCode(r), r.info,
+                // TODO: Have this take the merged configuration instead of separate global and
+                // override configs.
+                mergedConfiguration.getGlobalConfiguration(),
+                mergedConfiguration.getOverrideConfiguration(), r.compat,
+                r.launchedFromPackage, task.voiceInteractor, app.repProcState, r.icicle,
+                r.persistentState, results, newIntents, !andResume,
+                mService.isNextTransitionForward(), profilerInfo);
+```
+
+这段代码很重要，其中app.thread的类型是IAppLicationThread,他的声明如下
+
+```
+public interface IApplicationThread extends IInterface {}
+```
+熟悉AIDL的都知道这个是一个Binder类型的接口。从IApplicationThread声明的接口方法可以看出，其内部包含了大量启动、停止Activity的接口，此外还包含了启动和停止服务的接口。从接口方法的命名可以猜测，这个类接口实现者完成了大量和Activity以及Service相关的启动功能，事实却是如此
+IApplicationThread他的具体实现是什么，是ApplicationThread，这个是ActivityThread中的匿名内部类
+
+```
+    private class ApplicationThread extends IApplicationThread.Stub {}
+```
+
+这里可以发现IApplicationThread是Aidl自动生成的代码
+绕了一大圈发现这里回到ApplicationThread并且使用了scheduleLaunchActivity这个方法
+
+```
+public final void scheduleLaunchActivity(Intent intent, IBinder token, int ident,
+             ActivityInfo info, Configuration curConfig, Configuration overrideConfig,
+             CompatibilityInfo compatInfo, String referrer, IVoiceInteractor voiceInteractor,
+             int procState, Bundle state, PersistableBundle persistentState,
+             List<ResultInfo> pendingResults, List<ReferrerIntent> pendingNewIntents,
+             boolean notResumed, boolean isForward, ProfilerInfo profilerInfo) {
+
+         updateProcessState(procState, false);
+
+         ActivityClientRecord r = new ActivityClientRecord();
+
+         r.token = token;
+         r.ident = ident;
+         r.intent = intent;
+         r.referrer = referrer;
+         r.voiceInteractor = voiceInteractor;
+         r.activityInfo = info;
+         r.compatInfo = compatInfo;
+         r.state = state;
+         r.persistentState = persistentState;
+
+         r.pendingResults = pendingResults;
+         r.pendingIntents = pendingNewIntents;
+
+         r.startsNotResumed = notResumed;
+         r.isForward = isForward;
+
+         r.profilerInfo = profilerInfo;
+
+         r.overrideConfig = overrideConfig;
+         updatePendingConfiguration(curConfig);
+
+         sendMessage(H.LAUNCH_ACTIVITY, r);
+     }
+```
+
+这里只是使用Hadler处理Activity的启动消息
 
 
 # 第十章 Android的消息机制
