@@ -13906,6 +13906,736 @@ public final void scheduleLaunchActivity(Intent intent, IBinder token, int ident
 
 这里只是使用Hadler处理Activity的启动消息
 
+看一下这个Handler的处理
+```
+  private class H extends Handler {
+public void handleMessage(Message msg) {
+    if (DEBUG_MESSAGES) Slog.v(TAG, ">>> handling: " + codeToString(msg.what));
+    switch (msg.what) {
+        case LAUNCH_ACTIVITY: {
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityStart");
+            final ActivityClientRecord r = (ActivityClientRecord) msg.obj;
+
+            r.packageInfo = getPackageInfoNoCheck(
+                    r.activityInfo.applicationInfo, r.compatInfo);
+            handleLaunchActivity(r, null, "LAUNCH_ACTIVITY");
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+        } break;
+        case RELAUNCH_ACTIVITY: {
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityRestart");
+            ActivityClientRecord r = (ActivityClientRecord)msg.obj;
+            handleRelaunchActivity(r);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+        } break;
+        case PAUSE_ACTIVITY: {
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityPause");
+            SomeArgs args = (SomeArgs) msg.obj;
+            handlePauseActivity((IBinder) args.arg1, false,
+                    (args.argi1 & USER_LEAVING) != 0, args.argi2,
+                    (args.argi1 & DONT_REPORT) != 0, args.argi3);
+            maybeSnapshot();
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+        } break;
+        case PAUSE_ACTIVITY_FINISHING: {
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityPause");
+            SomeArgs args = (SomeArgs) msg.obj;
+            handlePauseActivity((IBinder) args.arg1, true, (args.argi1 & USER_LEAVING) != 0,
+                    args.argi2, (args.argi1 & DONT_REPORT) != 0, args.argi3);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+        } break;
+        case STOP_ACTIVITY_SHOW: {
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityStop");
+            SomeArgs args = (SomeArgs) msg.obj;
+            handleStopActivity((IBinder) args.arg1, true, args.argi2, args.argi3);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+        } break;
+        case STOP_ACTIVITY_HIDE: {
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityStop");
+            SomeArgs args = (SomeArgs) msg.obj;
+            handleStopActivity((IBinder) args.arg1, false, args.argi2, args.argi3);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+        } break;
+        case SHOW_WINDOW:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityShowWindow");
+            handleWindowVisibility((IBinder)msg.obj, true);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case HIDE_WINDOW:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityHideWindow");
+            handleWindowVisibility((IBinder)msg.obj, false);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case RESUME_ACTIVITY:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityResume");
+            SomeArgs args = (SomeArgs) msg.obj;
+            handleResumeActivity((IBinder) args.arg1, true, args.argi1 != 0, true,
+                    args.argi3, "RESUME_ACTIVITY");
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case SEND_RESULT:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityDeliverResult");
+            handleSendResult((ResultData)msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case DESTROY_ACTIVITY:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityDestroy");
+            handleDestroyActivity((IBinder)msg.obj, msg.arg1 != 0,
+                    msg.arg2, false);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case BIND_APPLICATION:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "bindApplication");
+            AppBindData data = (AppBindData)msg.obj;
+            handleBindApplication(data);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case EXIT_APPLICATION:
+            if (mInitialApplication != null) {
+                mInitialApplication.onTerminate();
+            }
+            Looper.myLooper().quit();
+            break;
+        case NEW_INTENT:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityNewIntent");
+            handleNewIntent((NewIntentData)msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case RECEIVER:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "broadcastReceiveComp");
+            handleReceiver((ReceiverData)msg.obj);
+            maybeSnapshot();
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case CREATE_SERVICE:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, ("serviceCreate: " + String.valueOf(msg.obj)));
+            handleCreateService((CreateServiceData)msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case BIND_SERVICE:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "serviceBind");
+            handleBindService((BindServiceData)msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case UNBIND_SERVICE:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "serviceUnbind");
+            handleUnbindService((BindServiceData)msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case SERVICE_ARGS:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, ("serviceStart: " + String.valueOf(msg.obj)));
+            handleServiceArgs((ServiceArgsData)msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case STOP_SERVICE:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "serviceStop");
+            handleStopService((IBinder)msg.obj);
+            maybeSnapshot();
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case CONFIGURATION_CHANGED:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "configChanged");
+            mCurDefaultDisplayDpi = ((Configuration)msg.obj).densityDpi;
+            mUpdatingSystemConfig = true;
+            try {
+                handleConfigurationChanged((Configuration) msg.obj, null);
+            } finally {
+                mUpdatingSystemConfig = false;
+            }
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case CLEAN_UP_CONTEXT:
+            ContextCleanupInfo cci = (ContextCleanupInfo)msg.obj;
+            cci.context.performFinalCleanup(cci.who, cci.what);
+            break;
+        case GC_WHEN_IDLE:
+            scheduleGcIdler();
+            break;
+        case DUMP_SERVICE:
+            handleDumpService((DumpComponentInfo)msg.obj);
+            break;
+        case LOW_MEMORY:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "lowMemory");
+            handleLowMemory();
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case ACTIVITY_CONFIGURATION_CHANGED:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityConfigChanged");
+            handleActivityConfigurationChanged((ActivityConfigChangeData) msg.obj,
+                    INVALID_DISPLAY);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case ACTIVITY_MOVED_TO_DISPLAY:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "activityMovedToDisplay");
+            handleActivityConfigurationChanged((ActivityConfigChangeData) msg.obj,
+                    msg.arg1 /* displayId */);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case PROFILER_CONTROL:
+            handleProfilerControl(msg.arg1 != 0, (ProfilerInfo)msg.obj, msg.arg2);
+            break;
+        case CREATE_BACKUP_AGENT:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "backupCreateAgent");
+            handleCreateBackupAgent((CreateBackupAgentData)msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case DESTROY_BACKUP_AGENT:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "backupDestroyAgent");
+            handleDestroyBackupAgent((CreateBackupAgentData)msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case SUICIDE:
+            Process.killProcess(Process.myPid());
+            break;
+        case REMOVE_PROVIDER:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "providerRemove");
+            completeRemoveProvider((ProviderRefCount)msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case ENABLE_JIT:
+            ensureJitEnabled();
+            break;
+        case DISPATCH_PACKAGE_BROADCAST:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "broadcastPackage");
+            handleDispatchPackageBroadcast(msg.arg1, (String[])msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case SCHEDULE_CRASH:
+            throw new RemoteServiceException((String)msg.obj);
+        case DUMP_HEAP:
+            handleDumpHeap(msg.arg1 != 0, (DumpHeapData)msg.obj);
+            break;
+        case DUMP_ACTIVITY:
+            handleDumpActivity((DumpComponentInfo)msg.obj);
+            break;
+        case DUMP_PROVIDER:
+            handleDumpProvider((DumpComponentInfo)msg.obj);
+            break;
+        case SLEEPING:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "sleeping");
+            handleSleeping((IBinder)msg.obj, msg.arg1 != 0);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case SET_CORE_SETTINGS:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "setCoreSettings");
+            handleSetCoreSettings((Bundle) msg.obj);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case UPDATE_PACKAGE_COMPATIBILITY_INFO:
+            handleUpdatePackageCompatibilityInfo((UpdateCompatibilityData)msg.obj);
+            break;
+        case TRIM_MEMORY:
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "trimMemory");
+            handleTrimMemory(msg.arg1);
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            break;
+        case UNSTABLE_PROVIDER_DIED:
+            handleUnstableProviderDied((IBinder)msg.obj, false);
+            break;
+        case REQUEST_ASSIST_CONTEXT_EXTRAS:
+            handleRequestAssistContextExtras((RequestAssistContextExtras)msg.obj);
+            break;
+        case TRANSLUCENT_CONVERSION_COMPLETE:
+            handleTranslucentConversionComplete((IBinder)msg.obj, msg.arg1 == 1);
+            break;
+        case INSTALL_PROVIDER:
+            handleInstallProvider((ProviderInfo) msg.obj);
+            break;
+        case ON_NEW_ACTIVITY_OPTIONS:
+            Pair<IBinder, ActivityOptions> pair = (Pair<IBinder, ActivityOptions>) msg.obj;
+            onNewActivityOptions(pair.first, pair.second);
+            break;
+        case CANCEL_VISIBLE_BEHIND:
+            handleCancelVisibleBehind((IBinder) msg.obj);
+            break;
+        case BACKGROUND_VISIBLE_BEHIND_CHANGED:
+            handleOnBackgroundVisibleBehindChanged((IBinder) msg.obj, msg.arg1 > 0);
+            break;
+        case ENTER_ANIMATION_COMPLETE:
+            handleEnterAnimationComplete((IBinder) msg.obj);
+            break;
+        case START_BINDER_TRACKING:
+            handleStartBinderTracking();
+            break;
+        case STOP_BINDER_TRACKING_AND_DUMP:
+            handleStopBinderTrackingAndDump((ParcelFileDescriptor) msg.obj);
+            break;
+        case MULTI_WINDOW_MODE_CHANGED:
+            handleMultiWindowModeChanged((IBinder) ((SomeArgs) msg.obj).arg1,
+                    ((SomeArgs) msg.obj).argi1 == 1,
+                    (Configuration) ((SomeArgs) msg.obj).arg2);
+            break;
+        case PICTURE_IN_PICTURE_MODE_CHANGED:
+            handlePictureInPictureModeChanged((IBinder) ((SomeArgs) msg.obj).arg1,
+                    ((SomeArgs) msg.obj).argi1 == 1,
+                    (Configuration) ((SomeArgs) msg.obj).arg2);
+            break;
+        case LOCAL_VOICE_INTERACTION_STARTED:
+            handleLocalVoiceInteractionStarted((IBinder) ((SomeArgs) msg.obj).arg1,
+                    (IVoiceInteractor) ((SomeArgs) msg.obj).arg2);
+            break;
+        case ATTACH_AGENT:
+            handleAttachAgent((String) msg.obj);
+            break;
+        case APPLICATION_INFO_CHANGED:
+            mUpdatingSystemConfig = true;
+            try {
+                handleApplicationInfoChanged((ApplicationInfo) msg.obj);
+            } finally {
+                mUpdatingSystemConfig = false;
+            }
+            break;
+    }
+    Object obj = msg.obj;
+    if (obj instanceof SomeArgs) {
+        ((SomeArgs) obj).recycle();
+    }
+    if (DEBUG_MESSAGES) Slog.v(TAG, "<<< done: " + codeToString(msg.what));
+}
+}
+```
+
+可以看到使用了这个方法来处理     handleLaunchActivity(r, null, "LAUNCH_ACTIVITY");
+```
+private void handleLaunchActivity(ActivityClientRecord r, Intent customIntent, String reason) {
+  // If we are getting ready to gc after going to the background, well
+  // we are back active so skip it.
+  unscheduleGcIdler();
+  mSomeActivitiesChanged = true;
+
+  if (r.profilerInfo != null) {
+      mProfiler.setProfiler(r.profilerInfo);
+      mProfiler.startProfiling();
+  }
+
+  // Make sure we are running with the most recent config.
+  handleConfigurationChanged(null, null);
+
+  if (localLOGV) Slog.v(
+      TAG, "Handling launch of " + r);
+
+  // Initialize before creating the activity
+  WindowManagerGlobal.initialize();
+
+  Activity a = performLaunchActivity(r, customIntent);
+
+  if (a != null) {
+      r.createdConfig = new Configuration(mConfiguration);
+      reportSizeConfigurations(r);
+      Bundle oldState = r.state;
+      handleResumeActivity(r.token, false, r.isForward,
+              !r.activity.mFinished && !r.startsNotResumed, r.lastProcessedSeq, reason);
+
+      if (!r.activity.mFinished && r.startsNotResumed) {
+          performPauseActivityIfNeeded(r, reason);
+          if (r.isPreHoneycomb()) {
+              r.state = oldState;
+          }
+      }
+  } else {
+      // If there was an error, for any reason, tell the activity manager to stop us.
+      try {
+          ActivityManager.getService()
+              .finishActivity(r.token, Activity.RESULT_CANCELED, null,
+                      Activity.DONT_FINISH_TASK_WITH_ACTIVITY);
+      } catch (RemoteException ex) {
+          throw ex.rethrowFromSystemServer();
+      }
+  }
+}
+
+```
+
+可以看到执行了这个方法来创建Activity`performLaunchActivity`
+
+```
+private Activity performLaunchActivity(ActivityClientRecord r, Intent customIntent) {
+    // System.out.println("##### [" + System.currentTimeMillis() + "] ActivityThread.performLaunchActivity(" + r + ")");
+
+    ActivityInfo aInfo = r.activityInfo;
+    if (r.packageInfo == null) {
+        r.packageInfo = getPackageInfo(aInfo.applicationInfo, r.compatInfo,
+                Context.CONTEXT_INCLUDE_CODE);
+    }
+
+    ComponentName component = r.intent.getComponent();
+    if (component == null) {
+        component = r.intent.resolveActivity(
+            mInitialApplication.getPackageManager());
+        r.intent.setComponent(component);
+    }
+
+    if (r.activityInfo.targetActivity != null) {
+        component = new ComponentName(r.activityInfo.packageName,
+                r.activityInfo.targetActivity);
+    }
+
+    ContextImpl appContext = createBaseContextForActivity(r);
+    Activity activity = null;
+    try {
+        java.lang.ClassLoader cl = appContext.getClassLoader();
+        activity = mInstrumentation.newActivity(
+                cl, component.getClassName(), r.intent);
+        StrictMode.incrementExpectedActivityCount(activity.getClass());
+        r.intent.setExtrasClassLoader(cl);
+        r.intent.prepareToEnterProcess();
+        if (r.state != null) {
+            r.state.setClassLoader(cl);
+        }
+    } catch (Exception e) {
+        if (!mInstrumentation.onException(activity, e)) {
+            throw new RuntimeException(
+                "Unable to instantiate activity " + component
+                + ": " + e.toString(), e);
+        }
+    }
+
+    try {
+        Application app = r.packageInfo.makeApplication(false, mInstrumentation);
+
+        if (localLOGV) Slog.v(TAG, "Performing launch of " + r);
+        if (localLOGV) Slog.v(
+                TAG, r + ": app=" + app
+                + ", appName=" + app.getPackageName()
+                + ", pkg=" + r.packageInfo.getPackageName()
+                + ", comp=" + r.intent.getComponent().toShortString()
+                + ", dir=" + r.packageInfo.getAppDir());
+
+        if (activity != null) {
+            CharSequence title = r.activityInfo.loadLabel(appContext.getPackageManager());
+            Configuration config = new Configuration(mCompatConfiguration);
+            if (r.overrideConfig != null) {
+                config.updateFrom(r.overrideConfig);
+            }
+            if (DEBUG_CONFIGURATION) Slog.v(TAG, "Launching activity "
+                    + r.activityInfo.name + " with config " + config);
+            Window window = null;
+            if (r.mPendingRemoveWindow != null && r.mPreserveWindow) {
+                window = r.mPendingRemoveWindow;
+                r.mPendingRemoveWindow = null;
+                r.mPendingRemoveWindowManager = null;
+            }
+            appContext.setOuterContext(activity);
+            activity.attach(appContext, this, getInstrumentation(), r.token,
+                    r.ident, app, r.intent, r.activityInfo, title, r.parent,
+                    r.embeddedID, r.lastNonConfigurationInstances, config,
+                    r.referrer, r.voiceInteractor, window, r.configCallback);
+
+            if (customIntent != null) {
+                activity.mIntent = customIntent;
+            }
+            r.lastNonConfigurationInstances = null;
+            checkAndBlockForNetworkAccess();
+            activity.mStartedActivity = false;
+            int theme = r.activityInfo.getThemeResource();
+            if (theme != 0) {
+                activity.setTheme(theme);
+            }
+
+            activity.mCalled = false;
+            if (r.isPersistable()) {
+                mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState);
+            } else {
+                mInstrumentation.callActivityOnCreate(activity, r.state);
+            }
+            if (!activity.mCalled) {
+                throw new SuperNotCalledException(
+                    "Activity " + r.intent.getComponent().toShortString() +
+                    " did not call through to super.onCreate()");
+            }
+            r.activity = activity;
+            r.stopped = true;
+            if (!r.activity.mFinished) {
+                activity.performStart();
+                r.stopped = false;
+            }
+            if (!r.activity.mFinished) {
+                if (r.isPersistable()) {
+                    if (r.state != null || r.persistentState != null) {
+                        mInstrumentation.callActivityOnRestoreInstanceState(activity, r.state,
+                                r.persistentState);
+                    }
+                } else if (r.state != null) {
+                    mInstrumentation.callActivityOnRestoreInstanceState(activity, r.state);
+                }
+            }
+            if (!r.activity.mFinished) {
+                activity.mCalled = false;
+                if (r.isPersistable()) {
+                    mInstrumentation.callActivityOnPostCreate(activity, r.state,
+                            r.persistentState);
+                } else {
+                    mInstrumentation.callActivityOnPostCreate(activity, r.state);
+                }
+                if (!activity.mCalled) {
+                    throw new SuperNotCalledException(
+                        "Activity " + r.intent.getComponent().toShortString() +
+                        " did not call through to super.onPostCreate()");
+                }
+            }
+        }
+        r.paused = true;
+
+        mActivities.put(r.token, r);
+
+    } catch (SuperNotCalledException e) {
+        throw e;
+
+    } catch (Exception e) {
+        if (!mInstrumentation.onException(activity, e)) {
+            throw new RuntimeException(
+                "Unable to start activity " + component
+                + ": " + e.toString(), e);
+        }
+    }
+
+    return activity;
+}
+
+```
+
+可以看到 使用Instrumentation的newActivity来创建Activity
+```
+activity = mInstrumentation.newActivity(
+             cl, component.getClassName(), r.intent);
+```
+
+```
+public Activity newActivity(ClassLoader cl, String className,
+          Intent intent)
+          throws InstantiationException, IllegalAccessException,
+          ClassNotFoundException {
+      return (Activity)cl.loadClass(className).newInstance();
+  }
+```
+
+终于找到了，通过loadClass来创建对象.
+回到这个方法performLaunchActivity，看一下他还做了什么操作
+```
+ActivityInfo aInfo = r.activityInfo;
+    if (r.packageInfo == null) {
+        r.packageInfo = getPackageInfo(aInfo.applicationInfo, r.compatInfo,
+                Context.CONTEXT_INCLUDE_CODE);
+    }
+```
+获取activity的信息
+
+这里创建Application
+
+```
+            Application app = r.packageInfo.makeApplication(false, mInstrumentation);
+```
+ r.packageInfo得到LoadedApk对象，然后调用他的makeApplication
+```
+public Application makeApplication(boolean forceDefaultAppClass,
+        Instrumentation instrumentation) {
+    if (mApplication != null) {
+        return mApplication;
+    }
+
+    Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "makeApplication");
+
+    Application app = null;
+
+    String appClass = mApplicationInfo.className;
+    if (forceDefaultAppClass || (appClass == null)) {
+        appClass = "android.app.Application";
+    }
+
+    try {
+        java.lang.ClassLoader cl = getClassLoader();
+        if (!mPackageName.equals("android")) {
+            Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER,
+                    "initializeJavaContextClassLoader");
+            initializeJavaContextClassLoader();
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+        }
+        ContextImpl appContext = ContextImpl.createAppContext(mActivityThread, this);
+        app = mActivityThread.mInstrumentation.newApplication(
+                cl, appClass, appContext);
+        appContext.setOuterContext(app);
+    } catch (Exception e) {
+        if (!mActivityThread.mInstrumentation.onException(app, e)) {
+            Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+            throw new RuntimeException(
+                "Unable to instantiate application " + appClass
+                + ": " + e.toString(), e);
+        }
+    }
+    mActivityThread.mAllApplications.add(app);
+    mApplication = app;
+
+    if (instrumentation != null) {
+        try {
+            instrumentation.callApplicationOnCreate(app);
+        } catch (Exception e) {
+            if (!instrumentation.onException(app, e)) {
+                Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+                throw new RuntimeException(
+                    "Unable to create application " + app.getClass().getName()
+                    + ": " + e.toString(), e);
+            }
+        }
+    }
+
+    // Rewrite the R 'constants' for all library apks.
+    SparseArray<String> packageIdentifiers = getAssets().getAssignedPackageIdentifiers();
+    final int N = packageIdentifiers.size();
+    for (int i = 0; i < N; i++) {
+        final int id = packageIdentifiers.keyAt(i);
+        if (id == 0x01 || id == 0x7f) {
+            continue;
+        }
+
+        rewriteRValues(getClassLoader(), packageIdentifiers.valueAt(i), id);
+    }
+
+    Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+
+    return app;
+}
+
+```
+
+这里是一个单例，如果Application已经创建了，就不会再创建,在创建Applicaiton的时候会调用makeApplication里面有这样一段代码
+```
+if (instrumentation != null) {
+        try {
+            instrumentation.callApplicationOnCreate(app);
+        } catch (Exception e) {
+            if (!instrumentation.onException(app, e)) {
+                Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+                throw new RuntimeException(
+                    "Unable to create application " + app.getClass().getName()
+                    + ": " + e.toString(), e);
+            }
+        }
+    }
+```
+这里调用Applicaiton的onCreate方法
+```
+public void callApplicationOnCreate(Application app) {
+     app.onCreate();
+ }
+```
+
+再回到ActivityThread的performLaunchActivity方法，看一下其中另外一部分代码的调用，看一下
+```
+activity.attach(appContext, this, getInstrumentation(), r.token,
+                      r.ident, app, r.intent, r.activityInfo, title, r.parent,
+                      r.embeddedID, r.lastNonConfigurationInstances, config,
+                      r.referrer, r.voiceInteractor, window, r.configCallback);
+```
+
+```
+final void attach(Context context, ActivityThread aThread,
+           Instrumentation instr, IBinder token, int ident,
+           Application application, Intent intent, ActivityInfo info,
+           CharSequence title, Activity parent, String id,
+           NonConfigurationInstances lastNonConfigurationInstances,
+           Configuration config, String referrer, IVoiceInteractor voiceInteractor,
+           Window window, ActivityConfigCallback activityConfigCallback) {
+       attachBaseContext(context);
+
+       mFragments.attachHost(null /*parent*/);
+
+       mWindow = new PhoneWindow(this, window, activityConfigCallback);
+       mWindow.setWindowControllerCallback(this);
+       mWindow.setCallback(this);
+       mWindow.setOnWindowDismissedCallback(this);
+       mWindow.getLayoutInflater().setPrivateFactory(this);
+       if (info.softInputMode != WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED) {
+           mWindow.setSoftInputMode(info.softInputMode);
+       }
+       if (info.uiOptions != 0) {
+           mWindow.setUiOptions(info.uiOptions);
+       }
+       mUiThread = Thread.currentThread();
+
+       mMainThread = aThread;
+       mInstrumentation = instr;
+       mToken = token;
+       mIdent = ident;
+       mApplication = application;
+       mIntent = intent;
+       mReferrer = referrer;
+       mComponent = intent.getComponent();
+       mActivityInfo = info;
+       mTitle = title;
+       mParent = parent;
+       mEmbeddedID = id;
+       mLastNonConfigurationInstances = lastNonConfigurationInstances;
+       if (voiceInteractor != null) {
+           if (lastNonConfigurationInstances != null) {
+               mVoiceInteractor = lastNonConfigurationInstances.voiceInteractor;
+           } else {
+               mVoiceInteractor = new VoiceInteractor(voiceInteractor, this, this,
+                       Looper.myLooper());
+           }
+       }
+
+       mWindow.setWindowManager(
+               (WindowManager)context.getSystemService(Context.WINDOW_SERVICE),
+               mToken, mComponent.flattenToString(),
+               (info.flags & ActivityInfo.FLAG_HARDWARE_ACCELERATED) != 0);
+       if (mParent != null) {
+           mWindow.setContainer(mParent.getWindow());
+       }
+       mWindowManager = mWindow.getWindowManager();
+       mCurrentConfig = config;
+
+       mWindow.setColorMode(info.colorMode);
+   }
+
+```
+这里面创建Activity所需要的window
+
+再回到ActivityThread的performLaunchActivity方法，看一下其中另外一部分代码的调用，看一下
+
+```
+if (r.isPersistable()) {
+               mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState);
+           } else {
+               mInstrumentation.callActivityOnCreate(activity, r.state);
+           }
+```
+Instrumentation
+```
+public void callActivityOnCreate(Activity activity, Bundle icicle,
+        PersistableBundle persistentState) {
+    prePerformCreate(activity);
+    activity.performCreate(icicle, persistentState);
+    postPerformCreate(activity);
+}
+```
+activity
+```
+
+final void performCreate(Bundle icicle) {
+    restoreHasCurrentPermissionRequest(icicle);
+    onCreate(icicle);
+    mActivityTransitionState.readState(icicle);
+    performCreateCommon();
+}
+```
+
+Activity的Oncreate方法在这里调用
+
+在回到ActivityThread的performLaunchActivity方法
+看方法的内容
+```
+ activity.performStart();
+```
+调用Activity的onStart方法
+
+再次回到ActivityThread的handleLaunchActivity方法
+```
+handleResumeActivity(r.token, false, r.isForward,
+                   !r.activity.mFinished && !r.startsNotResumed, r.lastProcessedSeq, reason);
+
+```
+调用activity的onresume方法
+
+这里Activity的生命周期就调用完毕了
 
 # 第十章 Android的消息机制
 # 第十一章 Android的线程和线程池
