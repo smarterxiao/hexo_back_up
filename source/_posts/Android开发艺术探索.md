@@ -14637,6 +14637,192 @@ handleResumeActivity(r.token, false, r.isForward,
 
 这里Activity的生命周期就调用完毕了
 
+
+![Alt text](activity.svg "Android 启动,最好下载下来看")
+
+这个是plantUml的代码，可以忽略。
+```
+@startuml
+actor Context #red
+autonumber 1 1 "<b>[000]"
+ Context-> Activity :startActivity()启动activity
+Activity ->Instrumentation : startActivityForResult()
+Instrumentation->ActivityManager:execStartActivity
+ActivityManager->IActivityManagerSingleton:ActivityManager.getService()
+IActivityManagerSingleton->ActivityManagerService:IActivityManagerSingleton.get()
+ActivityManagerService ->ActivityManagerService:startActivity()
+ActivityManagerService ->ActivityStarter:startActivityAsUser()
+ActivityStarter->ActivityStarter:startActivityMayWait()
+ActivityStarter->ActivityStarter:startActivityLocked()
+ActivityStarter->ActivityStarter:startActivityLocked()
+ActivityStarter->ActivityStarter:startActivity()
+ActivityStarter->ActivityStackSupervisor:startActivityUnchecked()
+ActivityStackSupervisor->ActivityStack:resumeFocusedStackTopActivityLocked()
+ActivityStack ->ActivityStack: resumeTopActivityUncheckedLocked()
+ActivityStack->ActivityStackSupervisor:ActivityStackSupervisor:resumeTopActivityInnerLocked()
+ActivityStackSupervisor->ActivityStackSupervisor:startSpecificActivityLocked()
+ActivityStackSupervisor->ProcessRecord:realStartActivityLocked()
+note over of ActivityStackSupervisor #aqua
+realStartActivityLocked
+这个就是真正启动activity的方法
+,饶了半个地球啊！
+end note
+ProcessRecord->ApplicationThread:getApplicationThread()
+ApplicationThread->Hadler:scheduleLaunchActivity()
+note over of ApplicationThread #aqua
+ApplicationThread是ActivityThread的一个静态内部类
+分发的过程使用的是Handler来分发
+end note
+== 准备工作:ActivityThread:performLaunchActivity才是重点 ==
+Hadler->ActivityThread:performLaunchActivity
+note over of ActivityThread #aqua
+performLaunchActivity()方法内部的调用逻辑：
+1. 内部会先调用newActivity方法创建activity
+2. 接着调用loadedApk.makeApplication方法创建application并调用application的生命周期onCreate方法
+3. 接着调用activity.attach方法创建创建windows
+4, 接着调用mInstrumentation.callActivityOnCreate调用activity的生命周期onCreate方法
+5, 接着调用activity.performStart()调用activity的onStart生命周期方法
+6, 接着调用handleLaunchActivity();调用activity的onResume生命周期方法
+
+end note
+== ActivityThread:performLaunchActivity 第一步创建Activity ==
+ActivityThread->Instrumentation:newActivity()
+note over of Instrumentation #aqua
+从performLaunchActivity调用的newActivity方法
+通过反射加载activity
+cl.loadClass(className).newInstance()
+end note
+== ActivityThread:performLaunchActivity 第二步创建Application并调用Application生命周期onCreate() ==
+ActivityThread->ActivityClientRecord
+note over of ActivityClientRecord #aqua
+从performLaunchActivity调用的r.packageInfo.makeApplication(false, mInstrumentation)方法
+看一下详细的代码
+Application app = r.packageInfo.makeApplication(false, mInstrumentation);
+r是ActivityClientRecord
+r.packageInfo是LoadedApk
+最终调用LoadedApk的makeApplication方法，创建application的时候回调用他的onCreate方法
+ActivityClientRecord是ActivityThread的一个内部类
+end note
+
+ActivityClientRecord->LoadedApk
+LoadedApk->LoadedApk:makeApplication()
+LoadedApk->Instrumentation:callApplicationOnCreate()
+
+note over of Instrumentation #aqua
+Instrumentation.callApplicationOnCreate
+会调用application的onCreate()方法
+是不是很熟悉
+public void callApplicationOnCreate(Application app) {
+     app.onCreate();
+ }
+end note
+== ActivityThread:performLaunchActivity 第三步创建window ==
+ActivityThread->Activity:attach()
+note over of Instrumentation #aqua
+从performLaunchActivity调用的activity.attach()
+activity.attach():这个方法创建windows
+end note
+== ActivityThread:performLaunchActivity 第四步调用Activity生命周期onCreate()  ==
+ActivityThread->Instrumentation:callActivityOnCreate()
+
+note over of Instrumentation #aqua
+从performLaunchActivity调用的mInstrumentation.callActivityOnCreate()
+这里执行activity生命周期方法onCreate()
+end note
+
+Instrumentation->Activity:performCreate()
+Activity->Activity:onCreate()
+note over of Activity #aqua
+看到了吗？onCreate()调用了
+end note
+== ActivityThread:performLaunchActivity 第五步调用Activity生命周期onStart()  ==
+ActivityThread->Activity:performStart()
+Activity->Activity:onStart()
+note over of Activity #aqua
+看到了吗？onStart()调用了
+end note
+== == ActivityThread:performLaunchActivity 第六步调用Activity生命周期onResume()  == ==
+ActivityThread->ActivityThread:handleResumeActivity()
+ActivityThread->Activity:performResumeActivity()
+Activity->Activity:onStart()
+note over of Activity #aqua
+看到了吗？onResume()调用了
+end note
+== == ActivityThread:performLaunchActivity 第七步Activity启动判断  == ==
+Instrumentation->Instrumentation:checkStartActivityResult
+note over of Instrumentation #aqua
+checkStartActivityResult
+方法检测activity是否启动成功
+看一个常见的错误
+activity没有在清单文件中配置
+have you declared this activity in your AndroidManifest.xml
+end note
+autonumber stop
+@enduml
+```
+
+## Service 工作过程
+上面分析了Activity的工作过程，加深了对Activity的理解。这里来折腾一下Service的
+这里从StartService开始
+
+```
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        Intent intentService=new Intent(this,MyService.class);
+        startService(intentService);
+        bindService(intentService, new ServiceConnection() {
+         @Override
+         public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+
+         }
+
+         @Override
+         public void onServiceDisconnected(ComponentName componentName) {
+
+         }
+     },1);
+    }
+}
+
+```
+
+```
+public class MyService extends Service {
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+}
+
+```
+### Service的启动过程：startService过程
+
+Service启动过程是从ContextWrapper的startService方法开始的
+```
+@Override
+public ComponentName startService(Intent service) {
+    return mBase.startService(service);
+}
+
+```
+看一下mBase：他是contextImpl，这个是ContextWrapper的具体实现，是一个装饰者模式。关于context的内容，大家可以百度一下，这个在android里面是一个非常重要的概念，后面我也会整理一下
+
+这里看一下contextImpl中的startService方法
+```
+@Override
+public ComponentName startService(Intent service) {
+    warnIfCallingFromSystemProcess();
+    return startServiceCommon(service, false, mUser);
+}
+```
+他调用了startServiceCommon，那我们继续
+```
+
+```
 # 第十章 Android的消息机制
 # 第十一章 Android的线程和线程池
 # 第十二章 Bitmap的加载和Cache
