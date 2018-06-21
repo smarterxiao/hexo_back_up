@@ -1,0 +1,42 @@
+@startuml
+actor Context #red
+autonumber 1 1 "<b>[000]"
+Context->contextImpl:startService()启动service
+note over of contextImpl #aqua
+这个是contextImpl是context的具体实现，
+在activity中startService
+其实是调用contextImpl的startService()
+end note
+contextImpl ->contextImpl : startServiceCommon()
+contextImpl->ActivityManager:
+ActivityManager->ActivityManagerService:getService
+ActivityManagerService->ActiveServices:startService
+note over of ActiveServices #aqua
+ActiveServices是一个辅助AMS进行Service管理的类，
+他包括Service的启动、绑定。停止等。
+end note
+
+ActiveServices->ActiveServices:startServiceLocked()
+ActiveServices->ActiveServices:startServiceInnerLocked()
+ActiveServices->ActiveServices:bringUpServiceLocked()
+ActiveServices->ActiveServices:realStartServiceLocked()
+note over of ActiveServices #aqua
+realStartServiceLocked才真正启动,进入realStartServiceLocked方法
+end note
+
+ActiveServices->ActivityThread:app.thread得到ActivityThread
+ActivityThread->Handler:scheduleCreateService
+Handler->ActivityThread:handleCreateService
+note over of ActivityThread #aqua
+这个方法分为几个步骤：
+1. 首先通过类加载器来创建Service对象
+2. 接着创建Application对象并调用其onCreate方法，当然Application创建过程只会只会有一次
+3. 接着创建ConTextImpl对象病通过Service的attach方法建立两者之间的联系，这个和Activity是类似的。
+4. 最后调用Service的onCreate方法并将Service对象存储到ActivityThread中的一个列表中
+
+由于Service的onCreate方法已经被执行了，这意味着Service已经启动了，
+除此之外，ActivityThread中还会通过handleServiceArgs方法调用Service的onStartCommand方法
+end note
+
+autonumber stop
+@enduml

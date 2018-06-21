@@ -14640,127 +14640,6 @@ handleResumeActivity(r.token, false, r.isForward,
 
 ![Alt text](activity.svg "Android 启动,最好下载下来看")
 
-这个是plantUml的代码，可以忽略。
-```
-@startuml
-actor Context #red
-autonumber 1 1 "<b>[000]"
- Context-> Activity :startActivity()启动activity
-Activity ->Instrumentation : startActivityForResult()
-Instrumentation->ActivityManager:execStartActivity
-ActivityManager->IActivityManagerSingleton:ActivityManager.getService()
-IActivityManagerSingleton->ActivityManagerService:IActivityManagerSingleton.get()
-ActivityManagerService ->ActivityManagerService:startActivity()
-ActivityManagerService ->ActivityStarter:startActivityAsUser()
-ActivityStarter->ActivityStarter:startActivityMayWait()
-ActivityStarter->ActivityStarter:startActivityLocked()
-ActivityStarter->ActivityStarter:startActivityLocked()
-ActivityStarter->ActivityStarter:startActivity()
-ActivityStarter->ActivityStackSupervisor:startActivityUnchecked()
-ActivityStackSupervisor->ActivityStack:resumeFocusedStackTopActivityLocked()
-ActivityStack ->ActivityStack: resumeTopActivityUncheckedLocked()
-ActivityStack->ActivityStackSupervisor:ActivityStackSupervisor:resumeTopActivityInnerLocked()
-ActivityStackSupervisor->ActivityStackSupervisor:startSpecificActivityLocked()
-ActivityStackSupervisor->ProcessRecord:realStartActivityLocked()
-note over of ActivityStackSupervisor #aqua
-realStartActivityLocked
-这个就是真正启动activity的方法
-,饶了半个地球啊！
-end note
-ProcessRecord->ApplicationThread:getApplicationThread()
-ApplicationThread->Hadler:scheduleLaunchActivity()
-note over of ApplicationThread #aqua
-ApplicationThread是ActivityThread的一个静态内部类
-分发的过程使用的是Handler来分发
-end note
-== 准备工作:ActivityThread:performLaunchActivity才是重点 ==
-Hadler->ActivityThread:performLaunchActivity
-note over of ActivityThread #aqua
-performLaunchActivity()方法内部的调用逻辑：
-1. 内部会先调用newActivity方法创建activity
-2. 接着调用loadedApk.makeApplication方法创建application并调用application的生命周期onCreate方法
-3. 接着调用activity.attach方法创建创建windows
-4, 接着调用mInstrumentation.callActivityOnCreate调用activity的生命周期onCreate方法
-5, 接着调用activity.performStart()调用activity的onStart生命周期方法
-6, 接着调用handleLaunchActivity();调用activity的onResume生命周期方法
-
-end note
-== ActivityThread:performLaunchActivity 第一步创建Activity ==
-ActivityThread->Instrumentation:newActivity()
-note over of Instrumentation #aqua
-从performLaunchActivity调用的newActivity方法
-通过反射加载activity
-cl.loadClass(className).newInstance()
-end note
-== ActivityThread:performLaunchActivity 第二步创建Application并调用Application生命周期onCreate() ==
-ActivityThread->ActivityClientRecord
-note over of ActivityClientRecord #aqua
-从performLaunchActivity调用的r.packageInfo.makeApplication(false, mInstrumentation)方法
-看一下详细的代码
-Application app = r.packageInfo.makeApplication(false, mInstrumentation);
-r是ActivityClientRecord
-r.packageInfo是LoadedApk
-最终调用LoadedApk的makeApplication方法，创建application的时候回调用他的onCreate方法
-ActivityClientRecord是ActivityThread的一个内部类
-end note
-
-ActivityClientRecord->LoadedApk
-LoadedApk->LoadedApk:makeApplication()
-LoadedApk->Instrumentation:callApplicationOnCreate()
-
-note over of Instrumentation #aqua
-Instrumentation.callApplicationOnCreate
-会调用application的onCreate()方法
-是不是很熟悉
-public void callApplicationOnCreate(Application app) {
-     app.onCreate();
- }
-end note
-== ActivityThread:performLaunchActivity 第三步创建window ==
-ActivityThread->Activity:attach()
-note over of Instrumentation #aqua
-从performLaunchActivity调用的activity.attach()
-activity.attach():这个方法创建windows
-end note
-== ActivityThread:performLaunchActivity 第四步调用Activity生命周期onCreate()  ==
-ActivityThread->Instrumentation:callActivityOnCreate()
-
-note over of Instrumentation #aqua
-从performLaunchActivity调用的mInstrumentation.callActivityOnCreate()
-这里执行activity生命周期方法onCreate()
-end note
-
-Instrumentation->Activity:performCreate()
-Activity->Activity:onCreate()
-note over of Activity #aqua
-看到了吗？onCreate()调用了
-end note
-== ActivityThread:performLaunchActivity 第五步调用Activity生命周期onStart()  ==
-ActivityThread->Activity:performStart()
-Activity->Activity:onStart()
-note over of Activity #aqua
-看到了吗？onStart()调用了
-end note
-== == ActivityThread:performLaunchActivity 第六步调用Activity生命周期onResume()  == ==
-ActivityThread->ActivityThread:handleResumeActivity()
-ActivityThread->Activity:performResumeActivity()
-Activity->Activity:onStart()
-note over of Activity #aqua
-看到了吗？onResume()调用了
-end note
-== == ActivityThread:performLaunchActivity 第七步Activity启动判断  == ==
-Instrumentation->Instrumentation:checkStartActivityResult
-note over of Instrumentation #aqua
-checkStartActivityResult
-方法检测activity是否启动成功
-看一个常见的错误
-activity没有在清单文件中配置
-have you declared this activity in your AndroidManifest.xml
-end note
-autonumber stop
-@enduml
-```
-
 ## Service 工作过程
 上面分析了Activity的工作过程，加深了对Activity的理解。这里来折腾一下Service的
 这里从StartService开始
@@ -14819,10 +14698,385 @@ public ComponentName startService(Intent service) {
     return startServiceCommon(service, false, mUser);
 }
 ```
-他调用了startServiceCommon，那我们继续
+他调用了startServiceCommon，那我们看一下这个方法做了什么操作
 ```
+private ComponentName startServiceCommon(Intent service, boolean requireForeground,
+        UserHandle user) {
+    try {
+        validateServiceIntent(service);
+        service.prepareToLeaveProcess(this);
+        ComponentName cn = ActivityManager.getService().startService(
+            mMainThread.getApplicationThread(), service, service.resolveTypeIfNeeded(
+                        getContentResolver()), requireForeground,
+                        getOpPackageName(), user.getIdentifier());
+        if (cn != null) {
+            if (cn.getPackageName().equals("!")) {
+                throw new SecurityException(
+                        "Not allowed to start service " + service
+                        + " without permission " + cn.getClassName());
+            } else if (cn.getPackageName().equals("!!")) {
+                throw new SecurityException(
+                        "Unable to start service " + service
+                        + ": " + cn.getClassName());
+            } else if (cn.getPackageName().equals("?")) {
+                throw new IllegalStateException(
+                        "Not allowed to start service " + service + ": " + cn.getClassName());
+            }
+        }
+        return cn;
+    } catch (RemoteException e) {
+        throw e.rethrowFromSystemServer();
+    }
+}
 
 ```
+
+这里又看到了一个熟悉的身影ActivityManager，之后调用了他的getService，得到ActivityManagerService,就是之前的AMS
+```
+public static IActivityManager getService() {
+    return IActivityManagerSingleton.get();
+}
+
+private static final Singleton<IActivityManager> IActivityManagerSingleton =
+        new Singleton<IActivityManager>() {
+            @Override
+            protected IActivityManager create() {
+                final IBinder b = ServiceManager.getService(Context.ACTIVITY_SERVICE);
+                final IActivityManager am = IActivityManager.Stub.asInterface(b);
+                return am;
+            }
+        };
+```
+
+得到AMS之后，调用他的startService方法
+
+```
+@Override
+public ComponentName startService(IApplicationThread caller, Intent service,
+        String resolvedType, boolean requireForeground, String callingPackage, int userId)
+        throws TransactionTooLargeException {
+    enforceNotIsolatedCaller("startService");
+    // Refuse possible leaked file descriptors
+    if (service != null && service.hasFileDescriptors() == true) {
+        throw new IllegalArgumentException("File descriptors passed in Intent");
+    }
+
+    if (callingPackage == null) {
+        throw new IllegalArgumentException("callingPackage cannot be null");
+    }
+
+    if (DEBUG_SERVICE) Slog.v(TAG_SERVICE,
+            "*** startService: " + service + " type=" + resolvedType + " fg=" + requireForeground);
+    synchronized(this) {
+        final int callingPid = Binder.getCallingPid();
+        final int callingUid = Binder.getCallingUid();
+        final long origId = Binder.clearCallingIdentity();
+        ComponentName res;
+        try {
+            res = mServices.startServiceLocked(caller, service,
+                    resolvedType, callingPid, callingUid,
+                    requireForeground, callingPackage, userId);
+        } finally {
+            Binder.restoreCallingIdentity(origId);
+        }
+        return res;
+    }
+}
+```
+可以看到这里AMS在这个方法里面调用了mServices.startServiceLocked。mServices是一个ActiveServices对象。他调用startServiceLocked方法
+ActiveServices是一个辅助AMS进行Service管理的类，他包括Service的启动、绑定。停止等。
+
+```
+
+    ComponentName startServiceLocked(IApplicationThread caller, Intent service, String resolvedType,
+            int callingPid, int callingUid, boolean fgRequired, String callingPackage, final int userId)
+            throws TransactionTooLargeException {
+        ...
+        ComponentName cmp = startServiceInnerLocked(smap, service, r, callerFg, addToStarting);
+        return cmp;
+    }
+
+```
+
+startServiceLocked方法比较长，就省略了一部分，重点是最后一段代码：
+看一下这一段代码做了什么
+
+```
+ComponentName startServiceInnerLocked(ServiceMap smap, Intent service, ServiceRecord r,
+        boolean callerFg, boolean addToStarting) throws TransactionTooLargeException {
+    ServiceState stracker = r.getTracker();
+    if (stracker != null) {
+        stracker.setStarted(true, mAm.mProcessStats.getMemFactorLocked(), r.lastActivity);
+    }
+    r.callStart = false;
+    synchronized (r.stats.getBatteryStats()) {
+        r.stats.startRunningLocked();
+    }
+    String error = bringUpServiceLocked(r, service.getFlags(), callerFg, false, false);
+    if (error != null) {
+        return new ComponentName("!!", error);
+    }
+
+    if (r.startRequested && addToStarting) {
+        boolean first = smap.mStartingBackground.size() == 0;
+        smap.mStartingBackground.add(r);
+        r.startingBgTimeout = SystemClock.uptimeMillis() + mAm.mConstants.BG_START_TIMEOUT;
+        if (DEBUG_DELAYED_SERVICE) {
+            RuntimeException here = new RuntimeException("here");
+            here.fillInStackTrace();
+            Slog.v(TAG_SERVICE, "Starting background (first=" + first + "): " + r, here);
+        } else if (DEBUG_DELAYED_STARTS) {
+            Slog.v(TAG_SERVICE, "Starting background (first=" + first + "): " + r);
+        }
+        if (first) {
+            smap.rescheduleDelayedStartsLocked();
+        }
+    } else if (callerFg || r.fgRequired) {
+        smap.ensureNotStartingBackgroundLocked(r);
+    }
+
+    return r.name;
+}
+```
+
+ServiceRecoed是描述一个Service记录，还记得ActivityRecord吗?，这个和ActivityRecord功能是类似的，ServiceRecord一直贯穿着整个Service的启动过程。但是startServiceInnerLocked并没有完成Service的启动，而是把工作交给了bringUpServiceLocked这个方法，我们看一下他的具体逻辑
+
+```
+private String bringUpServiceLocked(ServiceRecord r, int intentFlags, boolean execInFg,
+        boolean whileRestarting, boolean permissionsReviewRequired)
+        throws TransactionTooLargeException {
+          ...
+              realStartServiceLocked(r, app, execInFg);
+          ...
+        }
+```
+这个方法又调用了realStartServiceLocked方法。是不是很熟悉，Activity也是一样的，这里才是真正启动
+
+
+```
+private final void realStartServiceLocked(ServiceRecord r,
+        ProcessRecord app, boolean execInFg) throws RemoteException {
+    if (app.thread == null) {
+        throw new RemoteException();
+    }
+    if (DEBUG_MU)
+        Slog.v(TAG_MU, "realStartServiceLocked, ServiceRecord.uid = " + r.appInfo.uid
+                + ", ProcessRecord.uid = " + app.uid);
+    r.app = app;
+    r.restartTime = r.lastActivity = SystemClock.uptimeMillis();
+
+    final boolean newService = app.services.add(r);
+    bumpServiceExecutingLocked(r, execInFg, "create");
+    mAm.updateLruProcessLocked(app, false, null);
+    updateServiceForegroundLocked(r.app, /* oomAdj= */ false);
+    mAm.updateOomAdjLocked();
+
+    boolean created = false;
+    try {
+        if (LOG_SERVICE_START_STOP) {
+            String nameTerm;
+            int lastPeriod = r.shortName.lastIndexOf('.');
+            nameTerm = lastPeriod >= 0 ? r.shortName.substring(lastPeriod) : r.shortName;
+            EventLogTags.writeAmCreateService(
+                    r.userId, System.identityHashCode(r), nameTerm, r.app.uid, r.app.pid);
+        }
+        synchronized (r.stats.getBatteryStats()) {
+            r.stats.startLaunchedLocked();
+        }
+        mAm.notifyPackageUse(r.serviceInfo.packageName,
+                             PackageManager.NOTIFY_PACKAGE_USE_SERVICE);
+        app.forceProcessStateUpTo(ActivityManager.PROCESS_STATE_SERVICE);
+        app.thread.scheduleCreateService(r, r.serviceInfo,
+                mAm.compatibilityInfoForPackageLocked(r.serviceInfo.applicationInfo),
+                app.repProcState);
+        r.postNotification();
+        created = true;
+    } catch (DeadObjectException e) {
+        Slog.w(TAG, "Application dead when creating service " + r);
+        mAm.appDiedLocked(app);
+        throw e;
+    } finally {
+        if (!created) {
+            // Keep the executeNesting count accurate.
+            final boolean inDestroying = mDestroyingServices.contains(r);
+            serviceDoneExecutingLocked(r, inDestroying, inDestroying);
+
+            // Cleanup.
+            if (newService) {
+                app.services.remove(r);
+                r.app = null;
+            }
+
+            // Retry.
+            if (!inDestroying) {
+                scheduleServiceRestartLocked(r, false);
+            }
+        }
+    }
+
+    if (r.whitelistManager) {
+        app.whitelistManager = true;
+    }
+
+    requestServiceBindingsLocked(r, execInFg);
+
+    updateServiceClientActivitiesLocked(app, null, true);
+
+    // If the service is in the started state, and there are no
+    // pending arguments, then fake up one so its onStartCommand() will
+    // be called.
+    if (r.startRequested && r.callStart && r.pendingStarts.size() == 0) {
+        r.pendingStarts.add(new ServiceRecord.StartItem(r, false, r.makeNextStartId(),
+                null, null, 0));
+    }
+
+    sendServiceArgsLocked(r, execInFg, true);
+
+    if (r.delayed) {
+        if (DEBUG_DELAYED_STARTS) Slog.v(TAG_SERVICE, "REM FR DELAY LIST (new proc): " + r);
+        getServiceMapLocked(r.userId).mDelayedStartList.remove(r);
+        r.delayed = false;
+    }
+
+    if (r.delayedStop) {
+        // Oh and hey we've already been asked to stop!
+        r.delayedStop = false;
+        if (r.startRequested) {
+            if (DEBUG_DELAYED_STARTS) Slog.v(TAG_SERVICE,
+                    "Applying delayed stop (from start): " + r);
+            stopServiceLocked(r);
+        }
+    }
+}
+```
+这个方法里面先调用了   
+```
+ app.thread.scheduleCreateService(r, r.serviceInfo,
+            mAm.compatibilityInfoForPackageLocked(r.serviceInfo.applicationInfo),
+            app.repProcState);
+```
+这个东西，是不是有点熟悉，activity启动里面也有一个类似的是app.thread.scheduleLaunchActivity，然后这里就是回到ActivityThread通过Handler H来完成
+
+
+```
+public final void scheduleCreateService(IBinder token,
+          ServiceInfo info, CompatibilityInfo compatInfo, int processState) {
+          updateProcessState(processState, false);
+          CreateServiceData s = new CreateServiceData();
+          s.token = token;
+          s.info = info;
+          s.compatInfo = compatInfo;
+          sendMessage(H.CREATE_SERVICE, s);
+}
+```
+这里看一下handler H里面的处理
+```
+Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, ("serviceCreate: " + String.valueOf(msg.obj)));
+handleCreateService((CreateServiceData)msg.obj);
+Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+```
+最终调用了handleCreateService方法，来看一下这个方法
+```
+
+    private void handleCreateService(CreateServiceData data) {
+        // If we are getting ready to gc after going to the background, well
+        // we are back active so skip it.
+        unscheduleGcIdler();
+
+        LoadedApk packageInfo = getPackageInfoNoCheck(
+                data.info.applicationInfo, data.compatInfo);
+        Service service = null;
+        try {
+            java.lang.ClassLoader cl = packageInfo.getClassLoader();
+            service = (Service) cl.loadClass(data.info.name).newInstance();
+        } catch (Exception e) {
+            if (!mInstrumentation.onException(service, e)) {
+                throw new RuntimeException(
+                    "Unable to instantiate service " + data.info.name
+                    + ": " + e.toString(), e);
+            }
+        }
+
+        try {
+            if (localLOGV) Slog.v(TAG, "Creating service " + data.info.name);
+
+            ContextImpl context = ContextImpl.createAppContext(this, packageInfo);
+            context.setOuterContext(service);
+
+            Application app = packageInfo.makeApplication(false, mInstrumentation);
+            service.attach(context, this, data.info.name, data.token, app,
+                    ActivityManager.getService());
+            service.onCreate();
+            mServices.put(data.token, service);
+            try {
+                ActivityManager.getService().serviceDoneExecuting(
+                        data.token, SERVICE_DONE_EXECUTING_ANON, 0, 0);
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+        } catch (Exception e) {
+            if (!mInstrumentation.onException(service, e)) {
+                throw new RuntimeException(
+                    "Unable to create service " + data.info.name
+                    + ": " + e.toString(), e);
+            }
+        }
+    }
+```
+这个方法分为几个步骤：
+1. 首先通过类加载器来创建Service对象
+2. 接着创建Application对象并调用其onCreate方法，当然Application创建过程只会只会有一次
+3. 接着创建ConTextImpl对象病通过Service的attach方法建立两者之间的联系，这个和Activity是类似的。
+4. 最后调用Service的onCreate方法并将Service对象存储到ActivityThread中的一个列表中
+由于Service的onCreate方法已经被执行了，这意味着Service已经启动了，除此之外，ActivityThread中还会通过handleServiceArgs方法调用Service的onStartCommand方法
+```
+private void handleServiceArgs(ServiceArgsData data) {
+    Service s = mServices.get(data.token);
+    if (s != null) {
+        try {
+            if (data.args != null) {
+                data.args.setExtrasClassLoader(s.getClassLoader());
+                data.args.prepareToEnterProcess();
+            }
+            int res;
+            if (!data.taskRemoved) {
+                res = s.onStartCommand(data.args, data.flags, data.startId);
+            } else {
+                s.onTaskRemoved(data.args);
+                res = Service.START_TASK_REMOVED_COMPLETE;
+            }
+
+            QueuedWork.waitToFinish();
+
+            try {
+                ActivityManager.getService().serviceDoneExecuting(
+                        data.token, SERVICE_DONE_EXECUTING_START, data.startId, res);
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
+            ensureJitEnabled();
+        } catch (Exception e) {
+            if (!mInstrumentation.onException(s, e)) {
+                throw new RuntimeException(
+                        "Unable to start service " + s
+                        + " with " + data.args + ": " + e.toString(), e);
+            }
+        }
+    }
+}
+```
+这个样子startService的几个重要生命周期方法都调用了，Service的启动过程就分析完毕了
+
+和上面的Activity一样，用一张UML来总结一下
+
+
+
+
+
+![Alt text](service启动流程图.svg "Service 启动,最好下载下来看")
+### Service的绑定过程
+
+
 # 第十章 Android的消息机制
 # 第十一章 Android的线程和线程池
 # 第十二章 Bitmap的加载和Cache
