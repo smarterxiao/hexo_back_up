@@ -15075,8 +15075,494 @@ private void handleServiceArgs(ServiceArgsData data) {
 
 ![Alt text](service启动流程图.svg "Service 启动,最好下载下来看")
 ### Service的绑定过程
+和Service的启动过程是一样的，Service的绑定过程也是从ContextWrapper开始的，如下所示
 
+bindService其实是调用ContextWrapper的bindService方法
+```
+@Override
+public boolean bindService(Intent service, ServiceConnection conn,
+        int flags) {
+    return mBase.bindService(service, conn, flags);
+}
+```
 
+看一下mBase：他是contextImpl，这个是ContextWrapper的具体实现，是一个装饰者模式。这个在介绍Service启动的时候介绍过
+```
+@Override
+public boolean bindService(Intent service, ServiceConnection conn,
+        int flags) {
+    warnIfCallingFromSystemProcess();
+    return bindServiceCommon(service, conn, flags, mMainThread.getHandler(),
+            Process.myUserHandle());
+}
+```
+和启动Service类似，这里调用了bindServiceCommon这个方法
+
+```
+private boolean bindServiceCommon(Intent service, ServiceConnection conn, int flags, Handler
+        handler, UserHandle user) {
+    // Keep this in sync with DevicePolicyManager.bindDeviceAdminServiceAsUser.
+    IServiceConnection sd;
+    if (conn == null) {
+        throw new IllegalArgumentException("connection is null");
+    }
+    if (mPackageInfo != null) {
+        sd = mPackageInfo.getServiceDispatcher(conn, getOuterContext(), handler, flags);
+    } else {
+        throw new RuntimeException("Not supported in system context");
+    }
+    validateServiceIntent(service);
+    try {
+        IBinder token = getActivityToken();
+        if (token == null && (flags&BIND_AUTO_CREATE) == 0 && mPackageInfo != null
+                && mPackageInfo.getApplicationInfo().targetSdkVersion
+                < android.os.Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+            flags |= BIND_WAIVE_PRIORITY;
+        }
+        service.prepareToLeaveProcess(this);
+        int res = ActivityManager.getService().bindService(
+            mMainThread.getApplicationThread(), getActivityToken(), service,
+            service.resolveTypeIfNeeded(getContentResolver()),
+            sd, flags, getOpPackageName(), user.getIdentifier());
+        if (res < 0) {
+            throw new SecurityException(
+                    "Not allowed to bind to service " + service);
+        }
+        return res != 0;
+    } catch (RemoteException e) {
+        throw e.rethrowFromSystemServer();
+    }
+}
+
+```
+
+我们看一下这个方法的内容：这个方法主要完成两件事情
+第一个是将ServiceConnection对象转换成InnerConnection这个对象
+
+这里看一下这段代码` sd = mPackageInfo.getServiceDispatcher(conn, getOuterContext(), handler, flags);`mPackageInfo这个是一个LoadedApk类，我们跟进去看一下这个方法
+```
+public final IServiceConnection getServiceDispatcher(ServiceConnection c,
+        Context context, Handler handler, int flags) {
+    synchronized (mServices) {
+        LoadedApk.ServiceDispatcher sd = null;
+        ArrayMap<ServiceConnection, LoadedApk.ServiceDispatcher> map = mServices.get(context);
+        if (map != null) {
+            if (DEBUG) Slog.d(TAG, "Returning existing dispatcher " + sd + " for conn " + c);
+            sd = map.get(c);
+        }
+        if (sd == null) {
+            sd = new ServiceDispatcher(c, context, handler, flags);
+            if (DEBUG) Slog.d(TAG, "Creating new dispatcher " + sd + " for conn " + c);
+            if (map == null) {
+                map = new ArrayMap<>();
+                mServices.put(context, map);
+            }
+            map.put(c, sd);
+        } else {
+            sd.validate(context, handler);
+        }
+        return sd.getIServiceConnection();
+    }
+}
+
+```
+这里创建了`new ServiceDispatcher(c, context, handler, flags);`这个对象，ServiceDispatcher是LoadedApk的一个内部类.看一下他的构造方法里面做了什么
+```
+ServiceDispatcher(ServiceConnection conn,
+            Context context, Handler activityThread, int flags) {
+        mIServiceConnection = new InnerConnection(this);
+        mConnection = conn;
+        mContext = context;
+        mActivityThread = activityThread;
+        mLocation = new ServiceConnectionLeaked(null);
+        mLocation.fillInStackTrace();
+        mFlags = flags;
+    }
+```
+这里创建了InnerConnection,而InnerConnection是ServiceDispatcher的内部类，看一下InnerConnection的具体实现
+
+```
+private static class InnerConnection extends IServiceConnection.Stub {
+    final WeakReference<LoadedApk.ServiceDispatcher> mDispatcher;
+
+    InnerConnection(LoadedApk.ServiceDispatcher sd) {
+        mDispatcher = new WeakReference<LoadedApk.ServiceDispatcher>(sd);
+    }
+
+    public void connected(ComponentName name, IBinder service, boolean dead)
+            throws RemoteException {
+        LoadedApk.ServiceDispatcher sd = mDispatcher.get();
+        if (sd != null) {
+            sd.connected(name, service, dead);
+        }
+    }
+}
+
+```
+
+这里继承了IServiceConnection.Stub,说明他是一个AIDL。这里解释一下为什么不能直接使用ServiceConnection对象，这是因为服务的绑定有可能是跨进程的，因此ServiceConnection对象必须借助于Binder才能让远程服务回调自己的方法，而ServiceDispatcher的内部类InnerConnection刚好充当了Binder这个角色
+看一下ServiceConnection只是一个接口
+
+```
+public interface ServiceConnection {
+    void onServiceConnected(android.content.ComponentName componentName, android.os.IBinder iBinder);
+
+    void onServiceDisconnected(android.content.ComponentName componentName);
+
+    default void onBindingDied(android.content.ComponentName name) { /* compiled code */ }
+}
+```
+那么ServiceDispatcher的作用是什么呢？其实ServiceDispatcher起连接ServiceConnection和InnerConnection的作用
+回到LoadedApk的`getServiceDispatcher`方法，看一下是怎么将ServiceConnection和InnerConnection连接的
+这里使用mService是一个ArrayMap集合，他存储了一个应用当前活动的ServiceConnection和ServiceDispatcher的映射关系，他的定义如下
+```
+private final ArrayMap<Context, ArrayMap<ServiceConnection, LoadedApk.ServiceDispatcher>> mServices
+      = new ArrayMap<>();
+```
+系统会首先查找是否存在相同的ServiceConnection,如果不存在就创建一个ServiceDispatcher对象并将其存储在mService中，其中映射关系的key是ServiceConnection,Value是LoadedApk.ServiceDispatcher。在LoadedApk.ServiceDispatcher内部又保存了ServiceConnection和InnerConnection对象。当Service和客户端建立连接之后，系统会通知InnerConnection来调用ServiceConnection中的OnServiceConnected方法，这个过程有可能是跨进程的。当ServiceDispatcher创建好了之后，getServiceDispatcher 会返回他保存的InnerConnection这个对象，接着bindServiceCOmmon方法
+
+* 第二个
+```
+int res = ActivityManager.getService().bindService(
+    mMainThread.getApplicationThread(), getActivityToken(), service,
+    service.resolveTypeIfNeeded(getContentResolver()),
+    sd, flags, getOpPackageName(), user.getIdentifier());
+```
+是不是有点熟悉，调用了AMS的bindService方法
+
+```
+public int bindService(IApplicationThread caller, IBinder token, Intent service,
+            String resolvedType, IServiceConnection connection, int flags, String callingPackage,
+            int userId) throws TransactionTooLargeException {
+        enforceNotIsolatedCaller("bindService");
+
+        // Refuse possible leaked file descriptors
+        if (service != null && service.hasFileDescriptors() == true) {
+            throw new IllegalArgumentException("File descriptors passed in Intent");
+        }
+
+        if (callingPackage == null) {
+            throw new IllegalArgumentException("callingPackage cannot be null");
+        }
+
+        synchronized(this) {
+            return mServices.bindServiceLocked(caller, token, service,
+                    resolvedType, connection, flags, callingPackage, userId);
+        }
+}
+```
+接着调用ActiveServices的`bindServiceLocked`方法。
+方法比较长
+```
+
+int bindServiceLocked(IApplicationThread caller, IBinder token, Intent service,
+            String resolvedType, final IServiceConnection connection, int flags,
+            String callingPackage, final int userId) throws TransactionTooLargeException {...
+              bringUpServiceLocked
+              ...}
+```
+这里调用了bringUpServiceLocked这个方法，看一下这个方法
+```
+private String bringUpServiceLocked(ServiceRecord r, int intentFlags, boolean execInFg,
+        boolean whileRestarting, boolean permissionsReviewRequired)
+        throws TransactionTooLargeException {
+          ...
+                    realStartServiceLocked(r, app, execInFg);
+          ...
+        }
+```
+bringUpServiceLocked这个方法调用了realStartServiceLocked，这里就回到了StartService要调用的那个方法了。和StartService一样。那区别在哪儿呢？
+bindServiceLocked在这个方法里面也调用了requestServiceBindingLocked这个方法
+```
+private final boolean requestServiceBindingLocked(ServiceRecord r, IntentBindRecord i,
+        boolean execInFg, boolean rebind) throws TransactionTooLargeException {
+    if (r.app == null || r.app.thread == null) {
+        // If service is not currently running, can't yet bind.
+        return false;
+    }
+    if (DEBUG_SERVICE) Slog.d(TAG_SERVICE, "requestBind " + i + ": requested=" + i.requested
+            + " rebind=" + rebind);
+    if ((!i.requested || rebind) && i.apps.size() > 0) {
+        try {
+            bumpServiceExecutingLocked(r, execInFg, "bind");
+            r.app.forceProcessStateUpTo(ActivityManager.PROCESS_STATE_SERVICE);
+            r.app.thread.scheduleBindService(r, i.intent.getIntent(), rebind,
+                    r.app.repProcState);
+            if (!rebind) {
+                i.requested = true;
+            }
+            i.hasBound = true;
+            i.doRebind = false;
+        } catch (TransactionTooLargeException e) {
+            // Keep the executeNesting count accurate.
+            if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "Crashed while binding " + r, e);
+            final boolean inDestroying = mDestroyingServices.contains(r);
+            serviceDoneExecutingLocked(r, inDestroying, inDestroying);
+            throw e;
+        } catch (RemoteException e) {
+            if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "Crashed while binding " + r);
+            // Keep the executeNesting count accurate.
+            final boolean inDestroying = mDestroyingServices.contains(r);
+            serviceDoneExecutingLocked(r, inDestroying, inDestroying);
+            return false;
+        }
+    }
+    return true;
+}
+```
+requestServiceBindingLocked里面有一个比较关键的代码
+```
+r.app.thread.scheduleBindService(r, i.intent.getIntent(), rebind,
+        r.app.repProcState);
+```
+
+这里又回到了ActivityThread
+```
+public final void scheduleBindService(IBinder token, Intent intent,
+        boolean rebind, int processState) {
+    updateProcessState(processState, false);
+    BindServiceData s = new BindServiceData();
+    s.token = token;
+    s.intent = intent;
+    s.rebind = rebind;
+
+    if (DEBUG_SERVICE)
+        Slog.v(TAG, "scheduleBindService token=" + token + " intent=" + intent + " uid="
+                + Binder.getCallingUid() + " pid=" + Binder.getCallingPid());
+    sendMessage(H.BIND_SERVICE, s);
+}
+
+```
+使用handler H这个接受事件
+
+```
+case BIND_SERVICE:
+    Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "serviceBind");
+    handleBindService((BindServiceData)msg.obj);
+    Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+```
+在H接收到的BIND_SERVICE这类消息时，会交给handleBindService来处理，在handleBindService过程中，首先根据Service的Token去除Service对象，然后调用Service的onBind方法，Service的onBInd方法返回一个Binder对象给客户端使用，这个过程就比较熟悉了，但是onBind是Service的方法，这个时候客户端并不知道已经成功连接Service了，所以还必须调用客户端的ServiceConnection中的onServiceConnected,这个过程是有AMS的publishService来完成的
+
+看一下关键代码handleBindService
+Service有一个特性，就是多次绑定时，onBind方法只调用一次，除非Service终止了。
+```
+private void handleBindService(BindServiceData data) {
+    Service s = mServices.get(data.token);
+    if (DEBUG_SERVICE)
+        Slog.v(TAG, "handleBindService s=" + s + " rebind=" + data.rebind);
+    if (s != null) {
+        try {
+            data.intent.setExtrasClassLoader(s.getClassLoader());
+            data.intent.prepareToEnterProcess();
+            try {
+                if (!data.rebind) {
+                    IBinder binder = s.onBind(data.intent);
+                    ActivityManager.getService().publishService(
+                            data.token, data.intent, binder);
+                } else {
+                    s.onRebind(data.intent);
+                    ActivityManager.getService().serviceDoneExecuting(
+                            data.token, SERVICE_DONE_EXECUTING_ANON, 0, 0);
+                }
+                ensureJitEnabled();
+            } catch (RemoteException ex) {
+                throw ex.rethrowFromSystemServer();
+            }
+        } catch (Exception e) {
+            if (!mInstrumentation.onException(s, e)) {
+                throw new RuntimeException(
+                        "Unable to bind to service " + s
+                        + " with " + data.intent + ": " + e.toString(), e);
+            }
+        }
+    }
+}
+```
+AMS的publishService方法
+```
+public void publishService(IBinder token, Intent intent, IBinder service) {
+    // Refuse possible leaked file descriptors
+    if (intent != null && intent.hasFileDescriptors() == true) {
+        throw new IllegalArgumentException("File descriptors passed in Intent");
+    }
+
+    synchronized(this) {
+        if (!(token instanceof ServiceRecord)) {
+            throw new IllegalArgumentException("Invalid service token");
+        }
+        mServices.publishServiceLocked((ServiceRecord)token, intent, service);
+    }
+}
+```
+从这里可以看出AMS的publishService方法将工作交给了ActiveServices来处理。
+
+```
+void publishServiceLocked(ServiceRecord r, Intent intent, IBinder service) {
+    final long origId = Binder.clearCallingIdentity();
+    try {
+        if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "PUBLISHING " + r
+                + " " + intent + ": " + service);
+        if (r != null) {
+            Intent.FilterComparison filter
+                    = new Intent.FilterComparison(intent);
+            IntentBindRecord b = r.bindings.get(filter);
+            if (b != null && !b.received) {
+                b.binder = service;
+                b.requested = true;
+                b.received = true;
+                for (int conni=r.connections.size()-1; conni>=0; conni--) {
+                    ArrayList<ConnectionRecord> clist = r.connections.valueAt(conni);
+                    for (int i=0; i<clist.size(); i++) {
+                        ConnectionRecord c = clist.get(i);
+                        if (!filter.equals(c.binding.intent.intent)) {
+                            if (DEBUG_SERVICE) Slog.v(
+                                    TAG_SERVICE, "Not publishing to: " + c);
+                            if (DEBUG_SERVICE) Slog.v(
+                                    TAG_SERVICE, "Bound intent: " + c.binding.intent.intent);
+                            if (DEBUG_SERVICE) Slog.v(
+                                    TAG_SERVICE, "Published intent: " + intent);
+                            continue;
+                        }
+                        if (DEBUG_SERVICE) Slog.v(TAG_SERVICE, "Publishing to: " + c);
+                        try {
+                            c.conn.connected(r.name, service, false);
+                        } catch (Exception e) {
+                            Slog.w(TAG, "Failure sending service " + r.name +
+                                  " to connection " + c.conn.asBinder() +
+                                  " (in " + c.binding.client.processName + ")", e);
+                        }
+                    }
+                }
+            }
+
+            serviceDoneExecutingLocked(r, mDestroyingServices.contains(r), false);
+        }
+    } finally {
+        Binder.restoreCallingIdentity(origId);
+    }
+}
+```
+ActiveServices的publishService方法很长，但是核心代码只有一句话`c.conn.connected(r.name, service, false);`
+c是ConnectionRecord，c.conn是ServiceDispatcher.InnerConnection，service就是Service的onBind方法返回的binder对象。
+
+这里在回来看一下InnerConnection
+
+```
+private static class InnerConnection extends IServiceConnection.Stub {
+    final WeakReference<LoadedApk.ServiceDispatcher> mDispatcher;
+
+    InnerConnection(LoadedApk.ServiceDispatcher sd) {
+        mDispatcher = new WeakReference<LoadedApk.ServiceDispatcher>(sd);
+    }
+
+    public void connected(ComponentName name, IBinder service, boolean dead)
+            throws RemoteException {
+        LoadedApk.ServiceDispatcher sd = mDispatcher.get();
+        if (sd != null) {
+            sd.connected(name, service, dead);
+        }
+    }
+}
+
+```
+看到connected这个方法调用的是ServiceDispatcher的connected方法，看一下他的具体实现
+
+```
+public void connected(ComponentName name, IBinder service, boolean dead) {
+      if (mActivityThread != null) {
+          mActivityThread.post(new RunConnection(name, service, 0, dead));
+      } else {
+          doConnected(name, service, dead);
+      }
+  }
+```
+通常情况下mActivityThread是不为空的，这样一来，就通过post方法回到主线程，而RunConnection的定义如下
+```
+private final class RunConnection implements Runnable {
+          RunConnection(ComponentName name, IBinder service, int command, boolean dead) {
+              mName = name;
+              mService = service;
+              mCommand = command;
+              mDead = dead;
+          }
+
+          public void run() {
+              if (mCommand == 0) {
+                  doConnected(mName, mService, mDead);
+              } else if (mCommand == 1) {
+                  doDeath(mName, mService);
+              }
+          }
+
+          final ComponentName mName;
+          final IBinder mService;
+          final int mCommand;
+          final boolean mDead;
+      }
+```
+这里判断了命令状态，调用ServiceDispatcher的doConnected方法
+```
+public void doConnected(ComponentName name, IBinder service, boolean dead) {
+        ServiceDispatcher.ConnectionInfo old;
+        ServiceDispatcher.ConnectionInfo info;
+
+        synchronized (this) {
+            if (mForgotten) {
+                // We unbound before receiving the connection; ignore
+                // any connection received.
+                return;
+            }
+            old = mActiveConnections.get(name);
+            if (old != null && old.binder == service) {
+                // Huh, already have this one.  Oh well!
+                return;
+            }
+
+            if (service != null) {
+                // A new service is being connected... set it all up.
+                info = new ConnectionInfo();
+                info.binder = service;
+                info.deathMonitor = new DeathMonitor(name, service);
+                try {
+                    service.linkToDeath(info.deathMonitor, 0);
+                    mActiveConnections.put(name, info);
+                } catch (RemoteException e) {
+                    // This service was dead before we got it...  just
+                    // don't do anything with it.
+                    mActiveConnections.remove(name);
+                    return;
+                }
+
+            } else {
+                // The named service is being disconnected... clean up.
+                mActiveConnections.remove(name);
+            }
+
+            if (old != null) {
+                old.binder.unlinkToDeath(old.deathMonitor, 0);
+            }
+        }
+
+        // If there was an old service, it is now disconnected.
+        if (old != null) {
+            mConnection.onServiceDisconnected(name);
+        }
+        if (dead) {
+            mConnection.onBindingDied(name);
+        }
+        // If there is a new service, it is now connected.
+        if (service != null) {
+            mConnection.onServiceConnected(name, service);
+        }
+    }
+```
+因为ServiceDispatcher内部保存了客户端ServiceConnection对象，因此可以很方便的调用ServiceConnection对象的onServiceConnected方法
+```  
+if (service != null) {
+    mConnection.onServiceConnected(name, service);
+}
+```
+这里Service的绑定过程就解决了
 # 第十章 Android的消息机制
 # 第十一章 Android的线程和线程池
 # 第十二章 Bitmap的加载和Cache
