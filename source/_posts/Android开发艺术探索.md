@@ -1,7 +1,9 @@
 ---
 title: Android开发艺术探索
 date: 2018-01-27 17:08:20
-tags: android进阶第一步
+tags:
+- android进阶第一步
+categories: android
 ---
 
 >  这个是Android 开发艺术探索的读书笔记，感觉在把android群英传整理之后对android的知识体系有了更加深入的理解，好记性不如烂笔头，还是记录一下。https://github.com/appium/android-apidemos/blob/master/src/io/appium/android/apis/animation/Rotate3dAnimation.java 这个是这本书项目源码 作者的

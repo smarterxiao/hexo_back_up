@@ -64,6 +64,9 @@ index_generator:
 # Category & Tag
 default_category: uncategorized
 category_map:
+安卓: android
+生活: life
+其他: other
 tag_map:
 
 # Date / Time format
