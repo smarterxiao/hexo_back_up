@@ -2,7 +2,7 @@
 title: Android开发艺术探索
 date: 2018-01-27 17:08:20
 tags:
-- android进阶第一步
+- 进阶
 categories: android
 ---
 
@@ -15564,7 +15564,208 @@ if (service != null) {
     mConnection.onServiceConnected(name, service);
 }
 ```
+onServiceConnected就是连接成功的回调
 这里Service的绑定过程就解决了
+这里的UML图
+![Alt text](Service绑定流程图..svg "Service 启动,最好下载下来看")
+## BroadcastReceiver的工作过程
+这一章节介绍BroadCastReceiver的工作过程，主要包含两个方面，一个是广播注册过程，一个是广播发送和接受过程。这里先简单回顾一下广播的使用方法
+```
+public class TestBR extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+
+    }
+}
+
+```
+然后在清单文件中注册
+```
+ <receiver android:name=".TestBR" />
+```
+看一下动态注册
+```
+IntentFilter filter=new IntentFilter();
+   filter.addAction("ccc");
+   registerReceiver(new TestBR(),filter);
+```
+发送广播
+```  
+Intent intent =new Intent();
+intent.setAction("ccc");
+sendBroadcast(intent);
+```
+
+### 广播的注册过程
+广播的注册分为动态注册和静态注册，其中静态注册的广播在应用安装的时候由系统自动完成，具体的说是由PMS（PackageManagerService）来完成整个注册过程的，除了广播以外，其他三大组件也是在应用安装时由PMS解析并注册的。这里只研究动态注册。
+
+看下面动态注册的代码
+```
+IntentFilter filter=new IntentFilter();
+   filter.addAction("ccc");
+   registerReceiver(new TestBR(),filter);
+```
+可以发现，`registerReceiver`方法方法调用了其实是调用了ContextWrapper的，我们直接跳转到ContextWrapper，看一下他的`registerReceiver`方法
+```
+    @Override
+    public Intent registerReceiver(
+        BroadcastReceiver receiver, IntentFilter filter) {
+        return mBase.registerReceiver(receiver, filter);
+    }
+```
+mBase是ContextImpl,看一下他的`registerReceiver`方法
+
+```
+@Override
+public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter,
+        String broadcastPermission, Handler scheduler) {
+    return registerReceiverInternal(receiver, getUserId(),
+            filter, broadcastPermission, scheduler, getOuterContext(), 0);
+}
+
+```
+可以看到调用了自己的`registerReceiverInternal`方法
+```
+private Intent registerReceiverInternal(BroadcastReceiver receiver, int userId,
+        IntentFilter filter, String broadcastPermission,
+        Handler scheduler, Context context, int flags) {
+    IIntentReceiver rd = null;
+    if (receiver != null) {
+        if (mPackageInfo != null && context != null) {
+            if (scheduler == null) {
+                scheduler = mMainThread.getHandler();
+            }
+            rd = mPackageInfo.getReceiverDispatcher(
+                receiver, context, scheduler,
+                mMainThread.getInstrumentation(), true);
+        } else {
+            if (scheduler == null) {
+                scheduler = mMainThread.getHandler();
+            }
+            rd = new LoadedApk.ReceiverDispatcher(
+                    receiver, context, scheduler, null, true).getIIntentReceiver();
+        }
+    }
+    try {
+        final Intent intent = ActivityManager.getService().registerReceiver(
+                mMainThread.getApplicationThread(), mBasePackageName, rd, filter,
+                broadcastPermission, userId, flags);
+        if (intent != null) {
+            intent.setExtrasClassLoader(getClassLoader());
+            intent.prepareToEnterProcess();
+        }
+        return intent;
+    } catch (RemoteException e) {
+        throw e.rethrowFromSystemServer();
+    }
+}
+```
+看一下这个关键的代码
+```
+rd = mPackageInfo.getReceiverDispatcher(
+    receiver, context, scheduler,
+    mMainThread.getInstrumentation(), true);
+```
+
+这里是不是很熟悉，service的bind过程也使用了类似的方式
+mPackageInfo是一个LoadedApk
+
+```
+    public IIntentReceiver getReceiverDispatcher(BroadcastReceiver r,
+            Context context, Handler handler,
+            Instrumentation instrumentation, boolean registered) {
+        synchronized (mReceivers) {
+            LoadedApk.ReceiverDispatcher rd = null;
+            ArrayMap<BroadcastReceiver, LoadedApk.ReceiverDispatcher> map = null;
+            if (registered) {
+                map = mReceivers.get(context);
+                if (map != null) {
+                    rd = map.get(r);
+                }
+            }
+            if (rd == null) {
+                rd = new ReceiverDispatcher(r, context, handler,
+                        instrumentation, registered);
+                if (registered) {
+                    if (map == null) {
+                        map = new ArrayMap<BroadcastReceiver, LoadedApk.ReceiverDispatcher>();
+                        mReceivers.put(context, map);
+                    }
+                    map.put(r, rd);
+                }
+            } else {
+                rd.validate(context, handler);
+            }
+            rd.mForgotten = false;
+            return rd.getIIntentReceiver();
+        }
+    }
+```
+
+看一下ReceiverDispatcher的构造方法,如果猜的没错，这里应该有一个ReceiverDispatcher的内部类InnerReceiver，并且继承IIntentReceiver.Stub，和service的绑定过程一样
+
+```
+calss ReceiverDispatcher{
+  ...
+ReceiverDispatcher(BroadcastReceiver receiver, Context context,
+        Handler activityThread, Instrumentation instrumentation,
+        boolean registered) {
+    if (activityThread == null) {
+        throw new NullPointerException("Handler must not be null");
+    }
+
+    mIIntentReceiver = new InnerReceiver(this, !registered);
+    mReceiver = receiver;
+    mContext = context;
+    mActivityThread = activityThread;
+    mInstrumentation = instrumentation;
+    mRegistered = registered;
+    mLocation = new IntentReceiverLeaked(null);
+    mLocation.fillInStackTrace();
+}
+
+final static class InnerReceiver extends IIntentReceiver.Stub {
+    final WeakReference<LoadedApk.ReceiverDispatcher> mDispatcher;
+    final LoadedApk.ReceiverDispatcher mStrongRef;
+
+    InnerReceiver(LoadedApk.ReceiverDispatcher rd, boolean strong) {
+        mDispatcher = new WeakReference<LoadedApk.ReceiverDispatcher>(rd);
+        mStrongRef = strong ? rd : null;
+    }
+}
+}
+```
+这里列出了一些关键的代码，其余部分省略。看到和Service的bind过程一样
+然后第二步
+```
+final Intent intent = ActivityManager.getService().registerReceiver(
+        mMainThread.getApplicationThread(), mBasePackageName, rd, filter,
+        broadcastPermission, userId, flags);
+```
+得到AMS并调用他的registerReceiver方法
+来看一下这个registerReceiver方法
+方法比较长，看重点
+```
+public Intent registerReceiver(IApplicationThread caller, String callerPackage,
+            IIntentReceiver receiver, IntentFilter filter, String permission, int userId,
+            int flags) {
+              if (rl == null) {
+                  rl = new ReceiverList(this, callerApp, callingPid, callingUid,
+                          userId, receiver);
+                }
+                mRegisteredReceivers.put(receiver.asBinder(), rl);
+                BroadcastFilter bf = new BroadcastFilter(filter, rl, callerPackage,
+                        permission, callingUid, userId, instantApp, visibleToInstantApps);
+                rl.add(bf);
+                if (!bf.debugCheck()) {
+                    Slog.w(TAG, "==> For Dynamic broadcast");
+                }
+                mReceiverResolver.addFilter(bf);
+
+            }
+```
+最终会把远程的InnerReceiver对象以及IntentFilter对象存储起来
+### 广播的发送和接受过程
 # 第十章 Android的消息机制
 # 第十一章 Android的线程和线程池
 # 第十二章 Bitmap的加载和Cache
