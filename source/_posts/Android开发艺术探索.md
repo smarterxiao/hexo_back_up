@@ -15766,6 +15766,420 @@ public Intent registerReceiver(IApplicationThread caller, String callerPackage,
 ```
 最终会把远程的InnerReceiver对象以及IntentFilter对象存储起来
 ### 广播的发送和接受过程
+通过上面分析发现，广播的注册过程还是比较简单的,下面来分析一下广播的发送和接受过程。当通过send方法来发送广播时，AMS会查找出匹配的广播接受者，并将广播发送给他们处理。广播发送分为几种类型：普通广播、有序广播、粘性广播。有序广播和粘性广播与普通广播相比具有不同的特性，但是他们发送过程和接受过程是类似的，因此这里只分析普通广播。
+广播的发送和接收，其本质是一个过程的两个阶段。这里从广播的发送说起，广播的发送任然起始于ContextWrapper的sendBroadcast方法，之所以不是Context，那是因为Context的sendBroadcast是一个抽象方法。具体的做法都是在ContextImpl中处理的
+看一下调用
+首先是在activity中发送广播
+```
+Intent intent =new Intent();
+intent.setAction("ccc");
+sendBroadcast(intent);
+```
+这时会调用ContextWrapper的`sendBroadcast`方法，接着调用ContextImp的`sendBroadcast`方法
+```
+@Override
+public void sendBroadcast(Intent intent) {
+    warnIfCallingFromSystemProcess();
+    String resolvedType = intent.resolveTypeIfNeeded(getContentResolver());
+    try {
+        intent.prepareToLeaveProcess(this);
+        ActivityManager.getService().broadcastIntent(
+                mMainThread.getApplicationThread(), intent, resolvedType, null,
+                Activity.RESULT_OK, null, null, null, AppOpsManager.OP_NONE, null, false, false,
+                getUserId());
+    } catch (RemoteException e) {
+        throw e.rethrowFromSystemServer();
+    }
+}
+
+```
+可以看到`sendBroadcast`基本没有干什么事情，他是通过AMS来发送广播的，我们看一下AMS的`broadcastIntent`方法
+```
+public final int broadcastIntent(IApplicationThread caller,
+        Intent intent, String resolvedType, IIntentReceiver resultTo,
+        int resultCode, String resultData, Bundle resultExtras,
+        String[] requiredPermissions, int appOp, Bundle bOptions,
+        boolean serialized, boolean sticky, int userId) {
+    enforceNotIsolatedCaller("broadcastIntent");
+    synchronized(this) {
+        intent = verifyBroadcastLocked(intent);
+
+        final ProcessRecord callerApp = getRecordForAppLocked(caller);
+        final int callingPid = Binder.getCallingPid();
+        final int callingUid = Binder.getCallingUid();
+        final long origId = Binder.clearCallingIdentity();
+        int res = broadcastIntentLocked(callerApp,
+                callerApp != null ? callerApp.info.packageName : null,
+                intent, resolvedType, resultTo, resultCode, resultData, resultExtras,
+                requiredPermissions, appOp, bOptions, serialized, sticky,
+                callingPid, callingUid, userId);
+        Binder.restoreCallingIdentity(origId);
+        return res;
+    }
+}
+
+```
+可以看到这个方法内部又调用了`broadcastIntentLocked`方法,来看一下这个方法
+```
+final int broadcastIntentLocked(ProcessRecord callerApp,
+        String callerPackage, Intent intent, String resolvedType,
+        IIntentReceiver resultTo, int resultCode, String resultData,
+        Bundle resultExtras, String[] requiredPermissions, int appOp, Bundle bOptions,
+        boolean ordered, boolean sticky, int callingPid, int callingUid, int userId) {
+          ...
+          intent.addFlags(Intent.FLAG_EXCLUDE_STOPPED_PACKAGES);
+          ...
+          if (!ordered && NR > 0) {
+              // If we are not serializing this broadcast, then send the
+              // registered receivers separately so they don't wait for the
+              // components to be launched.
+              if (isCallerSystem) {
+                  checkBroadcastFromSystem(intent, callerApp, callerPackage, callingUid,
+                          isProtectedBroadcast, registeredReceivers);
+              }
+              final BroadcastQueue queue = broadcastQueueForIntent(intent);
+              BroadcastRecord r = new BroadcastRecord(queue, intent, callerApp,
+                      callerPackage, callingPid, callingUid, callerInstantApp, resolvedType,
+                      requiredPermissions, appOp, brOptions, registeredReceivers, resultTo,
+                      resultCode, resultData, resultExtras, ordered, sticky, false, userId);
+              if (DEBUG_BROADCAST) Slog.v(TAG_BROADCAST, "Enqueueing parallel broadcast " + r);
+              final boolean replaced = replacePending
+                      && (queue.replaceParallelBroadcastLocked(r) != null);
+              // Note: We assume resultTo is null for non-ordered broadcasts.
+              if (!replaced) {
+                  queue.enqueueParallelBroadcastLocked(r);
+                  queue.scheduleBroadcastsLocked();
+              }
+              registeredReceivers = null;
+              NR = 0;
+          }
+            ...
+        }
+```
+方法比较长，列出重要的步骤
+这里拆解分析一下
+
+```
+  intent.addFlags(Intent.FLAG_EXCLUDE_STOPPED_PACKAGES);
+```
+这个表示在Android5.0中，默认情况下广播不会发送给已经停止的应用，其实不仅仅是Android5.0，从Android3.1开始广播已经具有这种特性了。这时因为系统在Android3.1中添加了两个Intent标记位：FLAG_INCLUDE_STOPPED_PACKAGES和FLAG_EXCLUDE_STOPPED_PACKAGES,用来控制广播是否要对处于停滞状态的应用其作用
+FLAG_INCLUDE_STOPPED_PACKAGES：表示对已经停止的应用奏效，就是说广播会发给已经停止的应用
+FLAG_EXCLUDE_STOPPED_PACKAGES：表示对已经停止的应用不奏效，就是说广播会不发给已经停止的应用
+从Android3.1开始，系统为所有的广播默认添加了FLAG_EXCLUDE_STOPPED_PACKAGES标致，这样做是为了防止广播无意间或者在不必要的时候调起已经停止运行的应用。如果的确需要调起未启动的应用，只需要在Intent添加FLAG_INCLUDE_STOPPED_PACKAGES这个flag就可以了。当这两者同时存在时，FLAG_INCLUDE_STOPPED_PACKAGES的优先级高于FLAG_EXCLUDE_STOPPED_PACKAGES.
+在`broadcastIntentLocked`的内部，会根据intent-filter查找出匹配的广播接受者并经过一系列条件的过滤，最终将满足条件的广播接受者添加到BroadcastQueue中，接着BroadcastQueue就会将广播发送给相应的广播接受者
+
+```
+if (!ordered && NR > 0) {
+    // If we are not serializing this broadcast, then send the
+    // registered receivers separately so they don't wait for the
+    // components to be launched.
+    if (isCallerSystem) {
+        checkBroadcastFromSystem(intent, callerApp, callerPackage, callingUid,
+                isProtectedBroadcast, registeredReceivers);
+    }
+    final BroadcastQueue queue = broadcastQueueForIntent(intent);
+    BroadcastRecord r = new BroadcastRecord(queue, intent, callerApp,
+            callerPackage, callingPid, callingUid, callerInstantApp, resolvedType,
+            requiredPermissions, appOp, brOptions, registeredReceivers, resultTo,
+            resultCode, resultData, resultExtras, ordered, sticky, false, userId);
+    if (DEBUG_BROADCAST) Slog.v(TAG_BROADCAST, "Enqueueing parallel broadcast " + r);
+    final boolean replaced = replacePending
+            && (queue.replaceParallelBroadcastLocked(r) != null);
+    // Note: We assume resultTo is null for non-ordered broadcasts.
+    if (!replaced) {
+        queue.enqueueParallelBroadcastLocked(r);
+        queue.scheduleBroadcastsLocked();
+    }
+    registeredReceivers = null;
+    NR = 0;
+}
+
+```
+可以看到在`broadcastIntentLocked`方法中调用了BroadcastQueue的`scheduleBroadcastsLocked`方法,看一下这个方法做了什么
+
+```
+public void scheduleBroadcastsLocked() {
+    if (DEBUG_BROADCAST) Slog.v(TAG_BROADCAST, "Schedule broadcasts ["
+            + mQueueName + "]: current="
+            + mBroadcastsScheduled);
+
+    if (mBroadcastsScheduled) {
+        return;
+    }
+    mHandler.sendMessage(mHandler.obtainMessage(BROADCAST_INTENT_MSG, this));
+    mBroadcastsScheduled = true;
+}
+
+```
+可以看到他并没有立即发送广播，而是使用了Handler发送了一条消息BROADCAST_INTENT_MSG
+看一下这个handler
+
+```
+private final class BroadcastHandler extends Handler {
+    public BroadcastHandler(Looper looper) {
+        super(looper, null, true);
+    }
+
+    @Override
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
+            case BROADCAST_INTENT_MSG: {
+                if (DEBUG_BROADCAST) Slog.v(
+                        TAG_BROADCAST, "Received BROADCAST_INTENT_MSG");
+                processNextBroadcast(true);
+            } break;
+            case BROADCAST_TIMEOUT_MSG: {
+                synchronized (mService) {
+                    broadcastTimeoutLocked(true);
+                }
+            } break;
+        }
+    }
+}
+
+```
+可以看到其实是调用了`processNextBroadcast`这个方法,看一下这个方法。这个方法有点长，选重要的部分
+```
+while (mParallelBroadcasts.size() > 0) {
+    r = mParallelBroadcasts.remove(0);
+    r.dispatchTime = SystemClock.uptimeMillis();
+    r.dispatchClockTime = System.currentTimeMillis();
+
+    if (Trace.isTagEnabled(Trace.TRACE_TAG_ACTIVITY_MANAGER)) {
+        Trace.asyncTraceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER,
+            createBroadcastTraceTitle(r, BroadcastRecord.DELIVERY_PENDING),
+            System.identityHashCode(r));
+        Trace.asyncTraceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER,
+            createBroadcastTraceTitle(r, BroadcastRecord.DELIVERY_DELIVERED),
+            System.identityHashCode(r));
+    }
+
+    final int N = r.receivers.size();
+    if (DEBUG_BROADCAST_LIGHT) Slog.v(TAG_BROADCAST, "Processing parallel broadcast ["
+            + mQueueName + "] " + r);
+    for (int i=0; i<N; i++) {
+        Object target = r.receivers.get(i);
+        if (DEBUG_BROADCAST)  Slog.v(TAG_BROADCAST,
+                "Delivering non-ordered on [" + mQueueName + "] to registered "
+                + target + ": " + r);
+        deliverToRegisteredReceiverLocked(r, (BroadcastFilter)target, false, i);
+    }
+    addBroadcastToHistoryLocked(r);
+    if (DEBUG_BROADCAST_LIGHT) Slog.v(TAG_BROADCAST, "Done with parallel broadcast ["
+            + mQueueName + "] " + r);
+}
+
+```
+这里会遍历mParallelBroadcasts并将其中的广播发送给他们所有的接受者，具体发送过程是通过`deliverToRegisteredReceiverLocked`方法来发送的，
+这个方法比较长，看关键的部分
+```
+...
+performReceiveLocked(filter.receiverList.app, filter.receiverList.receiver,
+        new Intent(r.intent), r.resultCode, r.resultData,
+        r.resultExtras, r.ordered, r.initialSticky, r.userId);
+...
+```
+
+```
+
+    void performReceiveLocked(ProcessRecord app, IIntentReceiver receiver,
+            Intent intent, int resultCode, String data, Bundle extras,
+            boolean ordered, boolean sticky, int sendingUser) throws RemoteException {
+        // Send the intent to the receiver asynchronously using one-way binder calls.
+        if (app != null) {
+            if (app.thread != null) {
+                // If we have an app thread, do the call through that so it is
+                // correctly ordered with other one-way calls.
+                try {
+                    app.thread.scheduleRegisteredReceiver(receiver, intent, resultCode,
+                            data, extras, ordered, sticky, sendingUser, app.repProcState);
+                // TODO: Uncomment this when (b/28322359) is fixed and we aren't getting
+                // DeadObjectException when the process isn't actually dead.
+                //} catch (DeadObjectException ex) {
+                // Failed to call into the process.  It's dying so just let it die and move on.
+                //    throw ex;
+                } catch (RemoteException ex) {
+                    // Failed to call into the process. It's either dying or wedged. Kill it gently.
+                    synchronized (mService) {
+                        Slog.w(TAG, "Can't deliver broadcast to " + app.processName
+                                + " (pid " + app.pid + "). Crashing it.");
+                        app.scheduleCrash("can't deliver broadcast");
+                    }
+                    throw ex;
+                }
+            } else {
+                // Application has died. Receiver doesn't exist.
+                throw new RemoteException("app.thread must not be null");
+            }
+        } else {
+            receiver.performReceive(intent, resultCode, data, extras, ordered,
+                    sticky, sendingUser);
+        }
+    }
+```
+可以看到这里
+```
+app.thread.scheduleRegisteredReceiver(receiver, intent, resultCode,
+        data, extras, ordered, sticky, sendingUser, app.repProcState);
+```
+是不是有点印象，
+
+看一下ActivityThread中的这个方法
+```
+public void scheduleRegisteredReceiver(IIntentReceiver receiver, Intent intent,
+        int resultCode, String dataStr, Bundle extras, boolean ordered,
+        boolean sticky, int sendingUser, int processState) throws RemoteException {
+    updateProcessState(processState, false);
+    receiver.performReceive(intent, resultCode, dataStr, extras, ordered,
+            sticky, sendingUser);
+}
+```
+这里的receiver是一个InnerReceiver
+```
+@Override
+public void performReceive(Intent intent, int resultCode, String data,
+        Bundle extras, boolean ordered, boolean sticky, int sendingUser) {
+    final LoadedApk.ReceiverDispatcher rd;
+    if (intent == null) {
+        Log.wtf(TAG, "Null intent received");
+        rd = null;
+    } else {
+        rd = mDispatcher.get();
+    }
+    if (ActivityThread.DEBUG_BROADCAST) {
+        int seq = intent.getIntExtra("seq", -1);
+        Slog.i(ActivityThread.TAG, "Receiving broadcast " + intent.getAction()
+                + " seq=" + seq + " to " + (rd != null ? rd.mReceiver : null));
+    }
+    if (rd != null) {
+        rd.performReceive(intent, resultCode, data, extras,
+                ordered, sticky, sendingUser);
+    } else {
+        // The activity manager dispatched a broadcast to a registered
+        // receiver in this process, but before it could be delivered the
+        // receiver was unregistered.  Acknowledge the broadcast on its
+        // behalf so that the system's broadcast sequence can continue.
+        if (ActivityThread.DEBUG_BROADCAST) Slog.i(ActivityThread.TAG,
+                "Finishing broadcast to unregistered receiver");
+        IActivityManager mgr = ActivityManager.getService();
+        try {
+            if (extras != null) {
+                extras.setAllowFds(false);
+            }
+            mgr.finishReceiver(this, resultCode, data, extras, false, intent.getFlags());
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+}
+```
+他有调用了ReceiverDispatcher的`performReceive`方法
+```
+public void performReceive(Intent intent, int resultCode, String data,
+        Bundle extras, boolean ordered, boolean sticky, int sendingUser) {
+    final Args args = new Args(intent, resultCode, data, extras, ordered,
+            sticky, sendingUser);
+    if (intent == null) {
+        Log.wtf(TAG, "Null intent received");
+    } else {
+        if (ActivityThread.DEBUG_BROADCAST) {
+            int seq = intent.getIntExtra("seq", -1);
+            Slog.i(ActivityThread.TAG, "Enqueueing broadcast " + intent.getAction()
+                    + " seq=" + seq + " to " + mReceiver);
+        }
+    }
+    if (intent == null || !mActivityThread.post(args.getRunnable())) {
+        if (mRegistered && ordered) {
+            IActivityManager mgr = ActivityManager.getService();
+            if (ActivityThread.DEBUG_BROADCAST) Slog.i(ActivityThread.TAG,
+                    "Finishing sync broadcast to " + mReceiver);
+            args.sendFinished(mgr);
+        }
+    }
+}
+
+```
+先调用`!mActivityThread.post(args.getRunnable())`
+看一下`getRunnable`的内容,里面有一段关键的代码
+```
+ClassLoader cl = mReceiver.getClass().getClassLoader();
+intent.setExtrasClassLoader(cl);
+intent.prepareToEnterProcess();
+setExtrasClassLoader(cl);
+receiver.setPendingResult(this);
+receiver.onReceive(mContext, intent);
+```
+这里调用了`onReceive`这个方法,mActivityThread这个是一个Handler，就是ActivityThread内部的那个H
+
+这里会创建一个args对象，然后`sendFinished`是在Args父类的方法
+```
+final class Args extends BroadcastReceiver.PendingResult {
+  public void sendFinished(IActivityManager am) {
+      synchronized (this) {
+          if (mFinished) {
+              throw new IllegalStateException("Broadcast already finished");
+          }
+          mFinished = true;
+
+          try {
+              if (mResultExtras != null) {
+                  mResultExtras.setAllowFds(false);
+              }
+              if (mOrderedHint) {
+                  am.finishReceiver(mToken, mResultCode, mResultData, mResultExtras,
+                          mAbortBroadcast, mFlags);
+              } else {
+                  // This broadcast was sent to a component; it is not ordered,
+                  // but we still need to tell the activity manager we are done.
+                  am.finishReceiver(mToken, 0, null, null, false, mFlags);
+              }
+          } catch (RemoteException ex) {
+          }
+      }
+  }
+
+}
+```
+am是AMS,最后调用了AMS的`finishReceiver`方法
+```
+public void finishReceiver(IBinder who, int resultCode, String resultData,
+        Bundle resultExtras, boolean resultAbort, int flags) {
+    if (DEBUG_BROADCAST) Slog.v(TAG_BROADCAST, "Finish receiver: " + who);
+
+    // Refuse possible leaked file descriptors
+    if (resultExtras != null && resultExtras.hasFileDescriptors()) {
+        throw new IllegalArgumentException("File descriptors passed in Bundle");
+    }
+
+    final long origId = Binder.clearCallingIdentity();
+    try {
+        boolean doNext = false;
+        BroadcastRecord r;
+
+        synchronized(this) {
+            BroadcastQueue queue = (flags & Intent.FLAG_RECEIVER_FOREGROUND) != 0
+                    ? mFgBroadcastQueue : mBgBroadcastQueue;
+            r = queue.getMatchingOrderedReceiver(who);
+            if (r != null) {
+                doNext = r.queue.finishReceiverLocked(r, resultCode,
+                    resultData, resultExtras, resultAbort, true);
+            }
+        }
+
+        if (doNext) {
+            r.queue.processNextBroadcast(false);
+        }
+        trimApplications();
+    } finally {
+        Binder.restoreCallingIdentity(origId);
+    }
+}
+
+```
+这里面有是一个循环
+## ContentProvider工作过程
+
+  
 # 第十章 Android的消息机制
 # 第十一章 Android的线程和线程池
 # 第十二章 Bitmap的加载和Cache
