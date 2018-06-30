@@ -14640,7 +14640,7 @@ handleResumeActivity(r.token, false, r.isForward,
 这里Activity的生命周期就调用完毕了
 
 
-![Alt text](activity.svg "Android 启动,最好下载下来看")
+![Alt text](activity工作流程.svg "Android 启动,最好下载下来看")
 
 ## Service 工作过程
 上面分析了Activity的工作过程，加深了对Activity的理解。这里来折腾一下Service的
@@ -15567,7 +15567,7 @@ if (service != null) {
 onServiceConnected就是连接成功的回调
 这里Service的绑定过程就解决了
 这里的UML图
-![Alt text](Service绑定流程图..svg "Service 启动,最好下载下来看")
+![Alt text](Service绑定流程图.svg "Service 启动,最好下载下来看")
 ## BroadcastReceiver的工作过程
 这一章节介绍BroadCastReceiver的工作过程，主要包含两个方面，一个是广播注册过程，一个是广播发送和接受过程。这里先简单回顾一下广播的使用方法
 ```
@@ -16179,7 +16179,7 @@ public void finishReceiver(IBinder who, int resultCode, String resultData,
 这里面有是一个循环
 ## ContentProvider工作过程
 
-  
+
 # 第十章 Android的消息机制
 # 第十一章 Android的线程和线程池
 # 第十二章 Bitmap的加载和Cache
