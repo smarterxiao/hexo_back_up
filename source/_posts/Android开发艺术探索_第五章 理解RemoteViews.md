@@ -1,5 +1,5 @@
 ---
-title: 第五章 理解RemoteViews
+title: Android开发艺术探索 第五章 理解RemoteViews
 date: 2018-01-27 17:08:26
 top : 205
 tags:

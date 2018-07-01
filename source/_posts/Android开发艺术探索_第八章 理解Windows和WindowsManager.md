@@ -1,5 +1,5 @@
 ---
-title: 第八章 理解Windows和WindowsManager
+title: Android开发艺术探索 第八章 理解Windows和WindowsManager
 date: 2018-01-27 17:08:29
 top : 208
 tags:

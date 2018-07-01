@@ -1,5 +1,5 @@
 ---
-title: 第七章 Android 动画深入分析  
+title: Android开发艺术探索 第七章 Android 动画深入分析  
 date: 2018-01-27 17:08:28
 top : 207
 tags:

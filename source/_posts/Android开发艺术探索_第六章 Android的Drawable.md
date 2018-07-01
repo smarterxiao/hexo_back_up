@@ -1,5 +1,5 @@
 ---
-title: 第六章 Android的Drawable
+title: Android开发艺术探索 第六章 Android的Drawable
 date: 2018-01-27 17:08:27
 top : 206
 tags:

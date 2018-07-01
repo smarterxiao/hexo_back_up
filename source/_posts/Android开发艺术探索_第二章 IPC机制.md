@@ -1,5 +1,5 @@
 ---
-title: 第二章 IPC机制
+title: Android开发艺术探索 第二章 IPC机制
 date: 2018-01-27 17:08:21
 top : 202
 tags:

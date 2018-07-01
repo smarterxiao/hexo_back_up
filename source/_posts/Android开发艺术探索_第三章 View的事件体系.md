@@ -1,5 +1,5 @@
 ---
-title: 第三章 View的事件体系
+title: Android开发艺术探索 第三章 View的事件体系
 date: 2018-01-27 17:08:22
 top : 203
 tags:

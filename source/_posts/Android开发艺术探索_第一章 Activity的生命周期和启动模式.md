@@ -1,5 +1,5 @@
 ---
-title: 第一章 Activity的生命周期和启动模式
+title: Android开发艺术探索 第一章 Activity的生命周期和启动模式
 date: 2018-01-27 17:08:20
 top : 201
 tags:
