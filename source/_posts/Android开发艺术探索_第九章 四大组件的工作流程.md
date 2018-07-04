@@ -2806,7 +2806,7 @@ ContentProvide的使用方法在第二章的时候已经介绍过了，这里简
 
 当一个应用启动时，入口方法为ActivityThread的main方法，main方法是一个静态方法，在main方法中会创建ActivityThread的实例并创建主线程的消息队列，然后在ActivityThread的attach方法中会远程调用AMS的attachApplication方法并将ApplicationThread对象提供给AMS。ApplicationThread是一个Binder对象，他的Binder接口是IApplicationThread，他主要用于ActivityThread和AMS之间的通信，这一点在前面已经多次提及到。在AMS的AttachApplication方法中，会调用ApplicationThread的bindApplication方法，注意这个过程同样是在跨进程完成的，bindApplicationThread的逻辑会经过ActivityThread中的Handler m切换到ActivityThread中去执行，具体的方法是handleBindApplication。在handleBindApplication方法中，ActivityThread会创建Application对象并加载ContentProvide。需要注意的是ActivityThread会先加载Application对象并加载ContentProvide，然后在调用Application的onCreate方法。
 
-![Alt text](startContentProvide "ContentProvide启动过程")
+![Alt text](startContentProvide.png "ContentProvide启动过程")
 
 这就是ContentProvide的启动过程，ContentProvide启动后，外界就可以通过他所提供的增删改查接口操作ContentProvide中的数据源，即insert、delete、update和query四个方法。这四个方法都是通过Binder来调用的，外界无法直接访问ContentProvide，只能通过AMS根据URI来获取对应的ContentProvide的Binder接口IContentProvide，然后通过IContentProvide来访问ContentProvide中的数据源。
 
@@ -3148,4 +3148,38 @@ try {
     }
 }
 ```
-经过上面的四个步骤，ContentProvider已经成功启动，并且其所在的进程Application也已经启动，这意味着ContentProvide所在的进程已经完成了整个启动的过程，然后应用就可以通过AMS
+经过上面的四个步骤，ContentProvider已经成功启动，并且其所在的进程Application也已经启动，这意味着ContentProvide所在的进程已经完成了整个启动的过程，然后应用就可以通过AMS来访问这个ContentProvider了。拿到了ContentProvider以后，就可以通过他所提供的接口方法来访问它了。需要注意的是，这里的ContentProvider并不是原始的ContentProvider，而是ContentProvider的Binder对象IContentProvider，其中ContentProvider的具体实现是ContentProviderNative和ContentProvider.Transport，其中ContentProvider.transport继承了ContentProviderNative。这里任然选择query方法，首先其他应用会通过AMS获取ContentProvider的binder对象IContentProvider，而IContentProvider的实现者实际上是ContentProvider.Transport。因此其他应用调用IContentProvider的query方法最终会调用ContentProvider.Transport的query方法
+```
+@Override
+public Cursor query(String callingPkg, Uri uri, @Nullable String[] projection,
+        @Nullable Bundle queryArgs, @Nullable ICancellationSignal cancellationSignal) {
+    validateIncomingUri(uri);
+    uri = maybeGetUriWithoutUserId(uri);
+    if (enforceReadPermission(callingPkg, uri, null) != AppOpsManager.MODE_ALLOWED) {
+        if (projection != null) {
+            return new MatrixCursor(projection, 0);
+        }
+
+        Cursor cursor = ContentProvider.this.query(
+                uri, projection, queryArgs,
+                CancellationSignal.fromTransport(cancellationSignal));
+        if (cursor == null) {
+            return null;
+        }
+
+        // Return an empty cursor for all columns.
+        return new MatrixCursor(cursor.getColumnNames(), 0);
+    }
+    final String original = setCallingPackage(callingPkg);
+    try {
+        return ContentProvider.this.query(
+                uri, projection, queryArgs,
+                CancellationSignal.fromTransport(cancellationSignal));
+    } finally {
+        setCallingPackage(original);
+    }
+}
+
+```
+
+很显然ContentProvider.Transpor的query里面调用了ContentProvider的query方法，query方法的执行结果在通过Binder返回给调用者，这样一来整个调用过程就完成了。处理query方法，insert、delete、update方法也是同样的
