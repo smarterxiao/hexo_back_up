@@ -360,8 +360,116 @@ private void finish(Result result) {
 这里要注意一下AsyncTask的不同版本的串行和并行的问题，如果是4.1之上的版本，默认AsyncTask是串行的，如果想要并行，要使用`executeOnExecutor()`
 
 ## HandlerThread
+HandlerThread是继承字Thread，他是一种可以使用Handler的Thread，他的实现也很简单，就是在run方法中通过`Looper.prepare()`来创建消息队列，并通过`Looper.loop()`来开启消息循环，这样在实际的使用中就荀彧在HandlerThread中创建Handler了。HandlerThread的`run()`方法如下所示。
+
+```
+@Override
+   public void run() {
+       mTid = Process.myTid();
+       Looper.prepare();
+       synchronized (this) {
+           mLooper = Looper.myLooper();
+           notifyAll();
+       }
+       Process.setThreadPriority(mPriority);
+       onLooperPrepared();
+       Looper.loop();
+       mTid = -1;
+   }
+```
+这样在子线程中就可以创建Handler，主线程持有这个handler就可以给子线程发送消息。从HandlerThread的实现来看，他和普通的Thread又显著的不同之处。普通Thread主要在`run`方法中执行一个耗时任务，而HandlerThread在内部创建了消息队列，外界需要通过Handler的消息方式来通知HandlerThread执行一个具体的任务。HandlerThread是一个很有用的类，他在ANdroid中有一个具体的使用场景是IntentService，IntentService将在后面介绍。由于HandlerThread的`run`方法是一个无线循环，因此当明确不需要再使用HandlerThread时，可以通过他的quit或者quitSafely方法来终止线程的执行，这时一个良好的变成习惯，防止内存泄漏。
 ## IntentService
+IntentService是一种特殊的Service，他继承了Service并且他是一个抽象类，因此必须创建他的子类才能使用IntentService。IntentService可用于执行后台耗时任务，当任务执行完毕后会自动停止，同时由于IntentService是服务的原因，这导致他的优先级比单纯的线程任务要高很多，所以IntentService比较适合执行一些高优先级的后台任务，因为他优先级高不容易被系统杀死。在实现上，IntentService封装了HandlerThread和Handler，这一点可以从他的onCreate方法中看出来。
+
+```
+@Override
+public void onCreate() {
+    // TODO: It would be nice to have an option to hold a partial wakelock
+    // during processing, and to have a static startService(Context, Intent)
+    // method that would launch the service & hand off a wakelock.
+
+    super.onCreate();
+    HandlerThread thread = new HandlerThread("IntentService[" + mName + "]");
+    thread.start();
+
+    mServiceLooper = thread.getLooper();
+    mServiceHandler = new ServiceHandler(mServiceLooper);
+}
+```
+当IntentService第一次启动时，他的`onCreate`方法会被调用，onCreate方法会创建一个HandlerThread，然后使用他的Looper来构造一个Handler对象mServiceHandler，这样通过mServiceHandler发送的消息最终都会在HandlerThread中执行，从这个角度来看，IntentService也可以用于执行后台任务。每次启动IntentService，他的`onStartCommand`方法就会调用一次，IntentService在`onStartCommand`中处理每个后台任务的Intent。下面看一下`onStartCommand`方法是如何处理外界的Intent的，`onStartCommand`调用了`onStart`，`onStart`的实现方法如下所示。
+```
+@Override
+public void onStart(@Nullable Intent intent, int startId) {
+    Message msg = mServiceHandler.obtainMessage();
+    msg.arg1 = startId;
+    msg.obj = intent;
+    mServiceHandler.sendMessage(msg);
+}
+```
+可以看出，IntentService仅仅是通过mServiceHandler发送了一条消息，这条消息会在HandlerThread中被处理。mServiceHandler收到消息后，会将Intent对象传递给`onHandleIntent`方法来处理。注意这个Intent对象的内容和外界的`startService(Intent)`中的Intent内容是完全一致的,通过这个Intent对象即可解析出外界启动IntentService时所传递的参数，通过这些参数就可以区分具体的后台任务，这样在onHandlerIntent方法中就可以对不同的后台任务做处理了。当onHandleIntent方法执行结束后，IntentService会通过`stopSelf(int  startId)`方法来尝试停止服务。这里所采用`stopSelf(int  startId)`而不是`stopSelf()`来停止服务，那是因为`stopSelf()`会立刻停止服务，而这个时间可能还有其他的消息未处理，`stopSelf(int  startId)`会等待所有的消息都处理外才终止服务。一般来说，`stopSelf(int  startId)`在停止服务之前会判断最近启动的服务次数是否与startId相等，如果相等就立刻停止服务，不相等则不停止服务，这个策略可以从AMS的`stopServiceToken`方法的实现找到依据。可以自己看一下。ServiceHandler的实现如下。
+
+```
+private final class ServiceHandler extends Handler {
+    public ServiceHandler(Looper looper) {
+        super(looper);
+    }
+
+    @Override
+    public void handleMessage(Message msg) {
+        onHandleIntent((Intent)msg.obj);
+        stopSelf(msg.arg1);
+    }
+}
+```
+IntentService的`onHandleIntent`是一个抽象方法，需要我们在子类中实现，他的作用是从Intent的参数中区分具体的任务并执行这些任务。如果目前只存在一个后台任务，那么`onHandleIntent`方法会执行完毕之后直接执行`stopSelf(msg.arg1);`就会直接停止服务。如果目前存在多个后台任务，那么当`onHandleIntent`方法执行完最后一个任务时，`stopSelf(msg.arg1);`才会直接停止服务。另外，由于每执行后台任务必须启动一次IntentService，而IntentService内部则通过消息的方式向HandlerThread请求执行任务，Handler中的Looper是顺序处理消息的，这就意味着IntentService是顺序执行后台任务的，当有多个后台任务同时存在时，这些后台任务会按照外界发起的顺序排队执行
+下面看一下他的使用姿势：
+```
+public class MyIntentService extends IntentService {
+    //构造方法 一定要实现此方法否则Service运行出错。
+    public MyIntentService() {
+        super("MyIntentService");
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+    }
+
+    @Override
+    public void onStart(Intent intent, int startId) {
+        super.onStart(intent, startId);
+    }
+
+    @Override
+    protected void onHandleIntent(Intent intent) {
+        //模拟耗时操作
+        SystemClock.sleep(3000);
+        Log.i("MyIntentService","执行任务 "+intent.getStringExtra("task_action"));
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        Log.i("MyIntentService","销毁了");
+    }
+
+}
+```
+
+这里对MyIntentService做一下简单的说明，`onHandleIntent`方法会从参数中解析出后台任务标识，即task_action字段所代表的内容，然后根据不同的任务标识来执行具体的后台任务。这里为了简单起见，直接通过`  SystemClock.sleep(3000);`来休眠3000毫秒从而模拟一种耗时的后台任务，另外为了验证IntentService的停止时机，这里在`onDestroy`中打印日志。MyIntentService在完成任务后，就可以在完结请求执行后台任务了，在下面的代码中先后发起3个后台任务请求。
+
+```
+07-12 22:37:54.102 8857-8935/com.example.groot.myapplication I/MyIntentService: 执行任务 MainActivity
+07-12 22:37:57.107 8857-8935/com.example.groot.myapplication I/MyIntentService: 执行任务 MainActivity1
+07-12 22:38:00.111 8857-8935/com.example.groot.myapplication I/MyIntentService: 执行任务 MainActivity2
+07-12 22:38:00.113 8857-8857/com.example.groot.myapplication I/MyIntentService: 销毁了
+```
+可以看一下日志打印的时间，发现三个任务是顺序执行的，在第三个任务执行完毕后MyIntentService才真正的停止服务。
 # Android中的线程池详解
+提到线程池，就必须说一下线程池的好处，相信大家都用过线程池。他的优点主要有三个
+* 重用线程池中的线程，避免因为线程的创建和销毁带来的性能开销
+* 能有效控制线程池的最大并发数，避免大量线程之间互相抢占系统资源而导致的阻塞现象
+* 能够对线程进行简单的管理，并提供定时执行以及制定间隔循环执行的功能
 ## ThreadPoolExecute
 ## 线程池的分类
 *
