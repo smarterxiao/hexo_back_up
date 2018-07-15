@@ -739,6 +739,7 @@ private boolean addWorker(Runnable firstTask, boolean core) {
     }
 ```
 我们看一下Worker的实现和关键的方法
+
 ```
 private final class Worker
       extends AbstractQueuedSynchronizer
@@ -758,6 +759,7 @@ private final class Worker
   }
 ```
 可以发现Worker是一个runnable接口，他的`run`方法调用了`runWorker(this);`方法，而`t.start();`最终会调用Worker的`run`方法，最终会调用`runWorker(this);`方法
+
 ```
 final void runWorker(Worker w) {
     Thread wt = Thread.currentThread();
@@ -809,6 +811,7 @@ final void runWorker(Worker w) {
 第三个线程需要执行的时候，由于第一个和第二个线程中的任务还没有完成，就会走`workQueue.offer`这个将任务添加到workQueue中，我们看一下workQueue。
 workQueue是一个LinkedBlockingQueue。
 从`runWorker`中可以看到，当第一个线程和第二个线程中有一个执行完毕，while会继续走判断条件`task != null || (task = getTask()`,这个时候task为null，那么会调用`getTask()`方法
+
 ```
 private Runnable getTask() {
      boolean timedOut = false; // Did the last poll() time out?
@@ -875,6 +878,7 @@ public static ExecutorService newFixedThreadPool(int nThreads) {
 
 * CachedThreadPool
 通过`Executors.newCachedThreadPool();`方法创建，是一种线程数量不固定的线程池，他只有非线程池，并且其最大线程数量为Integer.MAX_VALUE。由于Integer.MAX_VALUE是一个很大的数，这就意味着最大线程数可以无限大。当线程池中的线程都处于活动状态时，他会创建新的线程来执行任务，否则就会利用空的线程来执行任务。线程池中的空闲线程都有超时机制，CachedThreadPool的任务队列其实相当于一个空集合，这将导致任何任务都会立即执行。从上面的说明来看，CachedThreadPool适合数量多耗时少的任务
+
 ```
 public static ExecutorService newCachedThreadPool() {
     return new ThreadPoolExecutor(0, Integer.MAX_VALUE,
@@ -885,6 +889,7 @@ public static ExecutorService newCachedThreadPool() {
 
 * ScheduledThreadPool
 通过`Executors.newScheduledThreadPool(3)`可以创建。他的核心线程数量是固定的，而非核心线程数量没有限制，并且当非核心线程处于限制状态时会立即回收。ScheduledThreadPool主要用于执行定时任务和具有固定周期的重复任务。
+
 ```
 public static ScheduledExecutorService newScheduledThreadPool(int corePoolSize) {
     return new ScheduledThreadPoolExecutor(corePoolSize);
@@ -903,6 +908,7 @@ public ScheduledThreadPoolExecutor(int corePoolSize) {
 
 * SingleThreadExecutor
 通过`Executors.newSingleThreadExecutor()`方法来创建。这类线程池内部只有一个核心线程，他确保所有的任务都在同一个线程中按顺序执行。SingleThreadExecutor的意义在于统一所有外界任务到一个线程中执行，这使得这些任务不需要处理线程同步的问题。
+
 ```
 public static ExecutorService newSingleThreadExecutor() {
     return new FinalizableDelegatedExecutorService
@@ -911,7 +917,9 @@ public static ExecutorService newSingleThreadExecutor() {
                                 new LinkedBlockingQueue<Runnable>()));
 }
 ```
+
 四种线程池的用法
+
 ```
 ExecutorService threadPool1 = Executors.newScheduledThreadPool(3);
         ExecutorService threadPool2 =  Executors.newSingleThreadExecutor();
