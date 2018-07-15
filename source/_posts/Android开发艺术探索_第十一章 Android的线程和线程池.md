@@ -470,9 +470,502 @@ public class MyIntentService extends IntentService {
 * 重用线程池中的线程，避免因为线程的创建和销毁带来的性能开销
 * 能有效控制线程池的最大并发数，避免大量线程之间互相抢占系统资源而导致的阻塞现象
 * 能够对线程进行简单的管理，并提供定时执行以及制定间隔循环执行的功能
-## ThreadPoolExecute
+
+Android中的线程池的概念来源于java中的Executor，Executor是一个功能接口，真正的线程池的实现为ThreadPoolExecutor。ThreadPoolExecutor提供了一系列的参数来配置线程池，通过不同的参数可以创建不同的线程池，从线程池的功能特性上来说，Android的线程池主要分为4类，这4类线程池可以通过Executor所提供的工厂方法得到，具体会在下面详细介绍。由于Android中的线程池都是直接或者间接通过配置ThreadPoolExecutor来实现的，因此在介绍他们之前先来介绍ThreadPoolExecutor。
+## ThreadPoolExecutor
+ThreadPoolExecutor是线程池的真正实现，他的构造方法提供了一系列的参数来配置线程池，下面介绍ThreadPoolExecutor的构造方法中各个参数的含义，这些阐述将直接影响到线程池的功能特性，下面是ThreadPoolExecutor的比较常用的构造方法
+
+```
+public ThreadPoolExecutor(int corePoolSize,
+                          int maximumPoolSize,
+                          long keepAliveTime,
+                          TimeUnit unit,
+                          BlockingQueue<Runnable> workQueue,
+                          ThreadFactory threadFactory,
+                          RejectedExecutionHandler handler) {
+                            ...
+                          }
+```
+
+
+* corePoolSize
+线程池的核心线程数，默认情况下，核心线程会在线程池中一直存货，即使他们处于闲置状态。如果ThreadPoolExecutor的allowCoreThreadTimeOut属性设置为true，那么闲置的核心线程在等待新任务到来的时候会有超市策略，这个时间间隔由keepAliveTime所指定，当等待超过keepAliveTime所指定的时长后，核心线程池会被终止
+
+* maximumPoolSize
+线程池所能容纳的最大线程数，当活动线程数达到这个数值后，后续的新任务将会被阻塞
+
+* keepAliveTime
+非核心线程闲置时的超时时长，超过这个时长，非核心线程池就会被回收。当ThreadPoolExecutor的allowCoreThreadTimeOut属性设置为true时，keepAliveTime同样会作用于核心线程
+
+* unit
+用于指定keepAliveTime的参数的时间单位，这时一个枚举，常用的有TimeUnit.MICROSECONDS(毫秒)、TimeUnit.SECONDS(秒)、TimeUnit.MINUTES(分钟)等
+
+* workQueue
+线程池中的任务队列，通过线程池的execute方法提交的Runnable对象会存储在这个参数中
+
+* threadFactory
+线程工厂，为线程池提供创建新线程的功能，threadFactory是一个接口，他只有一个方法：`  Thread newThread(Runnable r);`
+
+* handler
+当线程池无法执行新的任务时，这个可能是由于任务队列已满或者是无法成功执行任务，这个时候ThreadPoolExecutor会调用handler的`rejectedExecution`方法来通知调用者。ThreadPoolExecutor为RejectedExecutionHandler提供了几个默认的选项DiscardOldestPolicy、AbortPolicy、CallerRunsPolicy、DiscardPolicy。
+  * AbortPolicy：默认值，他会直接抛出RejectedExecutionException异常。
+  * CallerRunsPolicy：用于被拒绝任务的处理程序，它直接在 execute 方法的调用线程中运行被拒绝的任务；如果执行程序已关闭，则会丢弃该任务。
+  * DiscardOldestPolicy:丢弃最旧任务也不是简单的丢弃最旧的任务，而是有一些额外的处理。
+  * DiscardPolicy: 对被拒绝的任务什么都不做
+
+如果对着handler的四种模式不理解，可以看一下他的源码就清楚了
+
+ThreadPoolExecutor执行任务时大致遵循如下规则
+
+1. 如果献策会给你吃中的线程未达到核心线程池数量，那么会直接启动一个核心线程来执行任务。
+2. 如果线程池中的线程数量已经达到或者超过核心线程的数量，那么任务会被插入到任务队列中排队等待执行
+3. 如果步骤2无法将任务插入到任务队列，这个时候通常是任务队列已经满了，这个时候如果线程数量没有达到线程池规定的最大值，那么会立刻启动一个非核心线程池来执行任务
+4. 如果步骤3中的线程数量已经达到线程池规定的最大值，就会拒绝任务，ThreadPoolExecutor会调用RejectedExecutionHandler的`rejectedExecution`方法来通知调用者。
+
+ThreadPoolExecutor的具体配置参数在AsyncTask中有明显的体现，下面是AsyncTask中的线程池配置情况
+
+```
+private static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
+
+// We want at least 2 threads and at most 4 threads in the core pool,
+// preferring to have 1 less than the CPU count to avoid saturating
+// the CPU with background work
+private static final int CORE_POOL_SIZE = Math.max(2, Math.min(CPU_COUNT - 1, 4));
+
+private static final int MAXIMUM_POOL_SIZE = CPU_COUNT * 2 + 1;
+
+private static final int KEEP_ALIVE_SECONDS = 30;
+
+private static final ThreadFactory sThreadFactory = new ThreadFactory() {
+    private final AtomicInteger mCount = new AtomicInteger(1);
+
+    public Thread newThread(Runnable r) {
+        return new Thread(r, "AsyncTask #" + mCount.getAndIncrement());
+    }
+};
+
+
+private static final BlockingQueue<Runnable> sPoolWorkQueue =
+        new LinkedBlockingQueue<Runnable>(128);
+
+
+ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(
+               CORE_POOL_SIZE, MAXIMUM_POOL_SIZE, KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
+               sPoolWorkQueue, sThreadFactory);
+       threadPoolExecutor.allowCoreThreadTimeOut(true);
+       THREAD_POOL_EXECUTOR = threadPoolExecutor;
+```
+
+从上面的代码中可以看到
+
+|AsyncTask线程池参数|AsyncTask线程池参数对应值|
+|:--:|:--:|
+|corePoolSize|核心线程数是cup核数-1与4的最小值，如果最小值小于2，那么取两个个|
+|maximumPoolSize|CPU核心数*2+1|
+|keepAliveTime|非核心线程闲置时长是30秒|
+|unit|单位是秒|
+|workQueue|队列的容量是128个|
+|threadFactory||
+|handler|是AbortPolicy策略|
+
+这里有一个问题，使用线程池的目的是减少线程的创建和销毁，但是线程池内部是如何实现这么神奇的操作的呢？
+首先看一下如何使用一个线程池
+
+```
+ExecutorService threadPool = Executors.newFixedThreadPool(2);
+        for (int i = 1; i <= 10; i++) {
+            final int index = i;
+            threadPool.execute(new Runnable() {
+                @Override
+                public void run() {
+                    String threadName = Thread.currentThread().getName();
+                    Log.v("zxy", "线程：" + threadName + ",正在执行第" + index + "个任务");
+                    try {
+                        Thread.sleep(1000000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }
+```
+在启动线程池的时候会执行他的`execute`方法，我们看一下这个方法的具体实现
+
+```
+public void execute(Runnable command) {
+      if (command == null)
+          throw new NullPointerException();
+      /*
+       * Proceed in 3 steps:
+       *
+       * 1. If fewer than corePoolSize threads are running, try to
+       * start a new thread with the given command as its first
+       * task.  The call to addWorker atomically checks runState and
+       * workerCount, and so prevents false alarms that would add
+       * threads when it shouldn't, by returning false.
+       *
+       * 2. If a task can be successfully queued, then we still need
+       * to double-check whether we should have added a thread
+       * (because existing ones died since last checking) or that
+       * the pool shut down since entry into this method. So we
+       * recheck state and if necessary roll back the enqueuing if
+       * stopped, or start a new thread if there are none.
+       *
+       * 3. If we cannot queue task, then we try to add a new
+       * thread.  If it fails, we know we are shut down or saturated
+       * and so reject the task.
+       */
+      int c = ctl.get();
+      if (workerCountOf(c) < corePoolSize) {
+          if (addWorker(command, true))
+              return;
+          c = ctl.get();
+      }
+      // 如果当前核心线程数为0，会走这个判断，调用workQueue.offer
+      if (isRunning(c) && workQueue.offer(command)) {
+          int recheck = ctl.get();
+          if (! isRunning(recheck) && remove(command))
+              reject(command);
+          else if (workerCountOf(recheck) == 0)
+              addWorker(null, false);
+      }
+      else if (!addWorker(command, false))
+          reject(command);
+  }
+
+```
+
+这里有一段英文注释
+>    Proceed in 3 steps:
+     1. If fewer than corePoolSize threads are running, try to
+     start a new thread with the given command as its first
+     task.  The call to addWorker atomically checks runState and
+     workerCount, and so prevents false alarms that would add
+     threads when it shouldn't, by returning false.
+     2. If a task can be successfully queued, then we still need
+     to double-check whether we should have added a thread
+     (because existing ones died since last checking) or that
+     the pool shut down since entry into this method. So we
+     recheck state and if necessary roll back the enqueuing if
+     stopped, or start a new thread if there are none.
+     3. If we cannot queue task, then we try to add a new
+     thread.  If it fails, we know we are shut down or saturated
+     and so reject the task.
+     简单翻译一下就是之前解释的意思
+     1. 如果献策会给你吃中的线程未达到核心线程池数量，那么会直接启动一个核心线程来执行任务。
+     2. 如果线程池中的线程数量已经达到或者超过核心线程的数量，那么任务会被插入到任务队列中排队等待执行
+     3. 如果步骤2无法将任务插入到任务队列，这个时候通常是任务队列已经满了，这个时候如果线程数量没有达到线程池规定的最大值，那么会立刻启动一个非核心线程池来执行任务
+     4. 如果步骤3中的线程数量已经达到线程池规定的最大值，就会拒绝任务，ThreadPoolExecutor会调用RejectedExecutionHandler的`rejectedExecution`方法来通知调用者。
+
+这里创建了一个核心线程池是2的线程，如果核心线程数小于2，就会执行`addWorker`这个方法,我们看一下`addWorker`方法
+
+```
+private boolean addWorker(Runnable firstTask, boolean core) {
+    retry:
+    for (;;) {
+        int c = ctl.get();
+        int rs = runStateOf(c);
+
+        // Check if queue empty only if necessary.
+        if (rs >= SHUTDOWN &&
+            ! (rs == SHUTDOWN &&
+               firstTask == null &&
+               ! workQueue.isEmpty()))
+            return false;
+
+        for (;;) {
+            int wc = workerCountOf(c);
+            if (wc >= CAPACITY ||
+                wc >= (core ? corePoolSize : maximumPoolSize))
+                return false;
+            if (compareAndIncrementWorkerCount(c))
+                break retry;
+            c = ctl.get();  // Re-read ctl
+            if (runStateOf(c) != rs)
+                continue retry;
+            // else CAS failed due to workerCount change; retry inner loop
+        }
+    }
+
+    boolean workerStarted = false;
+    boolean workerAdded = false;
+    Worker w = null;
+    try {
+        w = new Worker(firstTask);
+        final Thread t = w.thread;
+        if (t != null) {
+            final ReentrantLock mainLock = this.mainLock;
+            mainLock.lock();
+            try {
+                // Recheck while holding lock.
+                // Back out on ThreadFactory failure or if
+                // shut down before lock acquired.
+                int rs = runStateOf(ctl.get());
+
+                if (rs < SHUTDOWN ||
+                    (rs == SHUTDOWN && firstTask == null)) {
+                    if (t.isAlive()) // precheck that t is startable
+                        throw new IllegalThreadStateException();
+                    workers.add(w);
+                    int s = workers.size();
+                    if (s > largestPoolSize)
+                        largestPoolSize = s;
+                    workerAdded = true;
+                }
+            } finally {
+                mainLock.unlock();
+            }
+            if (workerAdded) {
+                t.start();
+                workerStarted = true;
+            }
+        }
+    } finally {
+        if (! workerStarted)
+            addWorkerFailed(w);
+    }
+    return workerStarted;
+}
+
+```
+
+这里省去一些判断，精简一下得到这样的结果
+
+```
+private boolean addWorker(Runnable firstTask, boolean core) {
+      w = new Worker(firstTask);
+      final Thread t = w.thread;
+      t.start();
+    }
+```
+我们看一下Worker的实现和关键的方法
+```
+private final class Worker
+      extends AbstractQueuedSynchronizer
+      implements Runnable
+  {
+    //构造方法
+    Worker(Runnable firstTask) {
+           setState(-1); // inhibit interrupts until runWorker
+           this.firstTask = firstTask;、
+           //线程创建工厂
+           this.thread = getThreadFactory().newThread(this);
+       }
+
+       public void run() {
+          runWorker(this);
+      }
+  }
+```
+可以发现Worker是一个runnable接口，他的`run`方法调用了`runWorker(this);`方法，而`t.start();`最终会调用Worker的`run`方法，最终会调用`runWorker(this);`方法
+```
+final void runWorker(Worker w) {
+    Thread wt = Thread.currentThread();
+    Runnable task = w.firstTask;
+    w.firstTask = null;
+    w.unlock(); // allow interrupts
+    boolean completedAbruptly = true;
+    try {
+        while (task != null || (task = getTask()) != null) {
+            w.lock();
+            // If pool is stopping, ensure thread is interrupted;
+            // if not, ensure thread is not interrupted.  This
+            // requires a recheck in second case to deal with
+            // shutdownNow race while clearing interrupt
+            if ((runStateAtLeast(ctl.get(), STOP) ||
+                 (Thread.interrupted() &&
+                  runStateAtLeast(ctl.get(), STOP))) &&
+                !wt.isInterrupted())
+                wt.interrupt();
+            try {
+                beforeExecute(wt, task);
+                Throwable thrown = null;
+                try {
+                    task.run();
+                } catch (RuntimeException x) {
+                    thrown = x; throw x;
+                } catch (Error x) {
+                    thrown = x; throw x;
+                } catch (Throwable x) {
+                    thrown = x; throw new Error(x);
+                } finally {
+                    afterExecute(task, thrown);
+                }
+            } finally {
+                task = null;
+                w.completedTasks++;
+                w.unlock();
+            }
+        }
+        completedAbruptly = false;
+    } finally {
+        processWorkerExit(w, completedAbruptly);
+    }
+}
+
+```
+可以看到当task或者`gettask`不为空的时候会调用while中的内容。
+可以看到我们创建了10个线程需要线程池来执行，对于第一个和第二个，他会直接创建Thread，并调用`Thread.start()`方法
+第三个线程需要执行的时候，由于第一个和第二个线程中的任务还没有完成，就会走`workQueue.offer`这个将任务添加到workQueue中，我们看一下workQueue。
+workQueue是一个LinkedBlockingQueue。
+从`runWorker`中可以看到，当第一个线程和第二个线程中有一个执行完毕，while会继续走判断条件`task != null || (task = getTask()`,这个时候task为null，那么会调用`getTask()`方法
+```
+private Runnable getTask() {
+     boolean timedOut = false; // Did the last poll() time out?
+
+     for (;;) {
+         int c = ctl.get();
+         int rs = runStateOf(c);
+
+         // Check if queue empty only if necessary.
+         if (rs >= SHUTDOWN && (rs >= STOP || workQueue.isEmpty())) {
+             decrementWorkerCount();
+             return null;
+         }
+
+         int wc = workerCountOf(c);
+
+         // Are workers subject to culling?
+         boolean timed = allowCoreThreadTimeOut || wc > corePoolSize;
+
+         if ((wc > maximumPoolSize || (timed && timedOut))
+             && (wc > 1 || workQueue.isEmpty())) {
+             if (compareAndDecrementWorkerCount(c))
+                 return null;
+             continue;
+         }
+
+         try {
+             Runnable r = timed ?
+                 workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :
+                 workQueue.take();
+             if (r != null)
+                 return r;
+             timedOut = true;
+         } catch (InterruptedException retry) {
+             timedOut = false;
+         }
+     }
+ }
+```
+这个时候会调用` Runnable r = timed ?workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :`
+这里先解释一下`workQueue.poll()`方法
+poll(long timeout, TimeUnit unit)：从BlockingQueue取出一个队首的对象，如果在指定时间内，队列一旦有数据可取，则立即返回队列中的数据。否则知道时间超时还没有数据可取，返回失败。
+如果在keepAliveTime可以取到任务，就会执行这个任务，由于第三个线程已经存入workQueue，这个时候将这个任务取出，调用他的`run（）`方法，就不用多次创建线程了。
+
+
+![Alt text](2018-07-15-21-47-43.png "线程复用")
+
+简单的说，就是利用workQueue缓存Runnable，然后在前一个Runnable的`run`方法中调用后一个Runnable`run`方法，这样就保证了Thread不会多次start
+弄明白了线程池的复用原理，我们在来看一下几个常用的线程池
 ## 线程池的分类
-*
-*
-*
-*
+上面对线程池的配置和复用过程进行了分析，现在来说一下Android中最常用的几个线程池
+* FixedThreadPool
+
+通过`ExecutorService threadPool = Executors.newFixedThreadPool(2);`方法来创建。他是一种线程数量固定的线程池，当线程处于闲置状态是，他们并不会被回收，除非线程池被关闭了。当所有的线程都处于活动状态时，新的任务会处于等待状态，知道有新的线程空闲出来。由于FixedThreadPool只有核心线程池，并且这些核心线程不会被回收,这以为这他能够更加快速的响应外界的请求。看一下他的实现方法
+
+```
+public static ExecutorService newFixedThreadPool(int nThreads) {
+    return new ThreadPoolExecutor(nThreads, nThreads,
+                                  0L, TimeUnit.MILLISECONDS,
+                                  new LinkedBlockingQueue<Runnable>());
+}
+```
+可以发现他只有核心线程且这些核心线程没有超时机制。
+
+* CachedThreadPool
+通过`Executors.newCachedThreadPool();`方法创建，是一种线程数量不固定的线程池，他只有非线程池，并且其最大线程数量为Integer.MAX_VALUE。由于Integer.MAX_VALUE是一个很大的数，这就意味着最大线程数可以无限大。当线程池中的线程都处于活动状态时，他会创建新的线程来执行任务，否则就会利用空的线程来执行任务。线程池中的空闲线程都有超时机制，CachedThreadPool的任务队列其实相当于一个空集合，这将导致任何任务都会立即执行。从上面的说明来看，CachedThreadPool适合数量多耗时少的任务
+```
+public static ExecutorService newCachedThreadPool() {
+    return new ThreadPoolExecutor(0, Integer.MAX_VALUE,
+                                  60L, TimeUnit.SECONDS,
+                                  new SynchronousQueue<Runnable>());
+}
+```
+
+* ScheduledThreadPool
+通过`Executors.newScheduledThreadPool(3)`可以创建。他的核心线程数量是固定的，而非核心线程数量没有限制，并且当非核心线程处于限制状态时会立即回收。ScheduledThreadPool主要用于执行定时任务和具有固定周期的重复任务。
+```
+public static ScheduledExecutorService newScheduledThreadPool(int corePoolSize) {
+    return new ScheduledThreadPoolExecutor(corePoolSize);
+}
+
+```
+
+```
+public ScheduledThreadPoolExecutor(int corePoolSize) {
+     super(corePoolSize, Integer.MAX_VALUE,
+           DEFAULT_KEEPALIVE_MILLIS, MILLISECONDS,
+           new DelayedWorkQueue());
+ }
+
+```
+
+* SingleThreadExecutor
+通过`Executors.newSingleThreadExecutor()`方法来创建。这类线程池内部只有一个核心线程，他确保所有的任务都在同一个线程中按顺序执行。SingleThreadExecutor的意义在于统一所有外界任务到一个线程中执行，这使得这些任务不需要处理线程同步的问题。
+```
+public static ExecutorService newSingleThreadExecutor() {
+    return new FinalizableDelegatedExecutorService
+        (new ThreadPoolExecutor(1, 1,
+                                0L, TimeUnit.MILLISECONDS,
+                                new LinkedBlockingQueue<Runnable>()));
+}
+```
+四种线程池的用法
+```
+ExecutorService threadPool1 = Executors.newScheduledThreadPool(3);
+        ExecutorService threadPool2 =  Executors.newSingleThreadExecutor();
+        ExecutorService threadPool3 =  Executors.newFixedThreadPool(3);
+        ExecutorService threadPool = Executors.newCachedThreadPool();
+        for (int i = 1; i <= 10; i++) {
+            final int index = i;
+            threadPool.execute(new Runnable() {
+                @Override
+                public void run() {
+                    String threadName = Thread.currentThread().getName();
+                    Log.v("zxy", "线程：" + threadName + ",正在执行第" + index + "个任务");
+                    try {
+                        Thread.sleep(1000000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+            threadPool.execute1(new Runnable() {
+                @Override
+                public void run() {
+                    String threadName = Thread.currentThread().getName();
+                    Log.v("zxy", "线程：" + threadName + ",正在执行第" + index + "个任务");
+                    try {
+                        Thread.sleep(1000000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+            threadPool.execute2(new Runnable() {
+                @Override
+                public void run() {
+                    String threadName = Thread.currentThread().getName();
+                    Log.v("zxy", "线程：" + threadName + ",正在执行第" + index + "个任务");
+                    try {
+                        Thread.sleep(1000000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+            threadPool.execute3(new Runnable() {
+                @Override
+                public void run() {
+                    String threadName = Thread.currentThread().getName();
+                    Log.v("zxy", "线程：" + threadName + ",正在执行第" + index + "个任务");
+                    try {
+                        Thread.sleep(1000000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }
+```
