@@ -79,6 +79,79 @@ public class MainActivity extends AppCompatActivity {
 
 ```
 
-![Alt text](原始内存信息.png "原始内存信息")
 
+将
+```
+Bitmap bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.meizi);
+iv.setImageBitmap(bitmap);
+```
+注释
+查看内存信息
+
+![Alt text](原始图片.png "没有加载图片时的内存信息")
+
+可以看到在没有加载bitmap时是20.9m
+然后放开注释
+查看内存可以得到如下信息
+![Alt text](原始内存信息.png "原始内存信息")
+是21.2m
 可以看到一张图片占用了4.6M的内存
+接着先删除xxxhdpi下面的文件，运行看一下内存，是21.2m，大概是之前的4倍左右
+
+![Alt text](xxx.png "删除xxxhdpi的图片之后的内存信息")
+这里说明一下，我用的是nexus 6p
+
+这说明如果在默认加载xxxhdpi图片的手机上，如果没有将图片放置在xxxhdpi而是放置在xxhdpi，系统会自动填充这些空余的像素，导致bitmap占用内存扩大，而且是以4的指数级增长的。但是如果是在低分辨率的手机上面加载高清图片，系统会自动的剪裁。
+
+这里讲上面的4个流程使用程序来实现，就产生了如下代码：
+```
+
+public class BitmapUtils {
+    public  static Bitmap decodeSampleBitmapFromResorce(Resources res,int resId,int reqWidth,int reqHeight){
+        BitmapFactory.Options options=new BitmapFactory.Options();
+        options.inJustDecodeBounds=true;
+        BitmapFactory.decodeResource(res,resId,options);
+        options.inSampleSize=calculateInSampleSize(options,reqWidth,reqHeight);
+        options.inJustDecodeBounds=false;
+        return  BitmapFactory.decodeResource(res,resId,options);
+    }
+
+    private static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+        final  int height=options.outHeight;
+        final  int width=options.outWidth;
+        int inSampleSize=1;
+        if(height>reqHeight||width>reqWidth){
+            final int halfHeight=height/2;
+            final  int halfWidth=width/2;
+            while((halfHeight/inSampleSize)>=reqHeight&&(halfWidth/inSampleSize)>=reqWidth){
+                inSampleSize*=2;
+            }
+        }
+        return  inSampleSize;
+
+    }
+}
+
+```
+
+有了上面的两个方法，实际使用的时候就非常简单了，比如ImageView所期望的图片大小为100*100像素，这个时候就可以通过如下方式高效加载并显示图片：
+
+```
+public class MainActivity extends AppCompatActivity {
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        ImageView iv = findViewById(R.id.iv);
+
+        Bitmap bitmap = BitmapUtils.decodeSampleBitmapFromResorce(getResources(), R.mipmap.meizi, iv.getMeasuredWidth(), iv.getMeasuredHeight());
+        iv.setImageBitmap(bitmap);
+    }
+}
+
+
+```
+
+我们来看一下内存的结果
