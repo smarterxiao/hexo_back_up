@@ -85,25 +85,8 @@ public class MainActivity extends AppCompatActivity {
 Bitmap bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.meizi);
 iv.setImageBitmap(bitmap);
 ```
-注释
-查看内存信息
 
-![Alt text](原始图片.png "没有加载图片时的内存信息")
-
-可以看到在没有加载bitmap时是20.9m
-然后放开注释
-查看内存可以得到如下信息
-![Alt text](原始内存信息.png "原始内存信息")
-是21.2m
-可以看到一张图片占用了4.6M的内存
-接着先删除xxxhdpi下面的文件，运行看一下内存，是21.2m，大概是之前的4倍左右
-
-![Alt text](xxx.png "删除xxxhdpi的图片之后的内存信息")
-这里说明一下，我用的是nexus 6p
-
-这说明如果在默认加载xxxhdpi图片的手机上，如果没有将图片放置在xxxhdpi而是放置在xxhdpi，系统会自动填充这些空余的像素，导致bitmap占用内存扩大，而且是以4的指数级增长的。但是如果是在低分辨率的手机上面加载高清图片，系统会自动的剪裁。
-
-这里讲上面的4个流程使用程序来实现，就产生了如下代码：
+这里讲上面的四个流程使用程序来实现，就产生了如下代码：
 ```
 
 public class BitmapUtils {
@@ -154,7 +137,7 @@ public class MainActivity extends AppCompatActivity {
 
 ```
 
-我们来看一下内存的结果
+
 
 
 
@@ -175,3 +158,215 @@ LruCache是一个泛型类，他内部采用一个LinkedHashMap以强引用的�
 * 弱引用：当一个对象只有弱引用时，此对象随时会被GC回收
 
 另外LruCache是线程安全的，下面是LruCache的定义。
+
+LruCache的实现比较简单，我们可以看一下他的源码。
+先来看一下LruCache的使用方法，之后在分析一下他的源码
+```
+
+        int maxMemory= (int) (Runtime.getRuntime().maxMemory()/1024);
+        int cacheSize=maxMemory/8;
+        LruCache<String,Bitmap> mMemoryCache=new LruCache<String,Bitmap>(cacheSize){
+            @Override
+            protected int sizeOf(String key, Bitmap value) {
+                return super.sizeOf(key, value);
+            }
+        };
+```
+在上面的代码中，只需要提供缓存的总容量大小并重写sizeOf方法即可。sizeOf方法的作用是计算缓存对象的大小，这里大小的单位需要和总容量的单位一致。对于上面的示例代码来说，总容量的大小为当前进程的1/8，单位为kb，而sizeOf方法则完成了Bitmap对象的大小计算。很明显，之所以除以1024也是为了将其单位转换为kb。一些特殊情况下，还需要重写LruCache的entryRemoved方法，Lruchche移除旧缓存时会调用entryRemoved方法，因此可以在entryRemoved中完成一些资源回收的工作(如果需要的话)
+除了LruCache的创建以外，还有缓存的获取和添加，这也很简单，从LruCache中获取一个缓存对象
+
+```
+     mMemoryCache.get(key)
+   
+```
+向LruCache中添加一个缓存对象
+```
+     mMemoryCache.put(key,bitmap)
+```
+
+LruCache还支持删除操作，通过remove方法即可删除一个指定的缓存对象。可以看到LruCache的实现以及使用都非常简单，虽然很简单，但是任然不影响它具有强大的功能，从Android3.1开始，LruCache就是Android的一部分了。
+既然LruCache这么强大，我来分析一下他的源码，吸收一下他的思想。
+
+这里先从他的构造方法开始
+```
+        LruCache<String,Bitmap> mMemoryCache=new LruCache<String,Bitmap>(cacheSize){
+            @Override
+            protected int sizeOf(String key, Bitmap value) {
+                return super.sizeOf(key, value);
+            }
+
+              @Override
+            public void resize(int maxSize) {
+                super.resize(maxSize);
+            }
+
+            @Override
+            public void trimToSize(int maxSize) {
+                super.trimToSize(maxSize);
+            }
+
+            @Override
+            protected void entryRemoved(boolean evicted, String key, Bitmap oldValue, Bitmap newValue) {
+                super.entryRemoved(evicted, key, oldValue, newValue);
+            }
+
+            @Override
+            protected Bitmap create(String key) {
+                return super.create(key);
+            }
+        };
+
+```
+
+我们来看一下他做了什么操作
+```
+    public LruCache(int maxSize) {
+        if (maxSize <= 0) {
+            throw new IllegalArgumentException("maxSize <= 0");
+        }
+        this.maxSize = maxSize;
+        this.map = new LinkedHashMap<K, V>(0, 0.75f, true);
+    }
+```
+
+可以发现LruCache内部使用的是LinkedhashMap
+然后要看一下他的put方法，看做了什么操作
+```
+    public final V put(K key, V value) {
+        if (key == null || value == null) {
+            throw new NullPointerException("key == null || value == null");
+        }
+
+        V previous;
+        synchronized (this) {
+            putCount++;
+            size += safeSizeOf(key, value);
+            previous = map.put(key, value);
+            if (previous != null) {
+                size -= safeSizeOf(key, previous);
+            }
+        }
+
+        if (previous != null) {
+            entryRemoved(false, key, previous, value);
+        }
+
+        trimToSize(maxSize);
+        return previous;
+    }
+```
+
+
+
+可以发现控制LruCache占用内存大小的方法是`safeSizeOf`和`trimToSize`方法
+在添加的时候计算大小
+```
+    private int safeSizeOf(K key, V value) {
+        int result = sizeOf(key, value);
+        if (result < 0) {
+            throw new IllegalStateException("Negative size: " + key + "=" + value);
+        }
+        return result;
+    }
+```
+这个是LruCache默认的测量大小的方法，但是可以看到我们在创建LruCache对这个方法进行了重写，由于返回Bitmap的大小
+```
+    protected int sizeOf(K key, V value) {
+        return 1;
+    }
+```
+这样就测量出来当前BitMap占用总内存大小
+之后是调用`trimToSize`方法检测内存是否超出
+
+```
+    public void trimToSize(int maxSize) {
+        while (true) {
+            K key;
+            V value;
+            synchronized (this) {
+                if (size < 0 || (map.isEmpty() && size != 0)) {
+                    throw new IllegalStateException(getClass().getName()
+                            + ".sizeOf() is reporting inconsistent results!");
+                }
+
+                if (size <= maxSize) {
+                    break;
+                }
+
+                Map.Entry<K, V> toEvict = map.eldest();
+                if (toEvict == null) {
+                    break;
+                }
+
+                key = toEvict.getKey();
+                value = toEvict.getValue();
+                map.remove(key);
+                size -= safeSizeOf(key, value);
+                evictionCount++;
+            }
+
+            entryRemoved(true, key, value, null);
+        }
+    }
+```
+如果内存超出，就通过`eldest()`筛选要移除的key值。LinkedHashMap的eldest方法作用是移除最老的值。感兴趣的可以看一下他的源码。这里就不分析了。
+
+这样就可以将超出内存的bitmap移除出内存。
+
+下面看一下get方法
+```
+  public final V get(K key) {
+        if (key == null) {
+            throw new NullPointerException("key == null");
+        }
+
+        V mapValue;
+        synchronized (this) {
+            mapValue = map.get(key);
+            if (mapValue != null) {
+                hitCount++;
+                return mapValue;
+            }
+            missCount++;
+        }
+
+        /*
+         * Attempt to create a value. This may take a long time, and the map
+         * may be different when create() returns. If a conflicting value was
+         * added to the map while create() was working, we leave that value in
+         * the map and release the created value.
+         */
+
+        V createdValue = create(key);
+        if (createdValue == null) {
+            return null;
+        }
+
+        synchronized (this) {
+            createCount++;
+            mapValue = map.put(key, createdValue);
+
+            if (mapValue != null) {
+                // There was a conflict so undo that last put
+                map.put(key, mapValue);
+            } else {
+                size += safeSizeOf(key, createdValue);
+            }
+        }
+
+        if (mapValue != null) {
+            entryRemoved(false, key, createdValue, mapValue);
+            return mapValue;
+        } else {
+            trimToSize(maxSize);
+            return createdValue;
+        }
+    }
+
+```
+首先判断key值对应的对象是否存在，如果不存在，就尝试创建一个对象，如果创建失败，就返回null。
+这里注意一点，在创建LruCache时，可以重写一个create方法，这个方法就是当key对应的Value值为空时，会调用的创建方法，这个方法默认返回null。
+
+看到这里就可以发现LruCache其实并没有那么复杂，只是对LinkedhashMap的一次包装。
+
+## DiskLruCache
