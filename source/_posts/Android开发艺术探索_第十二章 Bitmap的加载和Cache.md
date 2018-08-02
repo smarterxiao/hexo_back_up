@@ -370,3 +370,719 @@ LruCache还支持删除操作，通过remove方法即可删除一个指定的缓
 看到这里就可以发现LruCache其实并没有那么复杂，只是对LinkedhashMap的一次包装。
 
 ## DiskLruCache
+DiskLruCache用于实现存储设备缓存，即磁盘缓存，他通过将缓存对象写入文件系统从而实现缓存的效果。DiskLruCache得到了Android官方文档的推荐，但是他不属于AndroidSDK的一部分
+需要在Gradle中添加如下以来
+```
+   implementation 'com.jakewharton:disklrucache:2.0.2'
+```
+这个是大神JakeWharton的开源项目。项目地址是：https://github.com/JakeWharton/DiskLruCache 膜拜一下JakeWharton大神。
+### DiskLruCache的创建
+DiskLruCache并不能通过构造方法来创建，它提供了open方法用于创建自身，如下所示。
+```
+  public static DiskLruCache open(File directory, int appVersion, int valueCount, long maxSize)
+      throws IOException {
+
+      }
+```
+open方法有四个参数，其中第一个参数表示磁盘缓存的路径。缓存路径可以选择SD卡上的缓存目录，具体是指sdcard/Android/data/package_name/cache。当然也可以选择其他目录。如果希望卸载后就删除文件，可以选择缓存目录，如果希望卸载之后还存在，就选择其他目录。
+第二个参数表示应用版本号，一般设定为1就可以。当版本号发生改变时，DiskLruCache会清空缓存，而这个特性在实际开发中作用并不大，很多情况下即使应用版本号发生改变缓存也不会失效。
+第三个参数表示单个节点所对应的数据的个数，一般设定为1即可。
+第四个参数表示缓存总大小，比如50m，当缓存超出这个设定值之后，DiskLruCache会清楚一些缓存从而保证总大小不大于这个设定值。下面是一个DiskLruCache经典的创建过程
+
+```
+       try {
+
+            File bitmapFile= new File(getCacheDir(), "bitmap");
+            if(!bitmapFile.exists()){
+                bitmapFile.mkdirs();
+            }
+            DiskLruCache diskLruCache = DiskLruCache.open(bitmapFile, 1, 1, 1024 * 1024 * 50);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+```
+### DiskLruCache的缓存添加
+DiskLruCache的缓存添加操作是通过Editor完成的，Editor表示一个缓存对象的编辑对象。这里任然以图片缓存举例，首先需要获取图片url所对应的key，然后根据key就可以edit()来获取对象，如果这个缓存正在被编辑，那么edit会返回null，即DiskLruCache不允许同时编辑一个缓存对象。之所以要把url转换为key，是因为图片的url中可能有一些特殊字符，这将影响url在Android中直接使用，一般采取url的md5值作为key。
+
+```
+ 
+    private  String hashKeyFormUrl(String url){
+        String cacheKey;
+        try{
+            MessageDigest md5 = MessageDigest.getInstance("MD5");
+            md5.update(url.getBytes());
+            cacheKey=bytesToHexString(md5.digest());
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private String bytesToHexString(byte[] digest) {
+        StringBuilder sb=new StringBuilder();
+        for (int i = 0; i < digest.length; i++) {
+            String hex=Integer.toHexString(0xFF&digest[i]);
+            if(hex.length()==1){
+                sb.append('0');
+            }
+            sb.append('0');
+        }
+        return  sb.toString();
+    }
+```
+
+将图片的Url转换成key之后，就可以获取editor对象了。对于这个key来说，如果当前不存在其他Editor对象，那么`edit()`会返回一个新的Editor对象，通过他就可以得到一个文件输出流。需要注意的是，由于在前面的DiskLruCache方法`open`中设置了一个节点只能有一个数据，因此下面的DISK_CACHE_INDEX常量直接设置为0即可。如下
+
+```
+     DiskLruCache.Editor edit = diskLruCache.edit(hashKeyFormUrl(url));
+            if(edit!=null){
+                OutputStream outputStream = edit.newOutputStream(DISK_CACHE_INDEX);
+            }
+```
+
+有了文件输出流，接下来怎么做呢》其实是这样的，当从网络下载图片时，图片就可以通过这个文件输出流写入到文件系统，可以看一下下面的具体实现。
+
+```
+
+    public boolean downloadUrlToStream(String urlString, OutputStream outputStream) {
+
+        HttpURLConnection urlConnection = null;
+        BufferedOutputStream out = null;
+        BufferedInputStream in = null;
+        try {
+            final URL url = new URL(urlString);
+            urlConnection = (HttpURLConnection) url.openConnection();
+            in = new BufferedInputStream(urlConnection.getInputStream(), IO_BUFFER_SIZE);
+            out = new BufferedOutputStream(outputStream, IO_BUFFER_SIZE);
+            int b;
+            while((b=in.read())!=-1){
+                out.write(b);
+            }
+            return true;
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+```
+
+经过上边的步骤，其实并没有真正将图片写入文件系统，还必须通过Editor的`commit()`，感觉步骤和SP差不多。如果图片下载过程中发生异常，还可以通过Editor的`abort()`来回退整个操作，这个过程如下所示。
+
+```
+ try {
+
+            File bitmapFile = new File(getCacheDir(), "bitmap");
+            if (!bitmapFile.exists()) {
+                bitmapFile.mkdirs();
+            }
+            DiskLruCache diskLruCache = DiskLruCache.open(bitmapFile, 1, 1, 1024 * 1024 * 50);
+            DiskLruCache.Editor edit = diskLruCache.edit(hashKeyFormUrl(url));
+            if (edit != null) {
+                OutputStream outputStream = edit.newOutputStream(DISK_CACHE_INDEX);
+                if(downloadUrlToStream(url,outputStream)){
+                    edit.commit();
+                }else{
+                    edit.abort();
+                }
+                diskLruCache.flush();
+            }
+          
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+```
+经过上面几个步骤，图片已经被正确的写入文件系统了，接下来图片获取的操作就不需要网络请求了。
+
+### DiskLruCache的缓存查找
+和缓存的添加过程类似，缓存查找过程也需要将url转换为key，然后通过DiskLruCache的get方法得到一个Snapshot对象，接着再通过Snapshot对象即可得到缓存的文件输入流，有了文件输入流，自然就可以得到Bitmap对象了。为了避免加载图片过程中导致OOM问题，一般不建议直接加载原始图片。在之前已经介绍了如何加载一张缩放后的图片，但是那种方式对FileInputStream的缩放存在问题。原因是FileInputStream是一种有序的文件流，而两次decodeStream调用影响了文件流的位置属性，导致了第二次decodeStream是得到的是null。为了解决这个问题，可以通过文件流来得到他所对应的文件描述符，，然后再通过BitmapFactory.decodeDileDescriptor方法来加载一张缩放后的图片，这个过程实现如下。
+
+```
+
+            Bitmap bitmap1 = null;
+            String key = hashKeyFormUrl(url);
+            DiskLruCache.Snapshot snapshot = diskLruCache.get(key);
+            if (snapshot != null) {
+                FileInputStream fileInputStream = (FileInputStream) snapshot.getInputStream(DISK_CACHE_INDEX);
+                FileDescriptor fileDescriptor = fileInputStream.getFD();
+                bitmap1 = mImageResizer.decodeSampleBitmapFromRDescriptor(fileDescriptor, 100, 100);
+                if ( bitmap1 != null) {
+
+                 addBitmapToMemoryCache(key,bitmap1);
+                }
+            }
+```
+上面介绍了DiskLruCache的创建、缓存的添加和查找过程。
+下面来看一下他的具体实现：
+### DiskLruCache的具体实现
+这里重点看一下他的缓存策略
+这里是一次写操作的调用，我们来分析一下
+```
+      DiskLruCache diskLruCache = DiskLruCache.open(bitmapFile, 1, 1, 1024 * 1024 * 50);
+            DiskLruCache.Editor edit = diskLruCache.edit(hashKeyFormUrl(url));
+            if (edit != null) {
+                OutputStream outputStream = edit.newOutputStream(DISK_CACHE_INDEX);
+                if (downloadUrlToStream(url, outputStream)) {
+                    edit.commit();
+                } else {
+                    edit.abort();
+                }
+                diskLruCache.flush();
+            }
+
+```
+
+
+第一个是`open`方法，这个是一定会调用的方法，看一下他做了哪些操作？
+```
+  public static DiskLruCache open(File directory, int appVersion, int valueCount, long maxSize)
+      throws IOException {
+    if (maxSize <= 0) {
+      throw new IllegalArgumentException("maxSize <= 0");
+    }
+    if (valueCount <= 0) {
+      throw new IllegalArgumentException("valueCount <= 0");
+    }
+
+    // If a bkp file exists, use it instead.
+    File backupFile = new File(directory, JOURNAL_FILE_BACKUP);
+    if (backupFile.exists()) {
+      File journalFile = new File(directory, JOURNAL_FILE);
+      // If journal file also exists just delete backup file.
+      if (journalFile.exists()) {
+        backupFile.delete();
+      } else {
+        renameTo(backupFile, journalFile, false);
+      }
+    }
+
+    // Prefer to pick up where we left off.
+    DiskLruCache cache = new DiskLruCache(directory, appVersion, valueCount, maxSize);
+    if (cache.journalFile.exists()) {
+      try {
+        cache.readJournal();
+        cache.processJournal();
+        cache.journalWriter = new BufferedWriter(
+            new OutputStreamWriter(new FileOutputStream(cache.journalFile, true), Util.US_ASCII));
+        return cache;
+      } catch (IOException journalIsCorrupt) {
+        System.out
+            .println("DiskLruCache "
+                + directory
+                + " is corrupt: "
+                + journalIsCorrupt.getMessage()
+                + ", removing");
+        cache.delete();
+      }
+    }
+
+    // Create a new empty cache.
+    directory.mkdirs();
+    cache = new DiskLruCache(directory, appVersion, valueCount, maxSize);
+    cache.rebuildJournal();
+    return cache;
+  }
+```
+可以发现`open()`方法的作用是创建DiskLruCache并且创建文件夹
+
+然后是`edit`方法
+
+```
+  public Editor edit(String key) throws IOException {
+    return edit(key, ANY_SEQUENCE_NUMBER);
+  }
+```
+
+然后再戳进去看一下
+```
+  private synchronized Editor edit(String key, long expectedSequenceNumber) throws IOException {
+    checkNotClosed();
+    validateKey(key);
+    Entry entry = lruEntries.get(key);
+    if (expectedSequenceNumber != ANY_SEQUENCE_NUMBER && (entry == null
+        || entry.sequenceNumber != expectedSequenceNumber)) {
+      return null; // Snapshot is stale.
+    }
+    if (entry == null) {
+      entry = new Entry(key);
+      lruEntries.put(key, entry);
+    } else if (entry.currentEditor != null) {
+      return null; // Another edit is in progress.
+    }
+
+    Editor editor = new Editor(entry);
+    entry.currentEditor = editor;
+
+    // Flush the journal before creating files to prevent file leaks.
+    journalWriter.write(DIRTY + ' ' + key + '\n');
+    journalWriter.flush();
+    return editor;
+  }
+
+```
+` checkNotClosed();`检查是否调用了open方法
+`validateKey`检验key是否合法
+然后是一段代码
+```
+ Entry entry = lruEntries.get(key);
+```
+看一下lruEntries是什么？
+```
+  private final LinkedHashMap<String, Entry> lruEntries =
+      new LinkedHashMap<String, Entry>(0, 0.75f, true);
+```
+可以发现DiskLruCache底层也是调用了LinkedHashMap这个东西，应该是参照了LruCache的代码。DiskLruCache应该是对linkedHashMap的包装。
+这里的Entry是DiskLruCache的内部类
+```
+
+  private final class Entry {
+    private final String key;
+
+    /** Lengths of this entry's files. */
+    private final long[] lengths;
+
+    /** True if this entry has ever been published. */
+    private boolean readable;
+
+    /** The ongoing edit or null if this entry is not being edited. */
+    private Editor currentEditor;
+
+    /** The sequence number of the most recently committed edit to this entry. */
+    private long sequenceNumber;
+  }
+```
+可以发现在entry中保存了文件的大小等信息
+
+```
+private static final String DIRTY = "DIRTY";
+private Writer journalWriter;
+
+journalWriter.write(DIRTY + ' ' + key + '\n');
+journalWriter.flush();
+```
+最后通过Writer写入了一段信息
+
+第三个是`newOutputStream`方法
+```
+ public OutputStream newOutputStream(int index) throws IOException {
+      synchronized (DiskLruCache.this) {
+        if (entry.currentEditor != this) {
+          throw new IllegalStateException();
+        }
+        if (!entry.readable) {
+          written[index] = true;
+        }
+        File dirtyFile = entry.getDirtyFile(index);
+        FileOutputStream outputStream;
+        try {
+          outputStream = new FileOutputStream(dirtyFile);
+        } catch (FileNotFoundException e) {
+          // Attempt to recreate the cache directory.
+          directory.mkdirs();
+          try {
+            outputStream = new FileOutputStream(dirtyFile);
+          } catch (FileNotFoundException e2) {
+            // We are unable to recover. Silently eat the writes.
+            return NULL_OUTPUT_STREAM;
+          }
+        }
+        return new FaultHidingOutputStream(outputStream);
+      }
+    }
+
+```
+可以发现他创建了写入的文件流，文件路径是
+```
+public File getDirtyFile(int i) {
+      return new File(directory, key + "." + i + ".tmp");
+    }
+```
+可以发现写入的文件是一个tmp临时文件。
+
+接着就是通过文件流写入文件到临时文件。
+写入成功之后会调用commit
+
+看一下commit 
+```
+  public void commit() throws IOException {
+      if (hasErrors) {
+        completeEdit(this, false);
+        remove(entry.key); // The previous entry is stale.
+      } else {
+        completeEdit(this, true);
+      }
+      committed = true;
+    }
+```
+这里分析正常情况，会调用`completeEdit`方法
+```
+  private synchronized void completeEdit(Editor editor, boolean success) throws IOException {
+    Entry entry = editor.entry;
+    if (entry.currentEditor != editor) {
+      throw new IllegalStateException();
+    }
+
+    // If this edit is creating the entry for the first time, every index must have a value.
+    if (success && !entry.readable) {
+      for (int i = 0; i < valueCount; i++) {
+        if (!editor.written[i]) {
+          editor.abort();
+          throw new IllegalStateException("Newly created entry didn't create value for index " + i);
+        }
+        if (!entry.getDirtyFile(i).exists()) {
+          editor.abort();
+          return;
+        }
+      }
+    }
+
+    for (int i = 0; i < valueCount; i++) {
+      File dirty = entry.getDirtyFile(i);
+      if (success) {
+        if (dirty.exists()) {
+          File clean = entry.getCleanFile(i);
+          dirty.renameTo(clean);
+          long oldLength = entry.lengths[i];
+          long newLength = clean.length();
+          entry.lengths[i] = newLength;
+          size = size - oldLength + newLength;
+        }
+      } else {
+        deleteIfExists(dirty);
+      }
+    }
+
+    redundantOpCount++;
+    entry.currentEditor = null;
+    if (entry.readable | success) {
+      entry.readable = true;
+      journalWriter.write(CLEAN + ' ' + entry.key + entry.getLengths() + '\n');
+      if (success) {
+        entry.sequenceNumber = nextSequenceNumber++;
+      }
+    } else {
+      lruEntries.remove(entry.key);
+      journalWriter.write(REMOVE + ' ' + entry.key + '\n');
+    }
+    journalWriter.flush();
+
+    if (size > maxSize || journalRebuildRequired()) {
+      executorService.submit(cleanupCallable);
+    }
+  }
+
+```
+这里valueCount是在`open`时传递进去的参数,值是1，这样for循环只会调用一次
+由于已经知道`abort`方法是撤销一次写入，所以在正确的情况下，是不会走`abort`的
+
+
+```
+    public File getCleanFile(int i) {
+      return new File(directory, key + "." + i);
+    }
+```
+这里与之前获取的文件名称差了一个tmp，应该是正式文件的名称。这里发现对于同一个key如果有不同的文件，可以通过index来区分...
+从上面的名字可以看出这个文件夹是干净的文件夹... 那么之前用的带有tmp文件夹名的应该是`getDirtyFile`脏文件夹
+
+```
+    for (int i = 0; i < valueCount; i++) {
+      File dirty = entry.getDirtyFile(i);
+      if (success) {
+        if (dirty.exists()) {
+          File clean = entry.getCleanFile(i);
+          dirty.renameTo(clean);
+          long oldLength = entry.lengths[i];
+          long newLength = clean.length();
+          entry.lengths[i] = newLength;
+          size = size - oldLength + newLength;
+        }
+      } else {
+        deleteIfExists(dirty);
+      }
+    }
+```
+这里有一个`renameTo`重命名的操作，把脏文件(带有tmp)转化为不带(tmp)
+
+之后通过file的`length`方法得到文件大小，拓展size大小
+最后会判断文件大小是否大于最大值，如果超过，会调用
+```
+   executorService.submit(cleanupCallable);
+```
+executorService很明显是一个线程池，
+
+看一下他的定义
+```
+final ThreadPoolExecutor executorService =
+      new ThreadPoolExecutor(0, 1, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+```
+这是一个单线程线程池，核心线程为0，最大线程为1
+接着看一下cleanupCallable中做了什么
+```
+  private final Callable<Void> cleanupCallable = new Callable<Void>() {
+    public Void call() throws Exception {
+      synchronized (DiskLruCache.this) {
+        if (journalWriter == null) {
+          return null; // Closed.
+        }
+        trimToSize();
+        if (journalRebuildRequired()) {
+          rebuildJournal();
+          redundantOpCount = 0;
+        }
+      }
+      return null;
+    }
+  };
+
+```
+
+看一下`trimToSize`方法
+
+```
+  private void trimToSize() throws IOException {
+    while (size > maxSize) {
+      Map.Entry<String, Entry> toEvict = lruEntries.entrySet().iterator().next();
+      remove(toEvict.getKey());
+    }
+  }
+```
+可以发现这里得到key并移除文件
+```
+ public synchronized boolean remove(String key) throws IOException {
+    checkNotClosed();
+    validateKey(key);
+    Entry entry = lruEntries.get(key);
+    if (entry == null || entry.currentEditor != null) {
+      return false;
+    }
+
+    for (int i = 0; i < valueCount; i++) {
+      File file = entry.getCleanFile(i);
+      if (file.exists() && !file.delete()) {
+        throw new IOException("failed to delete " + file);
+      }
+      size -= entry.lengths[i];
+      entry.lengths[i] = 0;
+    }
+
+    redundantOpCount++;
+    journalWriter.append(REMOVE + ' ' + key + '\n');
+    lruEntries.remove(key);
+
+    if (journalRebuildRequired()) {
+      executorService.submit(cleanupCallable);
+    }
+
+    return true;
+  }
+
+```
+最后是`flush`
+```
+  public synchronized void flush() throws IOException {
+    checkNotClosed();
+    trimToSize();
+    journalWriter.flush();
+  }
+```
+这里进行二次确认并flush
+到这里添加操作就完成了。
+
+下面看一下读取的操作
+
+```
+ DiskLruCache.Snapshot snapshot = diskLruCache.get(key);
+FileInputStream fileInputStream = (FileInputStream) snapshot.getInputStream(DISK_CACHE_INDEX);
+```
+这个比较简单，通过key获取Snapshot，而Snapshot是inputstream的一层包装，接着读取文件。
+# ImageLoader的实现
+前面介绍了BitMap高效加载方式，LruCache和DiskLruCache，现在我们来实现一个优秀的ImageLoader。
+一般来说，一个优秀的ImageLoader应该是具备如下功能：
+* 图片的同步加载：
+* 图片的异步加载：
+* 图片压缩：
+* 内存缓存
+* 磁盘缓存：
+* 网络拉取：
+
+图片的同步加载时指能够以同步的方式向调用者提供加载的图片，这个图片可能是从内存缓存中读取，也可能从硬盘缓存中读取，还可能从网络拉取的。图片的异步加载时一个很有用的功能，很多时候调用者不想在单独的线程中以同步的方式来获取图片，这个时候ImageLoader内部需要自己在线程中加载图片并将图片设置给所需要的ImageView。图片压缩是降低OOM的有效手段。
+除此之外，ImageLoader还需要处理一些特殊的情况，比如在ListView或者GridView中，View复用既是他们的优点，也是缺点。比较明显的就是图片的错位问题，ImageLoader需要正确的处理这种情况。
+上面对ImageLoad的功能做了一个全面的分析，下面就可以一步步的实现一个ImageLoad了，主要步骤如下。
+
+## 图片压缩功能的实现
+这个之前已经做了介绍，这里就不多说了，上代码。
+```
+public class ImageResizer {
+    private  static  final  String TAG="ImageResizer";
+    public  ImageResizer(){
+
+    }
+
+    public Bitmap decodeSampledBitmapFromFileDescriptor(FileDescriptor fd , int reqWidth, int reqHeight){
+
+        BitmapFactory.Options options=new BitmapFactory.Options();
+        options.inJustDecodeBounds=true;
+        BitmapFactory.decodeFileDescriptor(fd,null,options);
+        options.inSampleSize=calculateInSampleSize(options,reqWidth,reqHeight);
+        options.inJustDecodeBounds=false;
+        return  BitmapFactory.decodeFileDescriptor(fd,null,options);
+    }
+    
+    
+    public Bitmap decodeSampledBitmapFromResource(Resources res,int resId,int reqWidth,int reqHeight){
+
+        BitmapFactory.Options options=new BitmapFactory.Options();
+        options.inJustDecodeBounds=true;
+        BitmapFactory.decodeResource(res,resId,options);
+        options.inSampleSize=calculateInSampleSize(options,reqWidth,reqHeight);
+        options.inJustDecodeBounds=false;
+        return  BitmapFactory.decodeResource(res,resId,options);
+    }
+
+
+    private static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+        final  int height=options.outHeight;
+        final  int width=options.outWidth;
+        int inSampleSize=1;
+        if(height>reqHeight||width>reqWidth){
+            final int halfHeight=height/2;
+            final  int halfWidth=width/2;
+            while((halfHeight/inSampleSize)>=reqHeight&&(halfWidth/inSampleSize)>=reqWidth){
+                inSampleSize*=2;
+            }
+        }
+        return  inSampleSize;
+
+    }
+    
+}
+
+```
+## 内存缓存和磁盘缓存的实现
+
+```
+    private ImageLoader(Context mContext) {
+        this.mContext = mContext.getApplicationContext();
+        int maxMemory= (int) (Runtime.getRuntime().maxMemory()/1024);
+        int cacheSize=maxMemory/8;
+        mMemoryCache = new LruCache<String, Bitmap>(cacheSize) {
+            @Override
+            protected int sizeOf(String key, Bitmap value) {
+                return value.getRowBytes()*value.getHeight()/1024;
+            }
+        };
+
+        File diskCacheDir=getDiskCacheDir(mContext,"bitmap");
+        if(!diskCacheDir.exists()){
+            diskCacheDir.mkdirs();
+        }
+
+        if(getUsableSpace(diskCacheDir)>DISK_CACHE_SIZE){
+
+        }
+    }
+
+
+```
+
+这里设置硬盘缓存为250M
+硬盘缓存和内存缓存创建完毕之后，需要提供`get`和`set`方法
+
+先看一下内存缓存的`get`和`set`方法
+```
+
+    private  void addBitmapToMemoryCache(String key,Bitmap bitmap){
+        if(getBitmapFromMemCache(key)==null){
+            mMemoryCache.put(key,bitmap);
+        }
+    }
+    
+    
+    private  Bitmap getBitmapFromMemCache(String key){
+        return mMemoryCache.get(key);
+    }
+```
+
+而硬盘缓存的添加和读取功能稍微复杂一些，具体内容在之前已经介绍了，这里给出代码。
+
+```
+    private Bitmap loadBitmapFromHttp(String url, int reqWidth, int reqHeight) throws IOException {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            throw new RuntimeException("can not visit network from UI Thread.");
+        }
+        if(mDiskLruCache==null){
+            return  null;
+        }
+
+        String key=hashKeyFormUrl(url);
+        DiskLruCache.Editor edit = mDiskLruCache.edit(key);
+        if(edit!=null){
+            OutputStream outputStream=edit.newOutputStream(DISK_CACHE_INDEX);
+            if(downloadUrlToStream(url,outputStream)){
+                edit.commit();
+            }else{
+                edit.abort();
+            }
+            mDiskLruCache.flush();
+        }
+        return  loadBitmapFromDiskCache(url,reqWidth,reqHeight);
+    }
+
+    private Bitmap loadBitmapFromDiskCache(String url, int reqWidth, int reqHeight) throws IOException {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            throw new RuntimeException("load bitmap from UI Thread, it's not recommended!");
+        }
+
+        if(mDiskLruCache==null){
+            return  null;
+        }
+
+        Bitmap bitmap=null;
+        String key=hashKeyFormUrl(url);
+        DiskLruCache.Snapshot snapshot=mDiskLruCache.get(key);
+        if(snapshot!=null){
+            FileInputStream fileInputStream= (FileInputStream) snapshot.getInputStream(DISK_CACHE_INDEX);
+            FileDescriptor fd = fileInputStream.getFD();
+            bitmap=   mImageResizer.decodeSampledBitmapFromFileDescriptor(fd,reqWidth,reqHeight);
+            if(bitmap!=null){
+                addBitmapToMemoryCache(key,bitmap);
+            }
+        }
+        return  bitmap;
+    }
+
+```
+
+## 同步加载和异步加载接口设计
+首先看同步加载，同步加载接口需要外部在线程中调用，这是因为同步加载可能比较耗时
+
+```
+
+
+    public Bitmap loadBitmap(String url, int reqWidth, int reqHeight) {
+        Bitmap bitmap = loadBitmapFromMemCache(url);
+        if (bitmap != null) {
+            return bitmap;
+        }
+        try {
+            loadBitmapFromDiskCache(url, reqWidth, reqHeight);
+            if (bitmap != null) {
+                return bitmap;
+            }
+            bitmap = loadBitmapFromHttp(url, reqWidth, reqHeight);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if(bitmap==null&&!mIsDiskLruCacheCreated){
+            bitmap=downloadUrlFromUrl(url);
+        }
+        return bitmap;
+    }
+```
+可以发现优先级是 内存缓存>硬盘缓存>网络缓存
+下面看一下异步接口设计，如下所示
+
+
+# ImageLoader的使用
