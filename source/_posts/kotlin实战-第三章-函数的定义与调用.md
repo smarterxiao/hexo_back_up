@@ -389,3 +389,287 @@ kotli!
   char c= JakeKotlinKt.getLastChar("xx");
 ```
 # 处理集合：可变参数、中缀调用和库的支持
+
+## 拓展java集合的API
+之前提及到kotlin中的集合和java相同。但对API做了拓展。可以看一个示例，用来获取列表最后一个元素并找到元素的最大值
+
+```
+    val strings: List<String> = listOf("first", "second", "third")
+    println(strings.last())
+
+    val ints: List<Int> = listOf(1, 2, 3, 99)
+    println(ints.max())
+```
+
+输出结果:
+```
+third
+99
+```
+可以发现kotlin虽然使用了java的集合，但是在它的基础上进行了拓展。答案很显然：因为函数`last`和`max`都能被声明为拓展函数。
+last函数不会比String的lastChar更加复杂，在上一节讨论过：他是List类的一个拓展函数。
+
+## 可变参数：让函数支持任意数量的参数
+当使用一个函数来创建列表的时候，可以给他传递任意个参数:
+```
+    val list= listOf<Int>(2,3,4,5,6,7,8,9)
+```
+我们看一下`listOf`的具体实现
+
+```
+public fun <T> listOf(vararg elements: T): List<T> = if (elements.size > 0) elements.asList() else emptyList()
+```
+可变参数对于java而言使用`...`来表示，而kotlin使用vararg修饰符。kotlin和java之间的另一个区别是，当需要传递的参数已经包装在数组中时，调用该函数的语法。在java中，可以按原样传递数组，而kotlin则要求你显示地解包数组，一遍每个数组元素在函数中都能作为单独的参数来调用。从技术的角度来讲，这个功能被称为展开运算符，而使用的时候，不过是在对应的参数前面放一个*
+
+```
+fun main(args: Array<String>) {
+    val list= listOf<String>("args :",*args)
+}
+```
+
+## 键值对的处理：中缀调用和结构声明
+可以使用mapOf函数来创建Map：
+```
+    mapOf<Int,String>(1 to "One",2 to "Two")
+```
+之前把to解释为一个函数，现在再来看一下他。to是一个特殊的函数调用，被称为中缀调用。
+在中缀调用中，没有添加额外的分隔符，函数名称是直接放在目标对象和参数之间的。以下两种调用方式是等价的：
+```
+  mapOf<Int,String>(1.to("One") ,2.to("Two") )
+```
+中缀调用可以与只有一个参数的表达式一起使用，无论是普通函数还是拓展函数。要允许使用中缀函数，需要使用`infix`修饰符来标记它。下面是一个简单的to函数的声明：
+```
+infix  fun  Any.to(other:Any)=Pair(this,other)
+```
+`to`函数会返回一个Pair类型的对象，Pair是kotlin标准库中的类，不出所料，他会用来表示一对元素。Pair和to的声明都用到了泛型，简单起见，这里我们省略了泛型
+看一下使用：直接用Pair的内容来初始化两个变量
+```
+val (number,name)=1 to "one"
+```
+
+这个功能被称为解构声明。解构声明不知可以用于Pair。例如，还可以用于map的key和value。android也有pair，感兴趣可以了解一下
+```
+    val listOf = listOf<Int>(1, 2, 3, 4, 5, 6)
+    for ((index,element) in    listOf.withIndex()){
+        println("$index: $element")
+    }
+```
+
+之前使用的遍历便是一个解构。
+to函数是一个拓展函数，可以创建一对任意元素，这以为这他是泛型接收者的拓展，可以使用`1 to "one"`、`"two" to 2`、`list to list.size()`等写法。我们来看看mapOf函数的声明：
+```
+public fun <K, V> mapOf(vararg pairs: Pair<K, V>): Map<K, V> =
+    if (pairs.size > 0) pairs.toMap(LinkedHashMap(mapCapacity(pairs.size))) else emptyMap()
+```
+可以发现和`listOf`一样，`mapOf`接收可变数量的参数，但是这次他们应该是键值对。
+# 字符串和正则表达式的处理
+kotlin字符串和java完全相同，可以将在kotlin代码中创建的字符串传递给任何Java函数，也可以吧任何Kotlin标准库函数应用到从java代码接收的字符串上，不用转换。
+
+## 分割字符串
+java的`split`方法在使用上有很多坑的地方。举个栗子。当像分解`"12.34.56"`这个字符串时，使用`"12.34.56".split(".")`的时候，我们期待的到`[12,34,56]`但是得到的是一个空数组。因为他将一个正则表达式视为参数。`.`在正则表达式里面解释是任意字符...
+kotlin把这个令人费解的函数隐藏。作为替换，添加了一些名为`split`的，具有不同参数的拓展函数。需要使用正则的时候要传入Regex类型，而不是String
+
+```
+fun main(args: Array<String>) {
+    println("12.34.56-6.A".split("\\.|-".toRegex()))
+}
+```
+看一下输出
+```
+[12, 34, 56, 6, A]
+```
+kotlin中使用和java中一样的正则表达式语法。这里的模式匹配一个点或者破折号。使用正则表达式的API也类似java库的API。例如在kotlin中合一使用`toRegex`将字符串转换为正则表达式。
+但是对于一些简单的情况，就不需要使用正则表达式了。kotlin中的split拓展函数的其他重载支持任意数量的纯文本字符串分割：
+```
+fun main(args: Array<String>) {
+    println("12.34.56-6.A".split(".","-"))
+}
+```
+
+看一下输出
+```
+[12, 34, 56, 6, A]
+```
+
+## 正则表达式和三重引号的字符串
+我们来另一个例子的两种不同实现：一个将使用拓展函数来处理字符串，另一个将使用正则表达式来处理。
+将下面的目录分割为目录、文件名和拓展名
+```
+"/user/yole/kotlin-book/chapter.adoc"
+```
+
+看一下方法
+```
+fun parsePath(path: String) {
+    val directory = path.substringBeforeLast("/")
+    val fullName = path.substringAfterLast("/")
+    val fileName = fullName.substringBeforeLast(".")
+    val extension = fullName.substringAfterLast(".")
+    println("Dir：$directory ,name: $fileName,ext:$extension")
+}
+```
+
+调用:
+```
+fun main(args: Array<String>) {
+    parsePath("/user/yole/kotlin-book/chapter.adoc")
+}
+```
+输出结果:
+```
+Dir：/user/yole/kotlin-book ,name: chapter,ext:adoc
+```
+
+可以看到kotlin对字符串进行了拓展，提供了很多非常便利的拓展方法。可以不需要使用正则表达式完成这样的功能。下面来看一下如何使用正则表达式进行分解。
+
+
+
+
+看一下方法
+```
+fun parsePath(path: String) {
+    val regex = """(.+)/(.+)\.(.+)""".toRegex()
+    val matchResult = regex.matchEntire(path)
+    if (matchResult != null) {
+        val (directory, fileName, extension) = matchResult.destructured
+        println("Dir：$directory ,name: $fileName,ext:$extension")
+    }
+}
+```
+
+调用:
+```
+fun main(args: Array<String>) {
+    parsePath("/user/yole/kotlin-book/chapter.adoc")
+}
+```
+输出结果:
+```
+Dir：/user/yole/kotlin-book ,name: chapter,ext:adoc
+```
+
+`(.+)/`得到文件目录
+`(.+)`得到文件名称
+`\.(.+)`得到文件拓展名
+
+如果匹配成功，则将destructured属性赋给相应的变量。
+## 多行三重引号的字符串
+三重引号字符串的目的，不仅在于避免转义字符，而且使他可以包含任何字符，包括换行符。另外，它提供了一种更简单的方法，从而可以简单地把包换行符的文本嵌入到程序中。
+可以用ASCII码来换一点东西
+```
+    val kotlinLogo="""|//
+        |.|//
+        |.|/\
+    """
+```
+
+看一下输出结果
+```
+|//
+        |.|//
+        |.|/\
+```
+
+可以发现三重引号会输出包括格式化代码的缩进，所见即所得。
+
+# 让你的代码更加整洁：局部函数和拓展
+先来看一下局部函数的例子
+
+```
+class User(val id:Int,val name:String,val address:String)
+
+fun saveUser(user:User){
+    if(user.name.isEmpty()){
+        throw IllegalArgumentException("Can't save user ${user.id} :empty Name")
+    }
+
+    if(user.address.isEmpty()){
+        throw IllegalArgumentException("Can't save user ${user.id} :empty Address")
+    }
+
+}
+```
+
+调用:
+```
+fun main(args: Array<String>) {
+saveUser(User(1,"",""))
+}
+```
+输出：
+
+```
+Exception in thread "main" java.lang.IllegalArgumentException: Can't save user 1 :empty Name
+	at pkg2.JakeKotlinKt.saveUser(JakeKotlin.kt:32)
+	at pkg2.JakeKotlinKt.main(JakeKotlin.kt:25)
+```
+
+这里的重复代码是很少的，但是我不想要在类中一个面面俱到的方法，去验证用户字段的每一个特殊情况。如果将这个验证放到局部函数中，可以摆脱重复，并保持清晰的代码结构。
+
+```
+class User(val id:Int,val name:String,val address:String)
+
+fun saveUser(user:User){
+    fun  validate(user:User,value:String, field:String){
+        if(value.isEmpty()){
+            throw IllegalArgumentException("Can't save user ${user.id} :empty $field")
+        }
+    }
+    validate(user,user.name,"Name")
+    validate(user,user.address,"Address")
+}
+
+```
+
+调用:
+```
+fun main(args: Array<String>) {
+saveUser(User(1,"",""))
+}
+```
+输出：
+
+```
+Exception in thread "main" java.lang.IllegalArgumentException: Can't save user 1 :empty Name
+	at pkg2.JakeKotlinKt$saveUser$1.invoke(JakeKotlin.kt:33)
+	at pkg2.JakeKotlinKt.saveUser(JakeKotlin.kt:36)
+	at pkg2.JakeKotlinKt.main(JakeKotlin.kt:25)
+```
+可以发现这里使用了局部函数让代码更加简洁了一点。下面继续改进,把验证逻辑放到User类的拓展函数中
+
+```
+fun saveUser(user: User) {
+    user.validateBeforeSave()
+}
+
+class User(val id: Int, val name: String, val address: String)
+
+fun User.validateBeforeSave() {
+    fun validate(value: String, field: String) {
+        if (value.isEmpty()) {
+            throw IllegalArgumentException("Can't save user ${id} :empty $field")
+        }
+    }
+    validate(name, "Name")
+    validate(address, "Address")
+}
+
+```
+
+调用:
+```
+fun main(args: Array<String>) {
+saveUser(User(1,"",""))
+}
+```
+输出：
+
+```
+Exception in thread "main" java.lang.IllegalArgumentException: Can't save user 1 :empty Name
+	at pkg2.JakeKotlinKt$validateBeforeSave$1.invoke(JakeKotlin.kt:37)
+	at pkg2.JakeKotlinKt.validateBeforeSave(JakeKotlin.kt:40)
+	at pkg2.JakeKotlinKt.saveUser(JakeKotlin.kt:29)
+	at pkg2.JakeKotlinKt.main(JakeKotlin.kt:25)
+```
+现在讲代码提取到拓展函数中，看起来相当的不错。即使User属于当前代码库而不是ku的一部分，也不希望这段代码放到User方法中，因为他和其他使用的User的地方没有关系。这样就精简了很多。这里不建议多层嵌套。
+这一章节到此结束
