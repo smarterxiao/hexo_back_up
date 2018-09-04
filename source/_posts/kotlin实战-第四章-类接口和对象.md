@@ -429,3 +429,306 @@ class MyButton:View{
 如果累没有主构造方法，那么每一个从构造方法必须初始化基类或者委托给另一个构造方法。
 
 ## 实现在接口中声明的属性
+
+在kotlin中接口可以包含抽象属性。这里有一个例子
+```
+interface  User{
+    val nickName:String
+}
+```
+这意味着实现User接口的类需要提供一个取得nickName值的方式。接口并没有说明这个值应该存储到一个支持字段还是通过getter来取。接口本身不包含任何状态。来一个例子
+
+```
+
+class PrivateUser(override val nickName: String) : User
+
+class SubscribingUser(val email: String) : User {
+    override val nickName: String
+        get() = email.substringBefore('@')
+}
+
+class FacebookUser(val accountId: Int) : User {
+    override val nickName: String = getFacebookName(accountId)
+
+    private fun getFacebookName(accountId: Int): String {
+        return ""
+    }
+
+}
+```
+
+对于PrivateUser来说，你使用了简洁的语法直接在主构造方法中声明了一个属性。这个属性来自于User的抽象属性，说以使用标记override
+对于SubscribingUser来说，nickname属性通过一个自定义的getter实现。这个属性没有一个字段支持他来存储值，他只有一个getter在每次调用时从email中得到昵称。
+对于FacebookUser来说，在初始化时讲nickname属性与值关联。你使用了被认可可以通过账号id获取facebook昵称的函数。这个函数开销巨大:他需要与faceBook建立链接来获取想要的数据。这也就是为什么只在初始化阶段调用一次的原因。
+除了抽象属性外，接口还可以包含具有getter和setter的属性，只要他们没有引用一个一个支持字段(支持字段需要在接口中存储状态，这是不允许的)
+
+```
+
+interface Teacher {
+    val email: String
+    
+    val name:String
+    get() = email.substringBefore(email)
+}
+
+
+class Bob(override val email: String) :Teacher{
+    
+}
+```
+
+可以发现第一个抽象属性必须在子类中重写，第二个时可以被继承的
+
+
+## 通过getter和setter方法支持字段
+
+```
+fun main(args: Array<String>) {
+    val user=SuperUser("bob")
+    user.address="Els 47,80678 Muenchen"
+}
+
+class SuperUser(val name: String){
+    var address:String="unspecified"
+    set(value:String) {
+        println("""
+            Address was changed for $name:"$field" ->"$value".""".trimIndent())
+        field=value
+
+
+    }
+}
+```
+
+输出结果
+```
+Address was changed for bob:"unspecified" ->"Els 47,80678 Muenchen".
+```
+可以像平常一样通过`user.address=“new value”`来修饰一个属性的值，这其实在底层封装了setter。
+
+## 修改访问器的可见性
+
+访问器的可见性默认与属性的可见性相同。但是如果需要可以在get和set关键字前放置可见性修饰符的方式来修改它。
+
+
+```
+
+
+class LengthCounter {
+    var counter: Int = 0
+        private set//不能在类外部修改这个属性
+
+    fun addWord(word: String) {
+        counter += word.length
+    }
+}
+```
+调用
+```
+fun main(args: Array<String>) {
+    val lengthCounter = LengthCounter()
+    lengthCounter.addWord("hi")
+    println(lengthCounter.counter)
+}
+```
+输出:
+```
+2
+```
+
+# 编译器生成的方法：数据类和委托类
+
+## 通用方法
+和java一样kotlin也有通用类。举个栗子：`toString`,`equals`,`hashCode`。看一个例子
+
+```
+class Client(val name:String,val postalCode:Int)
+```
+
+重写`toString()`
+
+```
+class Client(val name: String,val postalCode: Int){
+    override fun toString():String="Client(name=$name,postalCode=$postalCode)"
+}
+
+
+fun main(args: Array<String>) {
+    val  client=Client("Alice",2345)
+    println(client)
+}
+```
+
+看一下输出
+```
+Client(name=Alice,postalCode=2345)
+//对比一下默认输出，是不是好了很多
+Client@6f94fa3e
+```
+
+对象相等性：`equals()`
+先看一下默认输出
+```
+fun main(args: Array<String>) {
+    val  client=Client("Alice",2345)
+    val  client1=Client("Alice",2345)
+    println(client==client1)
+}
+
+```
+
+输出结果：
+```
+false
+```
+在kotlin中如果想进行引用比较，可以使用`===`来进行比较，这个与java中的`==`是等价的。
+
+看一下重写`equal`后的代码
+```
+class Client(val name: String, val postalCode: Int) {
+    override fun equals(other: Any?): Boolean {
+        if (other == null || other !is Client) {
+            return false
+        }
+        return name == other.name && postalCode == other.postalCode
+    }
+    override fun toString(): String = "Client(name=$name,postalCode=$postalCode)"
+}
+
+```
+
+提醒你一下，kotlin中is检查是Java中instanceof的模拟，用来检查类型。
+我们运行看一下
+```
+fun main(args: Array<String>) {
+    val client = Client("Alice", 2345)
+    val client1 = Client("Alice", 2345)
+    println(client == client1)
+}
+
+```
+输出结果
+```
+true
+
+```
+
+Hash容器：hashCode()
+hashCode方法通常与equals一起被重写。
+```
+    val  processed= hashSetOf<Client>(Client("Alice",123456))
+    println(processed.contains(Client("Alice",123456)))
+```
+
+输出结果
+```
+false
+```
+
+原因时Client类缺少了hashCode方法。因为违反了hashCode的契约。如果一个对象相同，那么应当具有相同的hash值。
+现在来修复这个问题.看一下完全体的代码
+```
+class Client(val name: String, val postalCode: Int) {
+    override fun equals(other: Any?): Boolean {
+        if (other == null || other !is Client) {
+            return false
+        }
+        return name == other.name && postalCode == other.postalCode
+    }
+
+    override fun hashCode(): Int =name.hashCode()*31+postalCode
+    override fun toString(): String = "Client(name=$name,postalCode=$postalCode)"
+}
+
+```
+再一次调用
+```
+    val  processed= hashSetOf<Client>(Client("Alice",123456))
+    println(processed.contains(Client("Alice",123456)))
+```
+输出结果
+```
+true
+```
+
+## 数据类：自动生成通用方法的实现
+在kotlin中，可以使用关键字data避免生成上面的三个方法，`equal`,`toString`,`hashCode`。
+来测试一波
+```
+data  class Client(val name: String, val postalCode: Int) {
+
+}
+
+```
+
+调用代码
+```
+fun main(args: Array<String>) {
+    val client = Client("Alice", 2345)
+    val client1 = Client("Alice", 2345)
+    println(client == client1)
+
+
+    val processed = hashSetOf<Client>(Client("Alice", 123456))
+    println(processed.contains(Client("Alice", 123456)))
+}
+
+```
+
+输出结果
+```
+true
+true
+```
+
+## 数据类和不可变性：copy()方法
+```
+class Client(val name: String, val postalCode: Int) {
+   fun copy(name: String = this.name, postalCode: Int = this.postalCode) = Client(name, postalCode)
+}
+```
+
+调用
+```
+fun main(args: Array<String>) {
+
+    val client = Client("Alice", 123456)
+    println(client.copy(postalCode = 654321))
+
+}
+```
+
+输出结果
+```
+Client(name=Alice,postalCode=654321)
+```
+可以发现复制成功了
+当然系统也为我们提供了实现，和上面一样，用data修饰
+```
+data  class Client(val name: String, val postalCode: Int) {
+
+}
+
+```
+
+调用
+```
+
+fun main(args: Array<String>) {
+
+    val client = Client("Alice", 123456)
+    println(client.copy(postalCode = 654321))
+
+}
+
+```
+
+输出
+```
+Client(name=Alice, postalCode=654321)
+```
+
+## 类委托：使用by关键字
+```
+
+```
