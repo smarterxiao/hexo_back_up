@@ -729,6 +729,177 @@ Client(name=Alice, postalCode=654321)
 ```
 
 ## 类委托：使用by关键字
+很多时候需要类进行拓展，这个时候在java中可以使用装饰者模式，看一下下面的例子
 ```
+class  DelegatingCollection<T>:Collection<T>{
+    private  val innerList= arrayListOf<T>()
+    
+    override val size: Int
+        get() = innerList.size
+
+    override fun contains(element: T): Boolean =innerList.contains(element)
+
+    override fun containsAll(elements: Collection<T>): Boolean =innerList.containsAll(elements)
+    override fun isEmpty(): Boolean =innerList.isEmpty()
+    override fun iterator(): Iterator<T> =innerList.iterator()
+
+}
+```
+kotlin提供了一个关键字替代我们实现这些样板代码
+```
+class  DelegatingCollection<T>(innerList:Collection<T> =ArrayList<T>()) :Collection<T> by innerList
+```
+当需要改变方法时，可以重写而不使用默认方法
+
+来看一下栗子：
 
 ```
+
+class CountingSet<T>(val innerSet:MutableCollection<T>):MutableCollection<T> by innerSet{
+    var objectsAdd=0
+
+    override fun add(element: T): Boolean {
+
+        objectsAdd++
+        return innerSet.add(element)
+    }
+    override fun addAll(c:Collection<T>):Boolean{
+        objectsAdd++
+        return innerSet.addAll(c)
+    }
+}
+
+
+
+
+```
+
+调用
+```
+fun main(args: Array<String>) {
+
+val  cset=CountingSet<Int>(HashSet<Int>())
+    cset.addAll(listOf(1,1,2))
+    println("${cset.objectsAdd} objects were added, ${cset.size} remain")
+}
+
+```
+
+结果:
+```
+1 objects were added, 2 remain
+```
+
+# object关键字
+## 单例
+通过object对象声明出来的对象是一个单例
+```
+object  CaseINsensitiveFileComparator:Comparator<File>{
+    override fun compare(o1: File, o2: File): Int {
+        return o1.path.compareTo(o2.path,ignoreCase = true)
+    }
+}
+```
+调用
+```
+fun main(args: Array<String>) {
+
+println(CaseINsensitiveFileComparator.compare(File("/User"),File("/user")))
+}
+```
+
+输出结果
+```
+0
+```
+
+同样可以在类中声明对象，这样的对象同样时一个单例
+```
+
+data class Person(val name:String){
+    object NameComparator:Comparator<Person>{
+        override fun compare(p1: Person, p2: Person): Int =p1.name.compareTo(p2.name)
+    }
+}
+
+```
+在这个栗子中，NameComparator是一个单栗
+
+看一下调用
+```
+fun main(args: Array<String>) {
+    val persons = listOf<Person>(Person("Bob"), Person("Alice"))
+    println(persons.sortedWith(Person.NameComparator))
+
+}
+```
+输出结果
+```
+[Person(name=Alice), Person(name=Bob)]
+```
+
+在java中可以这样调用kotlin的单例
+
+```
+    Object ob=CaseINsensitiveFileComparator.INSTANCE.compare(new File("user"),new File("User"));
+```
+
+## 半生对象
+
+kotlin中没有静态成员类；Java的static关键字不是Kotlin语法的一部分。半生对象时他的替代部分
+
+```
+class A{
+    companion object {
+        fun  bar(){
+            println("Companion object called")
+        }
+    }
+}
+```
+
+调用
+```
+
+fun main(args: Array<String>) {
+    A.bar()
+
+}
+```
+
+结果
+```
+Companion object called
+```
+
+半生对象可以通过容器.xxx来调用
+我们可以通过定义伴生对象来访问私有API，类似一个工厂模式
+一个通用的类
+```
+class User {
+    val nickName: String
+
+    constructor(email: String) {
+        nickName = email.substringBefore("@")
+    }
+
+    constructor(faceBookAccountId: Int) {
+        nickName = getFaceBookName(faceBookAccountId)
+    }
+
+    private fun getFaceBookName(faceBookAccountId: Int): String = "Alice"
+}
+```
+使用工厂方法替代构造函数
+```
+class User private constructor(val nickName:String){
+  companion object {
+      fun newSubcribingUser(email:String)=User(email.substringBefore("@"))
+      fun newFaceBookUser(accountId:Int)=User(getFaceBookName(accountId))
+      private fun getFaceBookName(faceBookAccountId: Int): String = "Alice"
+  }
+}
+```
+伴生对象时不能被子类重写的。要注意
+
+## 作为普通对象使用的伴生对象
