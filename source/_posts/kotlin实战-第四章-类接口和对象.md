@@ -903,3 +903,130 @@ class User private constructor(val nickName:String){
 伴生对象时不能被子类重写的。要注意
 
 ## 作为普通对象使用的伴生对象
+
+一个半生对象
+```
+class Person(val  name:String){
+    companion object Loader {
+        fun  fromJson(jsonText:String):Person{
+            return Person(jsonText)
+        }
+    }
+}
+```
+
+
+```
+fun main(args: Array<String>) {
+   var person=Person.Loader.fromJson("{name:  'Dmitry'}")
+   println(person.name)
+     person=   Person.Companion.fromJson("{name:  'Dmitry'}")
+    println(person.name)
+   person=Person.fromJson("{name:  'Dmitry'}")
+   println(person.name)
+}
+
+```
+
+
+输出
+```
+{name:  'Dmitry'}
+{name:  'Dmitry'}
+{name:  'Dmitry'}
+```
+
+
+在伴生对象中实现接口
+
+```
+
+class Person(val  name:String){
+    companion object :JsonFactory<Person> {
+        override fun  fromJson(jsonText:String):Person{
+            return Person(jsonText)
+        }
+    }
+}
+
+interface JsonFactory<T> {
+    fun fromJson(jsonText: String):T
+}
+
+```
+
+调用
+```
+   val x: JsonFactory<Person> =Person
+    val fromJson = x.fromJson("{name:  'Dmitry'}")
+    println(fromJson.name)
+```
+
+输出
+```
+{name:  'Dmitry'}
+```
+
+可以吧Person的雷鸣当做JsonFactory的实例
+
+伴生对象拓展
+
+
+
+```
+
+class Person(val  name:String){
+    companion object :JsonFactory<Person> {
+        override fun  fromJson(jsonText:String):Person{
+            return Person(jsonText)
+        }
+    }
+}
+
+
+
+interface JsonFactory<T> {
+    fun fromJson(jsonText: String):T
+}
+// 拓展对象
+fun  Person.Companion.readName(){
+    
+}
+```
+
+## 对象表达式：改变写法的匿名内部类
+
+```
+window.addMouseListener(object:MouseAdapter(){
+    override fun mouseClicked(e: MouseEvent?) {
+        super.mouseClicked(e)
+    }
+})
+
+```
+可以把内部类存储到一个变量中
+```
+val listener=object :MouseAdapter(){
+
+}
+
+```
+
+与java匿名内部类只能拓展一个类或实现一个接口不同，kotlin的匿名对象那个可以实现多个接口或不实现接口
+
+如果访问局部变量可以不用final修饰变量
+
+```
+
+fun countClicks(window:Window){
+    var clickCount=0
+    window.addMouseListener(object:MouseAdapter()){
+        override fun mouseClicked(e:MouseEvent){
+            clickCount++
+        }
+    }
+}
+
+```
+
+clickCount 可以不用final
