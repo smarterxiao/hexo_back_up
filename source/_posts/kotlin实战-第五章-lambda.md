@@ -448,7 +448,6 @@ fun main(args: Array<String>) {
 fun main(args: Array<String>) {
     val list = listOf<Person>(Person(12,"Alice"), Person(34,"Booth"))
     println(list.filter { it.age>20}.map { it.name })
-}
 ```
 输出结果：
 ```
