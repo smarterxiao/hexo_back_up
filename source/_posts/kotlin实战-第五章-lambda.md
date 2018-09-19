@@ -485,3 +485,421 @@ fun main(args: Array<String>) {
 ```
 {0=ZERO, 1=ONE}
 ```
+
+## all any count find
+
+all:全部满足一种条件
+```
+fun main(args: Array<String>) {
+    val canBeInClub27={p:Person->p.age <=27}
+    val people= listOf<Person>(Person(23,"Alice"),Person(28,"Bob"))
+    println(people.all(canBeInClub27))
+}
+
+```
+输出结果：
+```
+false
+```
+any：任意一个满足条件
+```
+fun main(args: Array<String>) {
+    val canBeInClub27={p:Person->p.age <=27}
+    val people= listOf<Person>(Person(23,"Alice"),Person(28,"Bob"))
+    println(people.any(canBeInClub27))
+}
+
+```
+输出结果：
+```
+true
+```
+
+count:满足一种条件的个数
+```
+fun main(args: Array<String>) {
+    val canBeInClub27={p:Person->p.age <=27}
+    val people= listOf<Person>(Person(23,"Alice"),Person(28,"Bob"))
+    println(people.count(canBeInClub27))
+}
+
+```
+输出结果：
+```
+1
+```
+
+find：找到一个满足条件的元素
+
+```
+fun main(args: Array<String>) {
+    val canBeInClub27={p:Person->p.age <=27}
+    val people= listOf<Person>(Person(23,"Alice"),Person(28,"Bob"))
+    println(people.find(canBeInClub27))
+}
+
+```
+
+```
+Person(age=23, name=Alice)
+```
+
+## groupBy：把列表转换为分组的map
+```
+fun main(args: Array<String>) {
+    val people= listOf<Person>(Person(23,"Alice"),Person(28,"Bob"),Person(23,"Ana"))
+    println(people.groupBy {it.age  })
+}
+
+```
+输出结果：
+```
+{23=[Person(age=23, name=Alice), Person(age=23, name=Ana)], 28=[Person(age=28, name=Bob)]}
+
+```
+一个例子
+```
+
+   fun main(args: Array<String>) {
+    val list = listOf<String>("a", "ab", "b")
+    println(list.groupBy(::first))
+
+}
+
+fun first(x: String) = x[x.length - 1].toString()
+```
+
+输出结果:
+```
+{a=[a], b=[ab, b]}
+```
+
+## flatMap和flatten：处理嵌套集合中的元素
+
+```
+fun main(args: Array<String>) {
+    val books = listOf<Book>(Book("小王子", listOf("马云", "麻花藤")), Book("大王子", listOf("波多野结衣", "苍井麻衣")))
+    println(books.flatMap { it.authors }.toSet())
+}
+
+data class Book(val title: String, val authors: List<String>)
+```
+输出结果
+```
+[马云, 麻花藤, 波多野结衣, 苍井麻衣]
+```
+
+在来一个例子
+```
+fun main(args: Array<String>) {
+    val strings = listOf<String>("abc", "def")
+    println(strings.flatMap { it.toList() })
+}
+```
+
+结果
+```
+[a, b, c, d, e, f]
+```
+可以发现他将每个元素做了变换，并且吧多个列表合并(或者说平铺)成一个列表。
+
+
+如果不需要平铺，可以使用flatten
+```
+fun main(args: Array<String>) {
+    val strings = listOf(listOf(1,2), listOf(1,2))
+    println(strings.flatten())
+}
+
+```
+输出结果：
+```
+[1, 2, 1, 2]
+```
+
+集合添加了很多api，可以看一下：https://blog.csdn.net/android_jianbo/article/details/78498276
+
+## 惰性集合操作：序列
+
+如果对人物进行筛选
+```
+fun main(args: Array<String>) {
+    val person = listOf<Person>(Person(11,"小王子"),Person(15,"马云"),Person(23,"麻花藤"),Person(22,"波多野结衣"),Person(22,"苍井麻衣"))
+    println(person.map { it.name }.filter { it.startsWith("麻花") })
+}
+
+```
+输出结果:
+```
+[麻花藤]
+```
+
+但是这样会创建两个list集合，一个保存map的结果，一个保存filter的结果，如果数据量非常大，就会造成性能问题，为了提高性能，可以使用序列，而不是用集合
+
+```
+fun main(args: Array<String>) {
+    val person = listOf<Person>(Person(11,"小王子"),Person(15,"马云"),Person(23,"麻花藤"),Person(22,"波多野结衣"),Person(22,"苍井麻衣"))
+    println(person.asSequence().map { it.name }.filter { it.startsWith("麻花") }.toList())
+}
+
+```
+
+输出结果:
+```
+[麻花藤]
+```
+注意转换成为序列之后需要在转换回来
+
+## 执行序列操作：中间和末端操作
+序列操作分为两类：中间的和末端的。一次中间操作返回的是另一个序列。这个新序列知道如何变换原始序列中的元素。而末端操作只是返回一个结果
+中间操作始终都是惰性的。看一个例子
+
+```
+fun main(args: Array<String>) {
+    listOf(1,2,3,4).asSequence().map { println("map($it)   ");it*it }.filter { println("filter($it)");it%2==0 }
+}
+```
+这个会没有输出结果，这意味着map和filter变换被延期了，他们只有在获取结果的时候才会被应用(就是末端操作被调用的时候)
+这里的末端操作时将序列转换成其他。比如通过toList转换成为列表
+
+
+```
+fun main(args: Array<String>) {
+
+    listOf(1,2,3,4).asSequence().map { println("map($it)   ");it*it }.filter { println("filter($it)");it%2==0 }.toList()
+}
+```
+
+输出结果
+```
+map(1)   
+filter(1)
+map(2)   
+filter(4)
+map(3)   
+filter(9)
+map(4)   
+filter(16)
+```
+
+现在看一下序列和普通用法的区别
+```
+fun main(args: Array<String>) {
+
+    listOf(1,2,3,4).asSequence().map { println("map($it)   ");it*it }.filter { println("filter($it)");it%2==0 }.toList()
+    listOf(1,2,3,4).map { println("map($it)   ||");it*it }.filter { println("filter($it) ||" );it%2==0 }
+}
+
+```
+输出结果：
+```
+map(1)   
+filter(1)
+map(2)   
+filter(4)
+map(3)   
+filter(9)
+map(4)   
+filter(16)
+map(1)   ||
+map(2)   ||
+map(3)   ||
+map(4)   ||
+filter(1) ||
+filter(4) ||
+filter(9) ||
+filter(16) ||
+```
+
+可以发现序列的顺序时对应与每一个元素，一个元素先map在filter。而集合的处理时一个list的元素先处理map，之后再处理filter
+
+在看一个例子
+
+```
+fun main(args: Array<String>) {
+    println(listOf(1,2,3,4).asSequence().map { println(it);it*it }.find { println("$it");it>4 })
+    println(listOf(1,2,3,4).map { println(it);it*it }.find { println(it);it>4 })
+}
+
+```
+
+输出：
+```
+1
+1 
+2
+4 
+3
+9 
+9
+------------------------------------------------------
+1
+2
+3
+4
+1
+4
+9
+9
+```
+
+可以发现，序列时逐个元素处理，先将集合第一个元素变换，做find处理。而集合时先通过map将集合转换为另外一个集合再find处理。
+
+在来一个例子
+
+```
+fun main(args: Array<String>) {
+    var count=0
+    val person = listOf<Person>(Person(11,"小王子"),Person(15,"马云"),Person(23,"麻花藤"),Person(22,"波多野结衣"),Person(22,"苍井麻衣"))
+    println(person.asSequence().map { it.name }.filter { count++;it.length>2 }.toList())
+    println("执行次数：$count")
+    count=0
+    println(person.asSequence().filter { it.name.length>2 }.map { count++;it.name }.toList())
+    println("执行次数：$count")
+}
+
+
+```
+
+输出结果:
+```
+[小王子, 麻花藤, 波多野结衣, 苍井麻衣]
+执行次数：5
+[小王子, 麻花藤, 波多野结衣, 苍井麻衣]
+执行次数：4
+```
+可以发现先执行filter之后，执行的总次数会减少，因为filter会先进行筛选，只有符合条件的会被转换。这样就节约了性能。
+
+## 创建序列
+
+
+```
+fun main(args: Array<String>) {
+    val naturalNumbers = generateSequence(0) { it + 1 }
+    val numbersTo100 = naturalNumbers.takeWhile { it <= 100 }
+    println(numbersTo100.sum())
+}
+```
+
+输出结果：
+```
+5050
+```
+
+这里注意序列都是延时操作，调用的时候才会执行。
+
+创建并使用父目录的序列
+```
+fun main(args: Array<String>) {
+    val file = File("/home/groot")
+    println(file.isInsideHiddenDierctory())
+}
+
+fun File.isInsideHiddenDierctory() = generateSequence(this) { it.parentFile }.any { it.isHidden }
+```
+
+```
+false
+```
+
+## 使用java函数式接口
+
+和kotlin库一起使用lambda感觉不错，但是你用到的大部分API很有可能还时用java而不是kotlin写的，好消息时kotlin的lambda可以无缝的和JavaApi互动。
+这个时java定义的类
+```
+ class  Student{
+    public   void setListener(IListener listener){
+
+    }
+}
+interface  IListener{
+      void xyz(int x);
+}
+
+```
+在kotlin中可以使用下面的方式调用
+```
+fun main(args: Array<String>) {
+    Student().setListener{view->view+1}
+}
+```
+
+而不是创建匿名内部类
+
+```
+    public static void main(String[] args) {
+        Student a = new Student();
+        a.setListener(new IListener() {
+            @Override
+            public void xyz(int x) {
+                
+            }
+        });
+    }
+
+
+```
+可以发现这样简单了很多。
+## 把lambda当做参数传递给java方法
+可以把lambda传递给任何期望函数式接口的方法。
+举个栗子 
+```
+ class  Student{
+    void postComputation(int delay,Runnable computation){
+        computation.run();
+    }
+}
+
+```
+java调用
+```
+     Student a = new Student();
+        a.postComputation(1, new Runnable() {
+            @Override
+            public void run() {
+                   System.out.println(this);
+            }
+        });
+```
+在java中调用每次都会生成一个匿名对象
+kotlin调用
+```
+Student().postComputation(1,{ System.out.println(this);})
+```
+但是kotlin不会每次都创建这个。
+等价与java的如下代码
+
+```
+  public static void main(String[] args) {
+        Student a = new Student();
+
+        for (int i = 0; i < 10; i++) {
+            a.postComputation(1, new Runnable() {
+                @Override
+                public void run() {
+                    System.out.println(this);
+                }
+            });
+        }
+
+    }
+```
+
+输出结果:
+```
+X$1@12a3a380
+X$1@29453f44
+X$1@5cad8086
+X$1@6e0be858
+X$1@61bbe9ba
+X$1@610455d6
+X$1@511d50c0
+X$1@60e53b93
+X$1@5e2de80c
+X$1@1d44bcfa
+```
+
+看一下kotlin的输出结果
+```
+
+```
