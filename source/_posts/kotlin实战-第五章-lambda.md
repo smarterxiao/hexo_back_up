@@ -899,7 +899,143 @@ X$1@5e2de80c
 X$1@1d44bcfa
 ```
 
-看一下kotlin的输出结果
+相当与创建了一个全局变量存储Runnable这个对象
+
+但是如果引入一个变量
 ```
+fun  handleComputation(id:String){
+    Student().postComputation(1,  { println(id)})
+}
+```
+这个时候每次调用会创建一个lambda表达式
+
+lambda在底层时通过创建一个特殊的类来完成这个功能，如果时java1.8及以后的sdk，kotlin会生成java8的字节码
+
+## SAM构造方法：显示地吧lambda转换成函数式接口
 
 ```
+fun main(args: Array<String>) {
+
+    createAllDoneRunnable().run()
+}
+
+fun  createAllDoneRunnable():Runnable{
+    return Runnable { println("All done!") }
+}
+
+```
+
+输出结果
+```
+All done!
+```
+
+在看看一个
+
+```
+fun main(args: Array<String>) {
+   val listener= IListener {  view->view+1 ;println(view)}
+    Student().setListener(listener)
+    Student().setListener(listener)
+}
+
+```
+
+输出结果
+```
+10
+10
+```
+SAM其实就是将匿名内部类赋值给一个变量，可以重复使用
+
+## 带接受者的lambda：with与apply
+很多语言都有这样的语句，可以用他对相同的对象执行多次操作，而不需要反复吧名称写出来。kotlin提供了with和apply、
+看一个例子
+```
+fun alphabet(): String {
+
+    val result = StringBuilder()
+    for (letter in 'A'..'Z') {
+        result.append(letter)
+    }
+    result.append("\nNow I know the alphabet!")
+    return result.toString()
+}
+
+
+fun main(args: Array<String>) {
+    println(alphabet())
+}
+```
+
+输出结果：
+```
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+Now I know the alphabet!
+```
+上面这个例子中，我们调用了result的好多方法，每次都要重复这个名称，如果有100000个，这个时候就会很麻烦
+
+下面使用with来优化这段代码
+```
+fun alphabet(): String {
+
+    val result = StringBuilder()
+    return  with(result){
+        for (letter in 'A'..'Z'){
+            this.append(letter)
+        }
+        append("\\nNow I know the alphabet!")
+        this.toString()
+    }
+}
+
+```
+输出结果
+```
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+Now I know the alphabet!
+
+```
+可以发现使用with，相当与在这个对象的内部进行操作，省略了一些不必要的名称，但是会降低可读性
+
+当然this这个时可以省略的
+
+```
+fun alphabet(): String {
+
+    val result = StringBuilder()
+    return  with(result){
+        for (letter in 'A'..'Z'){
+            append(letter)
+        }
+        append("\nNow I know the alphabet!")
+        this.toString()
+    }
+}
+
+```
+
+输出结果：
+```
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+Now I know the alphabet!
+```
+如果有冲突，可以使用`this@OuterClass.toString()`
+
+## apply函数
+apply函数几乎和with一模一样，唯一的区别时apply始终会返回作为实参传递给他的对象
+```
+
+fun alphabet(): String = StringBuilder().apply {
+    for (letter in 'A'..'Z') {
+        append(letter)
+    }
+    append("\nNow I know the alphabet!")
+}.toString()
+```
+输出结果:
+```
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+Now I know the alphabet!
+```
+可以发现，apply返回了实参这个对象
