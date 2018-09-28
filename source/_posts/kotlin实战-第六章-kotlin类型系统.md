@@ -220,3 +220,106 @@ false
 ```
 
 ## 非空断言：“!!”
+非空断言时kotlin提供的最直接有效的处理可空类型的工具
+```
+fun ignoreNulls(s: String?) {
+    val sNotNull: String = s!!
+    println(s.length)
+}
+
+fun main(args: Array<String>) {
+    ignoreNulls(null)
+}
+
+```
+
+输出结果:
+```
+Exception in thread "main" kotlin.KotlinNullPointerException
+	at TestKt.ignoreNulls(Test.kt:29)
+	at TestKt.main(Test.kt:13)
+```
+
+如果上面的函数中s为null，那么在运行的时候会抛出空指针异常
+
+这个基本用于测试，开发中写单元测试会使用
+## let函数
+let函数让处理可空表达式变得更加容易。
+
+
+```
+fun main(args: Array<String>) {
+    val email: String? = "yole@example.com"
+    email?.let {
+        sendEmailTo(it)
+    }
+    email == null
+    val x = email?.let { sendEmailTo(it) }
+}
+```
+
+输出结果：
+```
+Sending email to yole@example.com
+Sending email to yole@example.com
+```
+
+## 延迟初始化属性
+JUnit要求把提前初始化的东西放在@before中
+举个例子
+```
+fun main(args: Array<String>) {
+    println(System.currentTimeMillis())
+   val x= MyTest()
+    Thread.sleep(1000);
+
+    x.setUp()
+
+
+}
+class  MyService() {
+    init {
+        println(System.currentTimeMillis())
+        println("初始化")
+    }
+    fun performAction():String="foo"
+}
+class MyTest{
+    private lateinit var myService: MyService;
+    fun  setUp(){
+        myService.performAction()
+    }
+
+}
+```
+
+输出结果
+```
+1538142612651
+Exception in thread "main" kotlin.UninitializedPropertyAccessException: lateinit property myService has not been initialized
+	at MyTest.setUp(Test.kt:29)
+	at TestKt.main(Test.kt:15)
+```
+
+可以发现使用延迟初始化属性，就是可以定义一个变量，在需要用的时候赋值，可以用于属性注入等。
+注意要和延迟赋值分开
+```
+val nameB: String by lazy {
+    println("getLazy")
+    "123"
+}
+
+fun main(args: Array<String>) {
+    println(nameB)
+    println(nameB)
+}
+```
+
+输出
+```
+getLazy
+123
+123
+```
+这个时用的时候才初始化
+## 可空类型的拓展
