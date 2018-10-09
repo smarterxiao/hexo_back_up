@@ -323,3 +323,210 @@ getLazy
 ```
 这个时用的时候才初始化
 ## 可空类型的拓展
+
+为可空类型定义拓展函数时一种更强大的处理null值的方式。可以允许接受者为null的调用，并在该函数中处理null，而不是在确定变量不为null的情况下调用他。
+
+```
+fun main(args: Array<String>) {
+    verifyUserInput("")
+    verifyUserInput(null)
+}
+
+fun  verifyUserInput(input:String?){
+    if(input.isNullOrBlank()){
+        println("Please fill in the required fields")
+    }
+}
+```
+
+输出结果:
+```
+Please fill in the required fields
+Please fill in the required fields
+```
+
+不需要安全访问，可以直接调用为可空接受者的拓展函数
+
+## 类型参数的可空性
+kotlin中所有的泛型类和泛型函数的类型参数默认都是可空的。任何类型，包括可空类型在内，都可以替换类型参数。
+
+第一种情况
+```
+fun main(args: Array<String>) {
+    printHashCode(null)
+}
+fun <T> printHashCode(t:T){
+    println(t?.hashCode())
+}
+```
+输出结果：
+```
+null
+```
+如果没有指定上界，泛型的推导类型是`any?`
+
+第二种情况
+```
+fun <T:Any> printHashCode(t:T){
+    println(t.hashCode())
+}
+fun main(args: Array<String>) {
+    printHashCode("")
+}
+```
+指定了上届，就不能将空参数传递进入，不然编译报错
+关于泛型的问题后面会详细解答
+
+## 可空性和java
+看一个例子
+在java中定义
+```
+public class X {
+
+  public X(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    private  String name;
+}
+
+
+```
+
+kotlin中调用
+```
+fun main(args: Array<String>) {
+    yellAt(X(null))
+}
+
+
+fun yellAt(x: X) {
+    println(x.name.toUpperCase() + "!!!")
+}
+```
+
+输出结果:
+```
+Exception in thread "main" java.lang.IllegalStateException: x.name must not be null
+	at TestKt.yellAt(Test.kt:16)
+	at TestKt.main(Test.kt:11)
+```
+可以发现报错了
+
+这个时候需要进行判断，进行修改
+```
+
+fun yellAt(x: X) {
+    println(x.name?:"anyone".toUpperCase() + "!!!")
+}
+```
+
+看一下输出结果
+```
+ANYONE!!!
+```
+如果name为空，那么为他附一个默认值
+
+一定要注意
+在java中定义一个接口
+```
+public interface StringProcessor {
+    void process(String value);
+}
+
+```
+在kotlin中实现
+```
+class StringPrinter:StringProcessor{
+    override fun process(value: String) {
+        println(value)
+    }
+
+}
+
+class NulllableStringPrinter:StringProcessor{
+    override fun process(value: String?) {
+        if (value!=null){
+            println(value)
+        }
+    }
+
+}
+
+```
+可以发现上面两种都可以，但是区别时一个value可以为空，一个不为空，要注意判断。
+
+# 基本数据类型和其他基本类型
+在kotlin中没有包装类这个概念
+## 基本数据类型：Int,Boolean以及其他
+
+```
+
+fun main(args: Array<String>) {
+    showProgress(122);
+}
+fun  showProgress(progress:Int){
+    val percent=progress.coerceIn(0..100)
+    println("we're ${percent}% done!")
+}
+```
+
+输出结果:
+```
+we're 100% done!
+```
+但是在编译时，Int会被转化为java的int来表示，提高效率
+## 可空的基本数据类型：Int？，Boolean？
+
+
+```
+fun main(args: Array<String>) {
+  println(Person("sum",35).isOlderThan(Person("Amy",42)))
+  println(Person("sum",35).isOlderThan(Person("Jane")))
+}
+data class Person(val name:String,val age:Int?=null){
+    fun  isOlderThan(other:Person):Boolean?{
+        if(age==null||other.age==null)
+            return null
+        return age>other.age
+    }
+}
+```
+输出结果
+```
+false
+null
+
+```
+可以发现Int是可以变为int的，但是Int?是一个引用，而不能转换为int。只能被转化为Integer
+
+## 数字转换
+kotlin和java区别之一就是处理数字转换的方式。kotlin不会自动地把数字从一种类型转换为另外一种类型，即范围更大的类型
+```
+
+fun main(args: Array<String>) {
+    val i = 1;
+    val l: Long = i;
+}
+```
+
+会提示报错
+```
+Error:(12, 19) Kotlin: Type mismatch: inferred type is Int but Long was expected
+```
+必须显示转换
+```
+
+fun main(args: Array<String>) {
+    val i = 1;
+    val l: Long = i.toLong()
+}
+```
