@@ -530,3 +530,110 @@ fun main(args: Array<String>) {
     val l: Long = i.toLong()
 }
 ```
+
+```
+fun main(args: Array<String>) {
+    var x=1
+    var list= listOf(1L,2L,3L)
+   x in list
+}
+```
+这里的`x in list`会报错，提示`Error:(13, 5) Kotlin: Type inference failed. The value of the type parameter T should be mentioned in input types (argument types, receiver type or expected type). Try to specify it explicitly.`
+可以发现kotlin不支持类型自动转换，必须手动转换
+这里有一点注意，使用算数运算符也被重载了。
+```
+fun main(args: Array<String>) {
+    val b: Byte = 1
+    val l = b + 1L
+    println(l)
+
+}
+```
+可以正确编译，得到的结果是
+```
+2
+```
+
+## Any和Any?:根类型
+和Object作为java类层级结构的根差不多，Any类型是kotlin所有非空类型的超类型。但是在java中，Object只是所有引用类型的超类型
+和java一样，吧基本数据类型赋值给Any类型时会自动装箱
+
+```
+val answer:Any=42
+```
+
+在kotlin使用Any时，编译之后会变成java的Object。
+Any不能使用其他Object的方法（比如：Wait和notify）
+但是可以通过手动把值转换成Object来调用这些方法。
+
+## Unit类型：Kotlin的Void
+kotlin中的Unit类型完成了Java中的void一样的功能。当函数没什么意思的结果要返回时，用他作为返回值类型：
+```
+fun  f():Unit{
+}
+```
+
+语法上，这和写一个代码不带有任何返回值的没有什么区别
+```
+fun  f(){}
+```
+
+大多数情况下，你不会留意到Void和Unit之间的区别。
+那么kotlin中的Unit和Java的Void到底有什么区别呢？
+Unit时一个完备的类型，可以作为类型参数，而void不能。看一个例子
+```
+interface Processor<T> {
+    fun process(): T
+}
+```
+
+```
+class NoResultProcessor:Processor<Unit>{
+    override fun process() {
+    }
+}
+```
+当重写的时候，可以返回一个Unit的类型，就是不需要返回值。如果需要，则定义自己想要的类型
+
+java遇到这种情况只能定义两个函数来解决
+
+## Nothing类型：这个函数永不返回
+对某些kotlin函数来说，返回类型的概念没有任何意义，因为它们从来不会成功的结束。
+
+```
+fun main(args: Array<String>) {
+  fail("Error occurred")
+
+}
+
+fun fail(message: String): Nothing {
+    throw
+    IllegalArgumentException(message)
+}
+```
+
+输出结果:
+```
+Exception in thread "main" java.lang.IllegalArgumentException: Error occurred
+	at TestKt.fail(Test.kt:17)
+	at TestKt.main(Test.kt:11)
+```
+Noting类型没有任何值，只有被当做函数返回时使用。注意Elvis运算符可以作为右边的先决检查：
+```
+fun main(args: Array<String>) {
+    val company = Company("3", null)
+
+    val address = company.address ?: fail("Error occurred")
+}
+
+fun fail(message: String): Nothing {
+    throw
+    IllegalArgumentException(message)
+}
+
+class Company(val name: String, val address: String?)
+```
+
+# 集合和数组
+## 可空性和集合
+
