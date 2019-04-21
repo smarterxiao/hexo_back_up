@@ -93,5 +93,251 @@ categories: java
 
 ![Alt text](pic4.png "效果图")
 
+
+
+|常用标签|语意|
+|:----:|:----:|
+|b|加粗，没有语义|
+|i|斜体，没有语义|
+|strong|加粗，带有语义|
+|em|斜体，带有语义|
+
+## 图片标签的显示
+上面说完常用的文字标签，现在来说一下图片如何显示
+
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body>
+		
+		
+		<img src="img/th.jpg" width="50%" alt="这张图片加载有问题" />
+	</body>
+</html>
+
+```
+
+这个是一个显示图片的案例，现在是按照百分比来显示的。宽度为浏览器大小的50%
+
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body>
+		
+		
+		<img src="img/th.jpg" width="500px" alt="这张图片加载有问题" />
+	</body>
+</html>
+
+```
+
+这个是按照宽度是500px来显示，并不会随着浏览器大小改变而改变。
+
+## 拓展文件路径
+
+|标识|语意|
+|:----:|:----:|
+|./|代表当前路径|
+|../|代表上一级路径|
+|../../|上上一级路径|
+
+# 网站的友情链接
+
+|标识|语意|
+|:----:|:----:|
+|ul|无序|
+|ol|有序|
+|li|ul和ol的行|
+|type|控制显示方式|
+
+看一个例子
+
+
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body>
+	<ul type="disc">
+		<li>真爱网</li>
+		<li>迷宫网</li>
+		<li><a href="http://www.baidu.com">baidu</a></li>
+		</ul>
+		
+		<ol type="disc">
+			<li>真爱网</li>
+			<li>迷宫网</li>
+			<li><a href="http://www.baidu.com">baidu</a></li>
+			</ol>
+
+	</body>
+</html>
+
+```
+![Alt text](pic1.png "效果图")
+
+这里还有一个标签
+
+|标识|语意|
+|:----:|:----:|
+|a|超链接|
+|href|链接地址|
+|target|打开方式|
+
+
+## 表格
+
+|标识|语意|
+|:----:|:----:|
+|tr|行|
+|td/th|列|
+
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body>
+		<table width="100%" border="1">
+			<tr>
+				<th>Month</th>
+				<th>Savings</th>
+			</tr>
+			<tr>
+				<td>January</td>
+				<td>$100</td>
+			</tr>
+		</table>
+	</body>
+</html>
+
+
+```
+
+
+![Alt text](pic2.png "效果图")
+
+在调试表格的时候建议加一下边框`border`，方便定位
+
+下面来看一个稍微复杂一点的例子
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body>
+		
+		<table border="1" width="100%">
+			<tr>
+				
+				<table>
+					
+					<tr>
+						
+						<td><img src="img/th.jpg" width="100px"></td>
+						<td>登录</td>
+						<td>注册</td>
+						<td>其他</td>
+					</tr>
+				</table>
+				
+			</tr>
+			
+			<tr>
+				<table>
+				
+				<tr>
+					<td>首页</td>
+					<td>手机数码</td>
+					<td>鞋靴箱包</td>
+					<td>电脑办公</td>
+					<td>香烟酒水</td>
+					
+				</tr>
+			</table>
+				
+				
+			</tr>
+				
+			<tr>
+				<table>
+				
+				<tr>
+				<td> <strong>热门商品</strong></td>
+					</tr>
+				</table>
+					
+			</tr>
+			
+			<tr>
+				<table width="100%">
+					<tr>
+						<td bgcolor="aliceblue" rowspan="2"><img src="products/1/cs10004.jpg"  >
+						<p>rowspan</p>
+						</td>
+						<td colspan="2" bgcolor="red" ><img src="products/1/cs10004.jpg" >	<p>colspan</p></td>
+						<td><img src="products/1/cs10004.jpg"></td>
+						<td><img src="products/1/cs10004.jpg"></td>
+				
+						
+					</tr>
+					<tr>
+						<td><img src="products/1/cs10004.jpg"></td>
+						<td><img src="products/1/cs10004.jpg"></td>
+						<td><img src="products/1/cs10004.jpg"></td>
+						<td><img src="products/1/cs10004.jpg"></td>
+		
+						
+					</tr>
+					
+				</table>
+				
+				
+			</tr>
+			
+			<tr>
+				
+				<table>
+					
+					<tr>
+						<td><a href="www.baidu.com"> 百度</a></td>
+							<td><a href="www.alibaba.com"> 阿里</a></td>
+								<td><a href="www.jd.com"> 二手东</a></td>
+							
+					</tr>
+				</table>
+			</tr>
+			
+			
+		</table>
+	</body>
+</html>
+
+
+```
+
+
+这里有一个属性要说一下
+
+|标识|语意|
+|:----:|:----:|
+|rowspan|行向占据几列，如果是0，则到表格最后一个|
+|colspan/th|纵向占据几行，如果是0，则到表格最后一个|
+
 # 疑问
 * 为什么html能够被浏览器显示，浏览器是如何解释html的呢？
