@@ -339,5 +339,180 @@ categories: java
 |rowspan|行向占据几列，如果是0，则到表格最后一个|
 |colspan/th|纵向占据几行，如果是0，则到表格最后一个|
 
+## 一个网站登录页面
+
+这里要介绍一下一个标签 form标签和input标签
+
+form标签：
+|标识|语意|
+|:----:|:----:|
+|action|提交的地址|
+|method|提交方式：get和post|
+
+input标签：
+
+|标识|语意|
+|:----:|:----:|
+|type|提交类型|
+|placeholder|默认提示信息|
+|name|参数名称|
+|id|便于操作|
+
+现在我们来创建一个简易版本的登录
+
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body>
+		
+		<form action="2.html">
+			
+			<table>
+				
+				
+				<tr>
+					<td colspan="2"><font color="blue" size="5">会员注册</font></td>
+				</tr>
+				
+				
+				<tr>
+					
+					<td>
+						用户名
+					</td>
+					<td><input type="text" placeholder="请输入用户名"></td>
+					
+				</tr>
+				
+						<tr>
+					
+					<td>
+						密码
+					</td>
+					<td><input type="password" placeholder="请输入密码"></td>
+				
+				</tr>
+					<tr>
+					
+					<td>
+						email
+					</td>
+				<td>	<input type="email" placeholder="请输入邮箱"></td>
+				
+				</tr>
+					<tr>
+			
+					<td>
+						性别
+					</td>
+					<td><input type="radio" name="sex" >男
+					<input type="radio" name="sex" >女
+					<input type="radio" name="sex" >妖</td>
+				</tr>
+				
+				<tr> 
+				<td>验证码</td>
+				<td><input type="text" placeholder="请输入验证码"></td>
+				</tr>
+				
+				<tr>
+					<td colspan="2"><input type="submit" value="注册"></td>
+				</tr>
+			</table>
+			
+		</form>
+		
+	</body>
+</html>
+
+```
+![Alt text](login.png "效果图")
+
+## 最后在介绍一个 frameset标签
+可以理解在一个页面中显示多个页面的内容
+
+来一个例子
+
+frameSet.html
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+
+		
+		<frameset rows="15%,*">
+			<frame src="aaa.html" />
+			
+			<frameset cols="30%,*">
+					<frame src="bbb.html" name="bbb"/>
+				<frame src="ccc.html" name="rightFrame" />
+		
+			</frameset>
+		</frameset>
+	
+</html>
+
+
+```
+aaa.html
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body bgcolor="yellow">
+		aaa
+	</body>
+</html>
+
+```
+
+bbb.html
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body bgcolor="red">
+		bbb
+		// 这里进行fram之间的跳转
+		<a href="login.html" target="rightFrame"> 登录</a>
+		<a href="#">其他</a>
+	</body>
+</html>
+
+```
+
+ccc.html
+```
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title></title>
+	</head>
+	<body bgcolor="green">
+		ccc
+	</body>
+</html>
+
+```
+
+
+
+
+
+
 # 疑问
 * 为什么html能够被浏览器显示，浏览器是如何解释html的呢？
